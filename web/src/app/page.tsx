@@ -321,6 +321,23 @@ export default function HomePage() {
         {status && <p className="text-xs text-neutral-500">{status}</p>}
       </form>
 
+      {catchment?.status === "complete" && areas.length === 0 && (
+        <div className="rounded-card border border-priority-mid/40 bg-priority-mid/10 p-4 text-sm">
+          <p className="font-semibold">No areas found in this catchment.</p>
+          <p className="mt-1 text-neutral-600">
+            The drive-time zone was built, but no boundaries matched. Load the
+            MSOA boundaries on the{" "}
+            <a
+              href="/data"
+              className="font-medium text-light-accent underline"
+            >
+              Reference data
+            </a>{" "}
+            page, then build again.
+          </p>
+        </div>
+      )}
+
       {catchment?.status === "complete" && areas.length > 0 && (
         <div className="flex items-center gap-3">
           <a
