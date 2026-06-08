@@ -25,10 +25,9 @@ the App Registration and the variables.
 
 ## Building next (no dependency on your tasks)
 
-- [ ] Development brief form: capture town, strapline, lifestyle pillars, feature
+- [x] Development brief form: capture town, strapline, lifestyle pillars, feature
       bullets, price band and bed range on submission, so the Battlecard header
-      and scoring use the real scheme rather than defaults. (Highest impact on
-      output quality.)
+      and scoring use the real scheme rather than defaults.
 - [ ] Scoring config panel: expose weights, price band, bed range and overlap
       threshold in the UI, persisted with the catchment.
 - [ ] Render the three Battlecard charts in the web drawer (age bar, income bar
