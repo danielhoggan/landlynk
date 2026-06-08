@@ -1,0 +1,25 @@
+# Pinned worker dependencies. Geometry, web service, data, validation.
+# All external data sources are open or free tier. No paid data licences.
+
+# Geospatial
+geopandas==1.0.1
+shapely==2.0.5
+
+# Web service (worker exposes job submission and read endpoints to the API layer)
+fastapi==0.111.1
+uvicorn[standard]==0.30.3
+
+# Database (Postgres with PostGIS)
+psycopg[binary]==3.2.1
+sqlalchemy==2.0.31
+geoalchemy2==0.15.2
+
+# Validation and settings
+pydantic==2.8.2
+pydantic-settings==2.3.4
+
+# HTTP for geocode and isochrone providers (postcodes.io, OpenRouteService)
+httpx==0.27.0
+
+# Output generation (KML for Google Earth)
+simplekml==1.3.6
