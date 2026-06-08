@@ -15,6 +15,18 @@ from landlynk_worker.pipeline.intersect import (
 )
 
 
+def test_multipolygon_geometry_builds():
+    # Real ONS boundaries are MultiPolygons. Shapely must build them (guards the
+    # NumPy 2.x "create_collection" incompatibility regression).
+    geojson = {
+        "type": "MultiPolygon",
+        "coordinates": [[[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]]],
+    }
+    area = area_geometry_from_geojson("E02000001", "MSOA", geojson)
+    assert area.geometry.geom_type == "MultiPolygon"
+    assert proportion_inside(area.geometry, box(0, 0, 1, 1)) == 1.0
+
+
 def test_proportion_inside_full_overlap():
     area = box(0, 0, 10, 10)
     isochrone = box(-5, -5, 15, 15)  # fully contains the area

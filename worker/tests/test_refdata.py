@@ -92,6 +92,29 @@ def test_fetch_arcgis_geojson_pages_by_returned_count():
     assert [f["id"] for f in fc["features"]] == [0, 1, 2, 3, 4]
 
 
+def test_fetch_csv_text_extracts_msoa_member_from_zip(tmp_path):
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("census2021-ts054-ltla.csv", "geography code,x\nE09,1\n")
+        zf.writestr("census2021-ts054-msoa.csv", "geography code,x\nE02000001,2\n")
+    zip_bytes = buf.getvalue()
+
+    # Point _get_bytes at our in-memory zip via monkeypatching the module.
+    import landlynk_worker.refdata.loaders as L
+
+    orig = L._get_bytes
+    L._get_bytes = lambda url: zip_bytes
+    try:
+        text = L._fetch_csv_text("https://x/census2021-ts054.zip", "MSOA")
+    finally:
+        L._get_bytes = orig
+    assert "E02000001" in text
+    assert "E09" not in text  # picked the MSOA member, not the LA one
+
+
 def test_read_csv_handles_bom_and_semicolons():
     text = "﻿geography code;Total: All households;Owns outright\nE1;100;40\n"
     rows, code_field = loaders._read_csv(text)

@@ -16,6 +16,13 @@ const DEFAULT_BOUNDARIES =
   "https://services1.arcgis.com/ESMARspQHYMw9BZ9/arcgis/rest/services/" +
   "Middle_layer_Super_Output_Areas_December_2021_Boundaries_EW_BGC_V3/FeatureServer/0/query";
 
+// NOMIS bulk census 2021 downloads: a zip per table containing one CSV per
+// geography. The worker picks the right geography CSV automatically.
+const NOMIS = "https://www.nomisweb.co.uk/output/census/2021/census2021-";
+const DEFAULT_AGE = `${NOMIS}ts007.zip`;
+const DEFAULT_HOUSEHOLDS = `${NOMIS}ts003.zip`;
+const DEFAULT_TENURE = `${NOMIS}ts054.zip`;
+
 interface FieldDef {
   key: string;
   label: string;
@@ -95,6 +102,11 @@ export default function DataPage() {
   const [status, setStatus] = useState<Record<string, ReferenceStatus>>({});
   const [values, setValues] = useState<Record<string, Record<string, string>>>({
     geo_boundaries: { url: DEFAULT_BOUNDARIES },
+    census_demographics: {
+      ageUrl: DEFAULT_AGE,
+      householdsUrl: DEFAULT_HOUSEHOLDS,
+    },
+    census_tenure: { url: DEFAULT_TENURE },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});

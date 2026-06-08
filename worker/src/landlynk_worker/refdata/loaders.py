@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import zipfile
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -104,6 +105,37 @@ def _read_csv(text: str) -> tuple[list[dict], str]:
     rows = list(reader)
     code_field = t.find_area_code_field(reader.fieldnames or [])
     return rows, code_field
+
+
+# Keyword to find the right geography CSV inside a NOMIS bulk zip.
+_AREA_TYPE_KEYWORD = {"MSOA": "msoa", "LA": "ltla"}
+
+
+def _fetch_csv_text(url: str, area_type: str) -> str:
+    """Return CSV text from a URL, transparently handling a NOMIS bulk .zip.
+
+    NOMIS bulk census downloads are zips containing one CSV per geography
+    (e.g. census2021-ts054-msoa.csv). We pick the member matching the area type
+    so census loads are a one-click download.
+    """
+    if not url.lower().endswith(".zip"):
+        return _get_text(url)
+    content = _get_bytes(url)
+    keyword = _AREA_TYPE_KEYWORD.get(area_type, "msoa")
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        csv_names = [n for n in zf.namelist() if n.lower().endswith(".csv")]
+        match = next((n for n in csv_names if keyword in n.lower()), None)
+        if match is None and area_type == "LA":
+            # Fall back to other LA spellings used across releases.
+            match = next(
+                (n for n in csv_names if any(k in n.lower() for k in ("lad", "utla"))),
+                None,
+            )
+        if match is None and csv_names:
+            match = csv_names[0]
+        if match is None:
+            raise ValueError(f"No CSV found in zip at {url}")
+        return zf.read(match).decode("utf-8-sig")
 
 
 def _read_xlsx(content: bytes) -> list[dict]:
@@ -261,11 +293,12 @@ def _replace_table(
     col_list = ", ".join(columns)
     placeholders = ", ".join(geometry_columns.get(c, "%s") for c in columns)
     insert_sql = f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})"
+    params = [[row.get(c) for c in columns] for row in rows]
     with pool.connection() as conn, conn.transaction():
         conn.execute(f"TRUNCATE {table}")
         with conn.cursor() as cur:
-            for row in rows:
-                cur.execute(insert_sql, [row.get(c) for c in columns])
+            # Batched insert: far faster than per-row for thousands of areas.
+            cur.executemany(insert_sql, params)
         conn.execute(
             "INSERT INTO reference_load (table_name, source, source_version) "
             "VALUES (%s, %s, %s)",
@@ -294,7 +327,11 @@ def load_boundaries(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> 
 def load_demographics(
     pool: ConnectionPool, age_url: str, households_url: str, area_type: str = "MSOA"
 ) -> int:
-    rows = _demographics_rows(_get_text(age_url), _get_text(households_url), area_type)
+    rows = _demographics_rows(
+        _fetch_csv_text(age_url, area_type),
+        _fetch_csv_text(households_url, area_type),
+        area_type,
+    )
     return _replace_table(
         pool,
         "census_demographics",
@@ -317,7 +354,7 @@ def load_demographics(
 
 
 def load_tenure(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
-    rows = _tenure_rows(_get_text(url), area_type)
+    rows = _tenure_rows(_fetch_csv_text(url, area_type), area_type)
     return _replace_table(
         pool,
         "census_tenure",
