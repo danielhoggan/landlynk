@@ -1,22 +1,16 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
-  "_comment": "Reference configuration for the landlynk Railway services. The web app and Python worker deploy as separate services, each built from its own subdirectory. Secrets are set as Railway environment variables, never committed.",
+  "_comment": "Reference configuration for the LandLynk Railway services. The web app and Python worker deploy as separate services, each built from its own Dockerfile. A Postgres with PostGIS plugin backs both. Secrets are Railway environment variables, never committed. In the Railway dashboard, set each service's root directory (web or worker) and point it at the Dockerfile.",
   "services": {
     "web": {
       "root": "web",
-      "build": { "builder": "NIXPACKS", "buildCommand": "npm ci && npm run build" },
-      "deploy": { "startCommand": "npm run start", "healthcheckPath": "/api/auth/providers" }
+      "build": { "builder": "DOCKERFILE", "dockerfilePath": "Dockerfile" },
+      "deploy": { "healthcheckPath": "/signin" }
     },
     "worker": {
       "root": "worker",
-      "build": {
-        "builder": "NIXPACKS",
-        "buildCommand": "pip install -r requirements.txt"
-      },
-      "deploy": {
-        "startCommand": "uvicorn landlynk_worker.app:app --host 0.0.0.0 --port $PORT",
-        "healthcheckPath": "/health"
-      }
+      "build": { "builder": "DOCKERFILE", "dockerfilePath": "Dockerfile" },
+      "deploy": { "healthcheckPath": "/health" }
     }
   }
 }

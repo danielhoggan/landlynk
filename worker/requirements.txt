@@ -1,8 +1,10 @@
 # Pinned worker dependencies. Geometry, web service, data, validation.
 # All external data sources are open or free tier. No paid data licences.
 
-# Geospatial
-geopandas==1.0.1
+# Geospatial. The pipeline uses Shapely for geometry and delegates spatial
+# candidate selection to PostGIS, so GeoPandas (and its heavy GDAL dependency)
+# is not required at runtime. Add geopandas==1.0.1 here if a future stage needs
+# dataframe-level geometry.
 shapely==2.0.5
 # Coordinate transforms: OS grid reference (EPSG:27700) to WGS84.
 pyproj==3.6.1
