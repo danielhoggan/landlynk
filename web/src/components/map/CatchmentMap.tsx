@@ -18,21 +18,12 @@ interface CatchmentMapProps {
   selectedAreaCode?: string;
 }
 
-// Open-source base map. OSM raster tiles are open data (ODbL); swap for
-// self-hosted or other open tiles in production. No licensed tiles
-// (design-framework.md, the map).
-const BASE_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    osm: {
-      type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors",
-    },
-  },
-  layers: [{ id: "osm", type: "raster", source: "osm" }],
-};
+// Open vector base map. OpenFreeMap is free, OSM-based and needs no API key, so
+// it fits the no-licensed-tiles rule (design-framework.md, the map). Override
+// with NEXT_PUBLIC_MAP_STYLE to point at a self-hosted style for production.
+const BASE_STYLE: string =
+  process.env.NEXT_PUBLIC_MAP_STYLE ??
+  "https://tiles.openfreemap.org/styles/liberty";
 
 function areasToFeatures(areas: CatchmentArea[]): GeoJSON.FeatureCollection {
   return {

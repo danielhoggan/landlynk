@@ -76,6 +76,7 @@ the App Registration and the variables.
 
 - [ ] Integration test of PostgresStore and the loaders against a real PostGIS
       (testcontainers or a CI database), to complement the offline unit tests.
-- [ ] Replace the OSM raster basemap with an open vector style for production.
-- [ ] Structured logging and error reporting in the worker pipeline.
-- [ ] Rate-limit handling and backoff for the isochrone provider.
+- [x] Open vector basemap (OpenFreeMap, no key) replacing OSM raster; override
+      with NEXT_PUBLIC_MAP_STYLE.
+- [x] Structured logging in the worker pipeline and job runner.
+- [x] Rate-limit handling and backoff for the isochrone provider.
