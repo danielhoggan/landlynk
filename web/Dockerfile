@@ -16,6 +16,10 @@ FROM node:20-slim AS run
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+# Bind to all interfaces. Next's standalone server otherwise defaults to
+# localhost, which makes the container unreachable behind Railway's proxy and
+# fails the health check.
+ENV HOSTNAME=0.0.0.0
 # The standalone output bundles only the files the server needs.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
