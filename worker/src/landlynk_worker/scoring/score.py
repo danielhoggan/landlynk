@@ -55,11 +55,15 @@ def score_income_fit(profile: AreaProfile, config: ScoringConfig) -> SignalScore
     income is close to the income the product price implies.
     """
     if profile.median_income is None:
-        return SignalScore("income_fit", 0.0, "Median income suppressed, no income fit signal")
+        return SignalScore(
+            "income_fit", 0.0, "Median income suppressed, no income fit signal"
+        )
 
     target = config.price_band.midpoint / config.affordability_multiple
     if target <= 0:
-        return SignalScore("income_fit", 0.0, "Invalid price band, cannot compute income fit")
+        return SignalScore(
+            "income_fit", 0.0, "Invalid price band, cannot compute income fit"
+        )
 
     relative_gap = abs(profile.median_income - target) / target
     raw = _clamp01(1.0 - relative_gap)
@@ -81,7 +85,9 @@ def _weighted_share(
     Returns the score in 0..1 and whether any data was usable. Suppressed
     components are dropped and the preference renormalised over what remains.
     """
-    usable = {k: v for k, v in shares.items() if v is not None and preference.get(k, 0) >= 0}
+    usable = {
+        k: v for k, v in shares.items() if v is not None and preference.get(k, 0) >= 0
+    }
     if not usable:
         return 0.0, False
     pref_total = sum(preference.get(k, 0.0) for k in usable)
@@ -105,7 +111,9 @@ def score_tenure_signal(profile: AreaProfile, config: ScoringConfig) -> SignalSc
     }
     raw, usable = _weighted_share(shares, config.tenure_preference)
     if not usable:
-        return SignalScore("tenure_signal", 0.0, "Tenure data suppressed, no tenure signal")
+        return SignalScore(
+            "tenure_signal", 0.0, "Tenure data suppressed, no tenure signal"
+        )
     return SignalScore(
         "tenure_signal",
         raw,
@@ -138,7 +146,9 @@ def score_addressable_scale(profile: AreaProfile, config: ScoringConfig) -> Sign
     A saturating curve so very large areas do not dominate purely on headcount.
     """
     if profile.population is None:
-        return SignalScore("addressable_scale", 0.0, "Population suppressed, no scale signal")
+        return SignalScore(
+            "addressable_scale", 0.0, "Population suppressed, no scale signal"
+        )
     inside = profile.population * profile.proportion_inside
     raw = _clamp01(1.0 - math.exp(-inside / config.scale_saturation))
     return SignalScore(
@@ -155,7 +165,9 @@ def score_household_type(profile: AreaProfile, config: ScoringConfig) -> SignalS
     compact or downsizer range inverts the preference.
     """
     if profile.family_household_share is None:
-        return SignalScore("household_type", 0.0, "Household type suppressed, no signal")
+        return SignalScore(
+            "household_type", 0.0, "Household type suppressed, no signal"
+        )
     family_oriented = _bed_range_is_family(config.bed_range)
     raw = (
         profile.family_household_share
@@ -226,4 +238,6 @@ def compute_score(profile: AreaProfile, config: ScoringConfig) -> ScoreBreakdown
         )
 
     total = _clamp01(total)
-    return ScoreBreakdown(total=total, band=band_for_score(total), contributions=contributions)
+    return ScoreBreakdown(
+        total=total, band=band_for_score(total), contributions=contributions
+    )

@@ -5,13 +5,14 @@
 
 from __future__ import annotations
 
+from shapely.geometry import box
+
 from landlynk_worker.pipeline.intersect import (
     AreaGeometry,
     area_geometry_from_geojson,
     intersect_catchment,
     proportion_inside,
 )
-from shapely.geometry import box
 
 
 def test_proportion_inside_full_overlap():
