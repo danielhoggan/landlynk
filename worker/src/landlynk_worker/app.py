@@ -17,9 +17,10 @@ import uuid
 from typing import TYPE_CHECKING
 
 import httpx
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Response
 
 from .api_models import CatchmentJobRequest, to_development_info, to_scoring_config
+from .battlecard import Battlecard, render_battlecard_pdf
 from .config import settings
 from .pipeline.isochrone import (
     InMemoryIsochroneCache,
@@ -143,3 +144,18 @@ def get_battlecard(catchment_id: str, area_code: str) -> dict:
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
     return data
+
+
+@app.get("/catchments/{catchment_id}/battlecards/{area_code}/pdf")
+def get_battlecard_pdf(catchment_id: str, area_code: str) -> Response:
+    data = get_store().get_battlecard(catchment_id, area_code)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Battlecard not found")
+    pdf = render_battlecard_pdf(Battlecard.model_validate(data))
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="battlecard-{area_code}.pdf"'
+        },
+    )
