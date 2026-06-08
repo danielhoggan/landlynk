@@ -7,9 +7,12 @@ DEPLOYMENT.md. Rough order below.
 
 - [ ] Create an OpenRouteService account and generate an API key (free tier).
       https://openrouteservice.org/dev/#/signup
-- [ ] Decide the public web hostname (Railway domain or custom domain). You need
-      it for `NEXTAUTH_URL` and the Azure redirect URI.
-- [ ] Generate a NextAuth secret: `openssl rand -base64 32`.
+      This value goes into the worker variable `WORKER_ISOCHRONE_API_KEY`.
+- [ ] Decide the public web hostname (Railway domain or custom domain). This
+      value goes into the web variable `NEXTAUTH_URL` (no trailing slash) and is
+      also the host in the Azure redirect URI.
+- [ ] Generate a NextAuth secret by running `openssl rand -base64 32`. Put the
+      output into the web variable `NEXTAUTH_SECRET`.
 
 ## Azure App Registration (SSO)
 
