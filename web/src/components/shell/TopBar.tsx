@@ -21,7 +21,7 @@ export function TopBar({ drawerOpen, onToggleDrawer }: TopBarProps) {
       >
         {drawerOpen ? <X size={22} /> : <Menu size={22} />}
       </button>
-      <span className="text-base font-semibold tracking-tight">landlynk</span>
+      <span className="text-base font-semibold tracking-tight">LandLynk</span>
     </header>
   );
 }

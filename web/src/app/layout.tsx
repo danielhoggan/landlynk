@@ -13,7 +13,7 @@ const tenorSans = Tenor_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "landlynk",
+  title: "LandLynk",
   description:
     "The Geographic Intelligence Engine. Ranked, clickable catchment maps with auto-generated Battlecards.",
 };

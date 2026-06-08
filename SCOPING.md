@@ -1,6 +1,6 @@
-# Geographic Intelligence Engine - Scoping Document
+# LandLynk - Scoping Document
 
-Working title: Geographic Intelligence Engine (GIE). Provisional. Rename before build sign-off.
+Working title: LandLynk (confirmed). Formerly the Geographic Intelligence Engine (GIE).
 
 Owner: Dan Hoggan (CTO)
 Status: Draft for scoping review
@@ -209,7 +209,7 @@ Risks:
 - ONS small-area suppression and rounding. Some MSOA cells are suppressed or rounded. Mitigation: handle nulls explicitly, surface confidence in the deep-dive.
 
 Open questions for Dan:
-- Working name and final branding for the engine.
+- Working name and final branding for the engine. Resolved: working name is LandLynk.
 - MSOA only for MVP, or LA from day one given the PfP Leisure use case.
 - Isochrone provider preference (TravelTime vs OpenRouteService) and whether a paid tier is acceptable.
 - Whether PPTX export to client brand templates is MVP or Phase 2.

@@ -1,4 +1,4 @@
-# landlynk
+# LandLynk
 
 The Geographic Intelligence Engine. A platform that turns a development postcode
 or OS grid reference into a ranked, clickable catchment map with auto-generated

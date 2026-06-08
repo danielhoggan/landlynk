@@ -49,7 +49,7 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
         }`}
       >
         <div className="mb-8 flex items-center justify-between">
-          <span className="text-lg font-semibold">landlynk</span>
+          <span className="text-lg font-semibold">LandLynk</span>
           <button
             type="button"
             onClick={onClose}
