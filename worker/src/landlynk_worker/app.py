@@ -13,6 +13,7 @@ module imports without a database for the unit tests.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import TYPE_CHECKING
 
@@ -37,6 +38,12 @@ from .pipeline.outputs.kml import render_catchment_kml
 from .pipeline.reference import PostgresReferenceData
 from .scoring.profile import ScoringConfig
 from .storage import InMemoryStore, JobInput, PostgresStore, Storage
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+_log = logging.getLogger("landlynk.worker")
 
 app = FastAPI(title="LandLynk worker", version="0.1.0")
 
@@ -103,7 +110,9 @@ def _run_job(
             area_type=request.area_type,
         )
         store.save_result(job_id, result, config)
+        _log.info("Catchment job %s complete: %s areas", job_id, len(result.areas))
     except Exception as exc:  # surface on the job, do not crash the worker
+        _log.exception("Catchment job %s failed", job_id)
         store.mark_status(job_id, "failed", str(exc))
 
 

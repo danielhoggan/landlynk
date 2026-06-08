@@ -12,6 +12,8 @@ dropped in without changing the rest of the pipeline (SCOPING.md Section 11).
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
@@ -19,6 +21,11 @@ import httpx
 
 if TYPE_CHECKING:
     from psycopg_pool import ConnectionPool
+
+_log = logging.getLogger("landlynk.isochrone")
+
+# Transient provider responses worth retrying: rate limit and server errors.
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 @dataclass(frozen=True)
@@ -121,6 +128,10 @@ class OpenRouteServiceProvider:
     The httpx client is injected so it is mocked in tests and points at the
     hosted or a self-hosted ORS in production. Set ``base_url`` to a self-hosted
     instance to remove the free-tier quota without other changes.
+
+    Transient failures (HTTP 429 rate limit, 5xx, network errors) are retried
+    with exponential backoff, honouring a Retry-After header when present. Set
+    ``backoff_base`` to 0 in tests to avoid real sleeps.
     """
 
     def __init__(
@@ -128,10 +139,22 @@ class OpenRouteServiceProvider:
         api_key: str,
         client: httpx.Client,
         base_url: str = "https://api.openrouteservice.org",
+        max_retries: int = 3,
+        backoff_base: float = 1.0,
     ) -> None:
         self._api_key = api_key
         self._client = client
         self._base_url = base_url.rstrip("/")
+        self._max_retries = max_retries
+        self._backoff_base = backoff_base
+
+    def _delay(self, attempt: int, retry_after: str | None) -> float:
+        if retry_after:
+            try:
+                return float(retry_after)
+            except ValueError:
+                pass
+        return self._backoff_base * (2**attempt)
 
     def fetch(self, params: IsochroneParams) -> dict:
         """Return the isochrone geometry as a GeoJSON geometry dict.
@@ -149,12 +172,45 @@ class OpenRouteServiceProvider:
             "Authorization": self._api_key,
             "Content-Type": "application/json",
         }
-        resp = self._client.post(url, json=body, headers=headers)
-        resp.raise_for_status()
-        features = resp.json().get("features") or []
-        if not features:
-            raise IsochroneError("OpenRouteService returned no isochrone feature")
-        geometry = features[0].get("geometry")
-        if not geometry:
-            raise IsochroneError("OpenRouteService feature had no geometry")
-        return geometry
+
+        last_error: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                resp = self._client.post(url, json=body, headers=headers)
+            except httpx.TransportError as exc:  # network blip
+                last_error = exc
+                _log.warning(
+                    "Isochrone network error (attempt %s): %s", attempt + 1, exc
+                )
+            else:
+                if resp.status_code in _RETRYABLE_STATUS:
+                    last_error = IsochroneError(
+                        f"OpenRouteService returned {resp.status_code}"
+                    )
+                    _log.warning(
+                        "Isochrone provider %s (attempt %s)",
+                        resp.status_code,
+                        attempt + 1,
+                    )
+                    if attempt < self._max_retries:
+                        time.sleep(
+                            self._delay(attempt, resp.headers.get("retry-after"))
+                        )
+                    continue
+                resp.raise_for_status()
+                features = resp.json().get("features") or []
+                if not features:
+                    raise IsochroneError(
+                        "OpenRouteService returned no isochrone feature"
+                    )
+                geometry = features[0].get("geometry")
+                if not geometry:
+                    raise IsochroneError("OpenRouteService feature had no geometry")
+                return geometry
+
+            if attempt < self._max_retries:
+                time.sleep(self._delay(attempt, None))
+
+        raise IsochroneError(
+            f"OpenRouteService failed after {self._max_retries + 1} attempts"
+        ) from last_error

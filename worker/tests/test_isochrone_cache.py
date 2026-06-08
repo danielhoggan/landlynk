@@ -128,6 +128,37 @@ def test_ors_provider_self_hosted_base_url():
     assert geometry["type"] == "Polygon"
 
 
+def test_ors_provider_retries_then_succeeds():
+    # First call 503, second 200. With backoff_base=0 there is no real sleep.
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503, json={})
+        return httpx.Response(200, json=_ORS_SAMPLE)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenRouteServiceProvider(api_key="k", client=client, backoff_base=0)
+        geometry = provider.fetch(
+            IsochroneParams(lat=52.0, lng=1.0, drive_time_minutes=30)
+        )
+    assert geometry["type"] == "Polygon"
+    assert calls["n"] == 2
+
+
+def test_ors_provider_gives_up_after_retries():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenRouteServiceProvider(
+            api_key="k", client=client, max_retries=2, backoff_base=0
+        )
+        with pytest.raises(IsochroneError):
+            provider.fetch(IsochroneParams(lat=52.0, lng=1.0, drive_time_minutes=30))
+
+
 def test_in_memory_cache_round_trip_with_provider():
     cache = InMemoryIsochroneCache()
     provider = CountingProvider()

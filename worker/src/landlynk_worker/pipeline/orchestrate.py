@@ -10,6 +10,7 @@ This runs in the Python worker, never in a Next.js request cycle.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -28,6 +29,8 @@ from .intersect import intersect_catchment
 from .isochrone import IsochroneCache, IsochroneParams, IsochroneProvider, get_isochrone
 from .reference import ReferenceData
 from .resolve import Coordinate, resolve_input
+
+_log = logging.getLogger("landlynk.pipeline")
 
 
 @dataclass(frozen=True)
@@ -124,8 +127,10 @@ def run_catchment(
     area_type: str = "MSOA",
 ) -> CatchmentResult:
     """Run the full pipeline and return ranked areas with their Battlecards."""
+    _log.info("Catchment run starting: input=%s area_type=%s", raw_input, area_type)
     # 1. Resolve input to a coordinate.
     coordinate = deps.geocode(raw_input)
+    _log.info("Geocoded to %.5f, %.5f", coordinate.lat, coordinate.lng)
 
     # 2. Isochrone, cached by coordinate and parameters.
     params = IsochroneParams(
@@ -140,6 +145,12 @@ def run_catchment(
     candidates = deps.reference.candidate_area_geometries(isochrone, area_type)
     matches = intersect_catchment(candidates, isochrone_shape, config.overlap_threshold)
     geometry_by_code = {c.area_code: mapping(c.geometry) for c in candidates}
+    _log.info(
+        "Intersect: %s candidate areas, %s retained above threshold %.2f",
+        len(candidates),
+        len(matches),
+        config.overlap_threshold,
+    )
 
     # 4 and 5. Join reference data and score each retained area.
     references = {
@@ -184,6 +195,7 @@ def run_catchment(
             catchment_stats=catchment_stats,
         )
 
+    _log.info("Catchment run complete: %s ranked areas", len(areas))
     return CatchmentResult(
         coordinate=coordinate,
         isochrone=isochrone,
