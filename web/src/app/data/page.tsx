@@ -23,6 +23,14 @@ const DEFAULT_AGE = `${NOMIS}ts007.zip`;
 const DEFAULT_HOUSEHOLDS = `${NOMIS}ts003.zip`;
 const DEFAULT_TENURE = `${NOMIS}ts054.zip`;
 
+// ONS small-area income (MSOA, financial year ending 2020). Best-known URL;
+// update here if ONS publishes a newer release.
+const DEFAULT_INCOME =
+  "https://www.ons.gov.uk/file?uri=/employmentandlabourmarket/peopleinwork/" +
+  "earningsandworkinghours/datasets/" +
+  "smallareaincomeestimatesformiddlelayersuperoutputareasenglandandwales/" +
+  "financialyearending2020/saiefy1920finalqaddownload280923.xlsx";
+
 interface FieldDef {
   key: string;
   label: string;
@@ -107,6 +115,7 @@ export default function DataPage() {
       householdsUrl: DEFAULT_HOUSEHOLDS,
     },
     census_tenure: { url: DEFAULT_TENURE },
+    income_estimates: { url: DEFAULT_INCOME },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});
