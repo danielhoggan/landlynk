@@ -11,10 +11,14 @@ dropped in without changing the rest of the pipeline (SCOPING.md Section 11).
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import httpx
+
+if TYPE_CHECKING:
+    from psycopg_pool import ConnectionPool
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,32 @@ class InMemoryIsochroneCache:
 
     def set(self, key: str, geojson: dict) -> None:
         self._store[key] = geojson
+
+
+class PostgresIsochroneCache:
+    """Durable cache in the isochrone_cache table.
+
+    Shared across worker instances and restarts, so a coordinate is only ever
+    billed once. Satisfies the IsochroneCache protocol.
+    """
+
+    def __init__(self, pool: ConnectionPool) -> None:
+        self._pool = pool
+
+    def get(self, key: str) -> dict | None:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT geojson FROM isochrone_cache WHERE cache_key = %s", [key]
+            ).fetchone()
+        return row[0] if row else None
+
+    def set(self, key: str, geojson: dict) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO isochrone_cache (cache_key, geojson) VALUES (%s, %s) "
+                "ON CONFLICT (cache_key) DO UPDATE SET geojson = EXCLUDED.geojson",
+                [key, json.dumps(geojson)],
+            )
 
 
 class OpenRouteServiceProvider:

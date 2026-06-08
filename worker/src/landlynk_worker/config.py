@@ -14,9 +14,15 @@ class Settings(BaseSettings):
     # Isochrone provider. OpenRouteService or TravelTime. Key from the env.
     isochrone_provider: str = "openrouteservice"
     isochrone_api_key: str = ""
+    # Base URL, override to point at a self-hosted ORS or Valhalla.
+    isochrone_base_url: str = "https://api.openrouteservice.org"
 
     # Default drive-time for the catchment.
     default_drive_time_minutes: int = 30
+
+    # Persist results to Postgres. When false, the worker uses an in-memory
+    # store (single process only). Production keeps this true.
+    persist_results: bool = True
 
 
 settings = Settings()

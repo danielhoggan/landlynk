@@ -6,79 +6,97 @@ request cycle (CLAUDE.md, architecture rules). Jobs run as background tasks: the
 POST returns 202 with an id immediately, and the client polls the catchment for
 status and results.
 
-Dependencies (isochrone provider and cache, reference data) are built from
-settings. The isochrone cache is a process singleton so repeat runs in the same
-worker reuse it; a durable Postgres cache is the production upgrade.
+Dependencies (connection pool, store, isochrone provider and cache, reference
+data) are built lazily from settings and cached as process singletons, so the
+module imports without a database for the unit tests.
 """
 
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 
 from .api_models import CatchmentJobRequest, to_development_info, to_scoring_config
 from .config import settings
-from .pipeline.isochrone import InMemoryIsochroneCache, OpenRouteServiceProvider
-from .pipeline.orchestrate import CatchmentResult, PipelineDeps, run_catchment
+from .pipeline.isochrone import (
+    InMemoryIsochroneCache,
+    OpenRouteServiceProvider,
+    PostgresIsochroneCache,
+)
+from .pipeline.orchestrate import PipelineDeps, run_catchment
 from .pipeline.reference import PostgresReferenceData
+from .scoring.profile import ScoringConfig
+from .storage import InMemoryStore, JobInput, PostgresStore, Storage
 
 app = FastAPI(title="LandLynk worker", version="0.1.0")
 
-# Process-local isochrone cache, shared across requests in this worker.
-_ISOCHRONE_CACHE = InMemoryIsochroneCache()
+# Process singletons, built lazily. Tests override _store before issuing requests.
+_pool = None
+_store: Storage | None = None
+_cache = None
 
 
-@dataclass
-class JobRecord:
-    request: CatchmentJobRequest
-    status: str = "queued"
-    result: CatchmentResult | None = None
-    error: str | None = None
-    created_by: str = "system"
+def get_pool():  # pragma: no cover - needs a database
+    global _pool
+    if _pool is None:
+        from psycopg_pool import ConnectionPool
+
+        _pool = ConnectionPool(settings.database_url, min_size=1, max_size=10)
+    return _pool
 
 
-_JOBS: dict[str, JobRecord] = {}
+def get_store() -> Storage:
+    global _store
+    if _store is None:
+        _store = (
+            PostgresStore(get_pool()) if settings.persist_results else InMemoryStore()
+        )
+    return _store
 
 
-def _connection_factory() -> object:  # pragma: no cover - needs a database
-    import psycopg
+def get_cache():  # pragma: no cover - selects durable cache in production
+    global _cache
+    if _cache is None:
+        _cache = (
+            PostgresIsochroneCache(get_pool())
+            if settings.persist_results
+            else InMemoryIsochroneCache()
+        )
+    return _cache
 
-    return psycopg.connect(settings.database_url)
 
-
-def build_deps() -> PipelineDeps:  # pragma: no cover - needs external services
-    """Construct pipeline dependencies from settings."""
+def get_deps() -> PipelineDeps:  # pragma: no cover - needs external services
     client = httpx.Client(timeout=30.0)
     provider = OpenRouteServiceProvider(
-        api_key=settings.isochrone_api_key, client=client
+        api_key=settings.isochrone_api_key,
+        client=client,
+        base_url=settings.isochrone_base_url,
     )
-    reference = PostgresReferenceData(_connection_factory)
     return PipelineDeps(
         isochrone_provider=provider,
-        isochrone_cache=_ISOCHRONE_CACHE,
-        reference=reference,
+        isochrone_cache=get_cache(),
+        reference=PostgresReferenceData(get_pool()),
     )
 
 
-def _run_job(job_id: str) -> None:  # pragma: no cover - needs external services
-    job = _JOBS[job_id]
-    job.status = "running"
+def _run_job(
+    job_id: str, request: CatchmentJobRequest, config: ScoringConfig
+) -> None:  # pragma: no cover - exercised via the app test with stubs
+    store = get_store()
+    store.mark_status(job_id, "running")
     try:
         result = run_catchment(
-            raw_input=job.request.value,
-            development=to_development_info(job.request),
-            config=to_scoring_config(job.request),
-            deps=build_deps(),
-            area_type=job.request.area_type,
+            raw_input=request.value,
+            development=to_development_info(request),
+            config=config,
+            deps=get_deps(),
+            area_type=request.area_type,
         )
-        job.result = result
-        job.status = "complete"
-    except Exception as exc:  # surface the failure on the job, do not crash
-        job.error = str(exc)
-        job.status = "failed"
+        store.save_result(job_id, result, config)
+    except Exception as exc:  # surface on the job, do not crash the worker
+        store.mark_status(job_id, "failed", str(exc))
 
 
 @app.get("/health")
@@ -91,62 +109,32 @@ def submit_catchment_job(
     request: CatchmentJobRequest, background: BackgroundTasks
 ) -> dict[str, str]:
     job_id = str(uuid.uuid4())
-    _JOBS[job_id] = JobRecord(request=request)
-    background.add_task(_run_job, job_id)
+    config = to_scoring_config(request)
+    get_store().create_job(
+        job_id,
+        JobInput(
+            kind=request.kind,
+            value=request.value,
+            development_name=request.development_name,
+        ),
+        config,
+        created_by="system",
+    )
+    background.add_task(_run_job, job_id, request, config)
     return {"id": job_id}
 
 
 @app.get("/catchments/{catchment_id}")
 def get_catchment(catchment_id: str) -> dict:
-    job = _JOBS.get(catchment_id)
-    if job is None:
+    data = get_store().get_catchment(catchment_id)
+    if data is None:
         raise HTTPException(status_code=404, detail="Catchment not found")
-    return serialise_catchment(catchment_id, job)
+    return data
 
 
 @app.get("/catchments/{catchment_id}/battlecards/{area_code}")
 def get_battlecard(catchment_id: str, area_code: str) -> dict:
-    job = _JOBS.get(catchment_id)
-    if job is None or job.result is None:
-        raise HTTPException(status_code=404, detail="Catchment not ready")
-    card = job.result.battlecards.get(area_code)
-    if card is None:
+    data = get_store().get_battlecard(catchment_id, area_code)
+    if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
-    return card.model_dump(by_alias=True)
-
-
-def serialise_catchment(catchment_id: str, job: JobRecord) -> dict:
-    """Shape a job into the web Catchment contract (catchment.ts)."""
-    result = job.result
-    areas = []
-    if result is not None:
-        for area in result.areas:
-            areas.append(
-                {
-                    "areaCode": area.area_code,
-                    "areaType": area.area_type,
-                    "name": area.name,
-                    "proportionInside": round(area.proportion_inside, 4),
-                    "score": round(area.score.total, 4),
-                    "band": area.score.band,
-                    "rank": area.rank,
-                    "geometry": area.geometry,
-                }
-            )
-    return {
-        "id": catchment_id,
-        "input": {
-            "kind": job.request.kind,
-            "value": job.request.value,
-            "developmentName": job.request.development_name,
-        },
-        "coordinate": (
-            None
-            if result is None
-            else {"lat": result.coordinate.lat, "lng": result.coordinate.lng}
-        ),
-        "isochrone": None if result is None else result.isochrone,
-        "status": job.status,
-        "areas": areas,
-        "error": job.error,
-    }
+    return data

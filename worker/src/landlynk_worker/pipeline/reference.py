@@ -9,13 +9,15 @@ production reads from the database.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from ..scoring.profile import AreaProfile
 from .intersect import AreaGeometry, area_geometry_from_geojson
 from .join import build_area_profile
+
+if TYPE_CHECKING:
+    from psycopg_pool import ConnectionPool
 
 
 @dataclass(frozen=True)
@@ -48,10 +50,10 @@ class PostgresReferenceData:
     proportion-inside calculation then runs in the tested shapely intersect.
     """
 
-    def __init__(self, connection_factory: Callable[[], Any]) -> None:
-        # connection_factory() returns a live psycopg connection. Injected so
-        # the caller owns pooling and lifecycle.
-        self._connect = connection_factory
+    def __init__(self, pool: ConnectionPool) -> None:
+        # Connection pool, owned by the caller. Reusing pooled connections
+        # avoids opening a new connection per query.
+        self._pool = pool
 
     def candidate_area_geometries(
         self, isochrone: dict, area_type: str
@@ -64,9 +66,8 @@ class PostgresReferenceData:
         )
         geojson = json.dumps(isochrone)
         out: list[AreaGeometry] = []
-        with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(sql, [area_type, geojson])
-            for area_code, a_type, geom_json in cur.fetchall():
+        with self._pool.connection() as conn:
+            for area_code, a_type, geom_json in conn.execute(sql, [area_type, geojson]):
                 out.append(
                     area_geometry_from_geojson(area_code, a_type, json.loads(geom_json))
                 )
@@ -75,11 +76,12 @@ class PostgresReferenceData:
     def area_reference(
         self, area_code: str, area_type: str, proportion_inside: float
     ) -> AreaReference:
-        with self._connect() as conn, conn.cursor(row_factory=_dict_row) as cur:
-            demographics = _one(cur, "census_demographics", area_code)
-            tenure = _one(cur, "census_tenure", area_code)
-            income = _one(cur, "income_estimates", area_code)
-            name = _area_name(cur, area_code)
+        # One pooled connection serves all reads for the area.
+        with self._pool.connection() as conn:
+            demographics = _one(conn, "census_demographics", area_code)
+            tenure = _one(conn, "census_tenure", area_code)
+            income = _one(conn, "income_estimates", area_code)
+            name = _area_name(conn, area_code)
         profile = build_area_profile(
             area_code=area_code,
             area_type=area_type,
@@ -91,21 +93,16 @@ class PostgresReferenceData:
         return AreaReference(profile=profile, name=name or area_code)
 
 
-# psycopg's dict row factory, imported lazily so the module imports without a DB.
-def _dict_row(cursor: Any) -> Any:  # pragma: no cover - thin psycopg adapter
+def _one(conn, table: str, area_code: str) -> dict:  # pragma: no cover - needs DB
     from psycopg.rows import dict_row
 
-    return dict_row(cursor)
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(f"SELECT * FROM {table} WHERE area_code = %s", [area_code])
+        return cur.fetchone() or {}
 
 
-def _one(cur: Any, table: str, area_code: str) -> dict:  # pragma: no cover - needs DB
-    cur.execute(f"SELECT * FROM {table} WHERE area_code = %s", [area_code])
-    return cur.fetchone() or {}
-
-
-def _area_name(cur: Any, area_code: str) -> str | None:  # pragma: no cover - needs DB
-    cur.execute(
+def _area_name(conn, area_code: str) -> str | None:  # pragma: no cover - needs DB
+    row = conn.execute(
         "SELECT area_name FROM geo_boundaries WHERE area_code = %s", [area_code]
-    )
-    row = cur.fetchone()
-    return row.get("area_name") if row else None
+    ).fetchone()
+    return row[0] if row else None

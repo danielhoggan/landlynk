@@ -28,7 +28,13 @@ from landlynk_worker.scoring import (
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # Use the in-memory store and skip real dependency construction so the app
+    # is exercised without a database or external services.
+    from landlynk_worker.storage import InMemoryStore
+
+    monkeypatch.setattr(app_module, "_store", InMemoryStore())
+    monkeypatch.setattr(app_module, "get_deps", lambda: None)
     return TestClient(app_module.app)
 
 
