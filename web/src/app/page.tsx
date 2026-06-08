@@ -141,14 +141,30 @@ export default function HomePage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 py-6">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Catchment map</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            Paste a postcode or grid reference to build a ranked, clickable
+            catchment.{" "}
+            <a
+              href="/how-it-works"
+              className="font-medium text-light-accent dark:text-dark-accent"
+            >
+              How it works
+            </a>
+          </p>
+        </div>
+      </header>
+
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-card border border-neutral-200 p-5 dark:border-neutral-800"
+        className="space-y-4 rounded-card border border-neutral-200 bg-white/60 p-5 dark:border-neutral-800 dark:bg-white/5"
       >
-        <h1 className="flex items-center gap-2 text-lg font-semibold">
-          <MapPin size={20} /> New catchment
-        </h1>
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <MapPin size={18} /> New catchment
+        </h2>
 
         <div className="flex gap-2">
           {(["postcode", "gridref"] as InputKind[]).map((k) => (

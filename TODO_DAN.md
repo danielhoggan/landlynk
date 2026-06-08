@@ -87,17 +87,19 @@ DEPLOYMENT.md. Rough order below.
       command `python -m landlynk_worker.migrate`). No manual step. Just confirm
       the worker's latest deploy log shows "Applied N migration(s)" or
       "Database is up to date".
-- [ ] Download the open reference datasets (links and licences in
-      `data/sources.yaml`):
-  - [ ] ONS MSOA 2021 boundaries (GeoJSON), Open Geography Portal.
-  - [ ] ONS OA to MSOA to LAD lookup (CSV).
-  - [ ] ONS Census 2021 age by single year (CSV, NOMIS TS007-style).
-  - [ ] ONS Census 2021 household composition (CSV, TS003-style).
-  - [ ] ONS Census 2021 tenure (CSV, TS054-style).
-  - [ ] ONS MSOA income estimates (XLSX).
-  - [ ] OS CodePoint Open (CSV).
-- [ ] Load each with the loaders (DEPLOYMENT.md section 2). Pin the concrete
-      version in `data/sources.yaml` as you go.
+- [ ] Load reference data IN THE APP (no local commands): open the "Reference
+      data" page in the nav and press Load on each dataset. The worker downloads
+      and loads it.
+  - [ ] MSOA boundaries (essential, gets areas showing). The ArcGIS URL is
+        pre-filled; replace only if a newer ONS vintage exists.
+  - [ ] Census demographics: paste the NOMIS bulk CSV URLs for age (TS007) and
+        household composition (TS003).
+  - [ ] Census tenure: paste the NOMIS bulk CSV URL (TS054).
+  - [ ] Income estimates: paste the ONS small-area income XLSX URL.
+  - Lookup and OS CodePoint Open are NOT needed (geocoding uses postcodes.io).
+- [ ] Optional: set `WORKER_ADMIN_TOKEN` (same value) on the web and worker
+      services to lock the load endpoints down. Not required while the worker is
+      private.
 - [ ] Confirm the GWI persona licence terms before we wire persona-driven channel
       guidance into client outputs (SCOPING.md section 11). Tell me the outcome.
 

@@ -49,6 +49,11 @@ the App Registration and the variables.
 
 ## Building next (Phase 2 scope, after MVP proven)
 
+- [x] Server-side ONS auto-loader: the worker downloads boundaries (ONS ArcGIS),
+      census and income and loads PostGIS itself. Triggered from the in-app
+      Reference data page with status polling. No local commands.
+- [x] LandLynk logo (themeable wordmark), standard nav, and a How it Works page
+      (purpose, value, user flow, real use cases). Removed Mediaworks references.
 - [x] KML export: catchment polygon plus foldered, colour-coded area pins with
       Battlecard info balloons, emitted as XML (no native build dependency).
       Worker endpoint and web download wired.
