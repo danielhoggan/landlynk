@@ -8,6 +8,16 @@ export interface SubmitPayload {
   kind: "postcode" | "gridref";
   value: string;
   developmentName: string;
+  town?: string;
+  strapline?: string;
+  lifestylePillars?: string[];
+  developmentFeatures?: string[];
+  config?: {
+    priceBand?: { from: number; to: number };
+    bedRange?: string;
+    driveTimeMinutes?: number;
+    overlapThreshold?: number;
+  };
 }
 
 export async function submitCatchment(payload: SubmitPayload): Promise<{ id: string }> {

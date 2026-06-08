@@ -19,6 +19,21 @@ export default function HomePage() {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Development brief and scoring inputs. These shape the Battlecard header and
+  // the priority score, so a real run reflects the scheme not the defaults.
+  const [town, setTown] = useState("");
+  const [strapline, setStrapline] = useState("");
+  const [pillars, setPillars] = useState("");
+  const [features, setFeatures] = useState("");
+  const [priceFrom, setPriceFrom] = useState("");
+  const [priceTo, setPriceTo] = useState("");
+  const [bedRange, setBedRange] = useState("");
+  const [driveTime, setDriveTime] = useState("30");
+  const [showBrief, setShowBrief] = useState(false);
+
+  const splitList = (s: string) =>
+    s.split(",").map((x) => x.trim()).filter(Boolean);
+
   const [catchment, setCatchment] = useState<Catchment | null>(null);
   const [selected, setSelected] = useState<Battlecard | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
@@ -32,7 +47,23 @@ export default function HomePage() {
     setCatchment(null);
     setStatus("Submitting catchment job...");
     try {
-      const { id } = await submitCatchment({ kind, value, developmentName });
+      const config: Record<string, unknown> = {};
+      if (priceFrom && priceTo) {
+        config.priceBand = { from: Number(priceFrom), to: Number(priceTo) };
+      }
+      if (bedRange) config.bedRange = bedRange;
+      if (driveTime) config.driveTimeMinutes = Number(driveTime);
+
+      const { id } = await submitCatchment({
+        kind,
+        value,
+        developmentName,
+        town: town || undefined,
+        strapline: strapline || undefined,
+        lifestylePillars: splitList(pillars),
+        developmentFeatures: splitList(features),
+        config: Object.keys(config).length ? config : undefined,
+      });
       setStatus("Building catchment. Geocoding, isochrone, scoring...");
       const final = await pollCatchment(id, (c) => {
         setCatchment(c);
@@ -101,6 +132,42 @@ export default function HomePage() {
           placeholder={kind === "postcode" ? "e.g. IP14 1AA" : "e.g. TM 06457 58755"}
           className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
         />
+
+        <button
+          type="button"
+          onClick={() => setShowBrief((s) => !s)}
+          className="text-xs font-medium text-light-accent dark:text-dark-accent"
+        >
+          {showBrief ? "Hide" : "Add"} development brief and scoring
+        </button>
+
+        {showBrief && (
+          <div className="space-y-3 rounded-card border border-neutral-200 p-4 dark:border-neutral-800">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Town" value={town} onChange={setTown} placeholder="Stowmarket" />
+              <Field label="Bed range" value={bedRange} onChange={setBedRange} placeholder="2 to 5" />
+            </div>
+            <Field label="Strapline" value={strapline} onChange={setStrapline} placeholder="Room to grow" />
+            <Field
+              label="Lifestyle pillars (comma separated)"
+              value={pillars}
+              onChange={setPillars}
+              placeholder="Connected, Green, Family"
+            />
+            <Field
+              label="Feature bullets (comma separated)"
+              value={features}
+              onChange={setFeatures}
+              placeholder="Open green space, Primary school nearby"
+            />
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Price from (£)" value={priceFrom} onChange={setPriceFrom} placeholder="280000" type="number" />
+              <Field label="Price to (£)" value={priceTo} onChange={setPriceTo} placeholder="450000" type="number" />
+              <Field label="Drive time (min)" value={driveTime} onChange={setDriveTime} placeholder="30" type="number" />
+            </div>
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={busy || !value || !developmentName}
@@ -141,5 +208,32 @@ export default function HomePage() {
         }
       />
     </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-neutral-500">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+      />
+    </label>
   );
 }

@@ -1,4 +1,4 @@
-import type { Catchment, CatchmentInput } from "./types/catchment";
+import type { Catchment } from "./types/catchment";
 import type { Battlecard } from "./types/battlecard";
 
 // Thin client for the Python worker service. The API route handlers stay thin
@@ -19,8 +19,12 @@ async function workerFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/** Submit a catchment job. The worker geocodes, builds the isochrone, etc. */
-export function submitCatchmentJob(input: CatchmentInput): Promise<{ id: string }> {
+/** Submit a catchment job. The worker geocodes, builds the isochrone, etc. The
+ * request body is the development brief and scoring config; the worker validates
+ * it. */
+export function submitCatchmentJob(
+  input: Record<string, unknown>,
+): Promise<{ id: string }> {
   return workerFetch("/jobs/catchment", {
     method: "POST",
     body: JSON.stringify(input),
