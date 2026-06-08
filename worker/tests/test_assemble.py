@@ -1,0 +1,160 @@
+"""Battlecard assembly produces a valid payload with signal-driven commentary.
+
+Covers the suppression contract (null, never zero) and the house prose
+conventions (no em dashes, no Oxford commas, no markdown headers).
+"""
+
+from __future__ import annotations
+
+from landlynk_worker.battlecard import (
+    DevelopmentInfo,
+    IncomeContext,
+    assemble_battlecard,
+)
+from landlynk_worker.battlecard.schema import Battlecard
+from landlynk_worker.scoring import (
+    AgeProfile,
+    AreaProfile,
+    ScoringConfig,
+    TenureMix,
+    compute_score,
+)
+
+
+def make_profile(**overrides) -> AreaProfile:
+    base = dict(
+        area_code="E02000001",
+        area_type="MSOA",
+        population=8000,
+        households=3200,
+        median_income=60_000,
+        mean_income=68_000,
+        median_age=39,
+        tenure=TenureMix(
+            owns_outright=0.25,
+            owns_with_mortgage=0.40,
+            social_rented=0.10,
+            private_rented=0.25,
+        ),
+        age=AgeProfile(
+            age_0_15=0.18,
+            age_16_34=0.30,
+            age_35_54=0.28,
+            age_55_74=0.18,
+            age_75_plus=0.06,
+        ),
+        family_household_share=0.55,
+        proportion_inside=0.8,
+    )
+    base.update(overrides)
+    return AreaProfile(**base)
+
+
+def _development() -> DevelopmentInfo:
+    return DevelopmentInfo(
+        development_name="Abbots Vale",
+        town="Stowmarket",
+        postcode="IP14 1AA",
+        strapline="Room to grow",
+        lifestyle_pillars=["Connected", "Green", "Family"],
+        development_features=["Open green space", "Primary school nearby"],
+    )
+
+
+def _income_context() -> IncomeContext:
+    return IncomeContext(
+        lowest_la_name="Ipswich",
+        lowest_la_value=52_000,
+        highest_la_name="Babergh",
+        highest_la_value=71_000,
+    )
+
+
+def _assemble(profile: AreaProfile) -> Battlecard:
+    config = ScoringConfig()
+    score = compute_score(profile, config)
+    return assemble_battlecard(
+        profile,
+        config,
+        score,
+        rank=1,
+        development=_development(),
+        income_context=_income_context(),
+    )
+
+
+def test_assembles_a_valid_battlecard():
+    card = _assemble(make_profile())
+    # Re-validate through the schema to prove the payload is contract-clean.
+    Battlecard.model_validate(card.model_dump(by_alias=True))
+    assert card.area_code == "E02000001"
+    assert card.rank == 1
+    assert len(card.visual_summary.charts.age_demographics) == 5
+
+
+def test_population_catchment_weighted_by_proportion_inside():
+    card = _assemble(make_profile(population=10_000, proportion_inside=0.8))
+    assert card.visual_summary.key_statistics.population_catchment.value == 8000
+
+
+def test_owner_occupied_combines_ownership_tenures():
+    card = _assemble(make_profile())
+    # 25% outright + 40% mortgage = 65%.
+    assert card.visual_summary.key_statistics.owner_occupied_percentage.value == 65.0
+
+
+def test_suppressed_income_is_null_not_zero():
+    card = _assemble(make_profile(mean_income=None))
+    avg = card.visual_summary.key_statistics.average_household_income
+    assert avg.value is None
+    assert avg.suppressed is True
+
+
+def test_audience_tiers_ordered_by_signal_strength():
+    # Heavy private rented should put first-time buyers first.
+    profile = make_profile(
+        tenure=TenureMix(
+            owns_outright=0.10,
+            owns_with_mortgage=0.20,
+            social_rented=0.10,
+            private_rented=0.60,
+        )
+    )
+    card = _assemble(profile)
+    primary = next(
+        m for m in card.visual_summary.audience_messaging if m.tier == "primary"
+    )
+    assert primary.audience == "First-time buyers"
+
+
+def test_income_commentary_flags_wide_spread():
+    card = _assemble(make_profile(median_income=40_000, mean_income=60_000))
+    assert "above the median" in card.income_and_tenure.income_commentary
+
+
+def test_prose_obeys_house_conventions():
+    card = _assemble(make_profile())
+    prose = " ".join(
+        [
+            card.income_and_tenure.income_commentary,
+            card.income_and_tenure.tenure_commentary,
+            *[c.body for c in card.audience_and_demographics.audience_tiers],
+            *[c.body for c in card.audience_and_demographics.age_cohorts],
+        ]
+    )
+    assert "—" not in prose  # no em dashes
+    assert "#" not in prose  # no markdown headers
+    # No Oxford comma: avoid the ", and" pattern in generated prose.
+    assert ", and " not in prose
+
+
+def test_score_contributions_use_contract_signal_names():
+    card = _assemble(make_profile())
+    signals = {c.signal for c in card.score.contributions}
+    assert signals == {
+        "incomeFit",
+        "tenureSignal",
+        "ageSkew",
+        "addressableScale",
+        "householdType",
+    }

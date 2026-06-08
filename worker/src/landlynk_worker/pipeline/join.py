@@ -36,6 +36,7 @@ def build_area_profile(
         households=demographics_row.get("households"),
         median_income=income_row.get("median_income"),
         mean_income=income_row.get("mean_income"),
+        median_age=demographics_row.get("median_age"),
         tenure=TenureMix(
             owns_outright=tenure_row.get("owns_outright"),
             owns_with_mortgage=tenure_row.get("owns_with_mortgage"),

@@ -26,6 +26,7 @@ def make_profile(**overrides) -> AreaProfile:
         households=3200,
         median_income=60_000,
         mean_income=68_000,
+        median_age=39,
         tenure=TenureMix(
             owns_outright=0.25,
             owns_with_mortgage=0.40,

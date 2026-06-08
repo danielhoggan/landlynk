@@ -45,6 +45,7 @@ class AreaProfile:
     households: int | None
     median_income: float | None
     mean_income: float | None
+    median_age: float | None
     tenure: TenureMix
     age: AgeProfile
     family_household_share: float | None
