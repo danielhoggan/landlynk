@@ -43,7 +43,7 @@ _store: Storage | None = None
 _cache = None
 
 
-def get_pool() -> "ConnectionPool":  # pragma: no cover - needs a database
+def get_pool() -> ConnectionPool:  # pragma: no cover - needs a database
     global _pool
     if _pool is None:
         from psycopg_pool import ConnectionPool
