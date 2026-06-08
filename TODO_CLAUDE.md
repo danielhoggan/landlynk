@@ -22,16 +22,25 @@ the App Registration and the variables.
 - [x] SSO middleware gate on every route, sign-in page.
 - [x] Dockerfiles, Next standalone output, migration runner, Railway config.
 - [x] Deployment runbook (DEPLOYMENT.md).
+- [x] Battlecard charts in the web drawer (age bar, income bar with callouts,
+      tenure donut).
+- [x] Expanded Battlecard beyond the reference card, all data-derived: pricing
+      rationale (implied affordable price vs scheme price), addressable segment
+      sizes (FTB pipeline, downsizer pool, family households), catchment context
+      (income index, share of catchment population) and explicit data
+      confidence. Wired through the schema, assembler, web drawer and PDF.
 
 ## Building next (no dependency on your tasks)
 
 - [x] Development brief form: capture town, strapline, lifestyle pillars, feature
       bullets, price band and bed range on submission, so the Battlecard header
       and scoring use the real scheme rather than defaults.
+- [x] Battlecard charts in the web drawer (age bar, income bar with callouts,
+      tenure donut).
+- [x] Expanded Battlecard content (pricing, addressable segments, catchment
+      context, data confidence).
 - [ ] Scoring config panel: expose weights, price band, bed range and overlap
       threshold in the UI, persisted with the catchment.
-- [ ] Render the three Battlecard charts in the web drawer (age bar, income bar
-      with callouts, tenure donut) to match the Abbots Vale visual summary.
 - [ ] History page: list past catchments from the database, reopen one without
       recompute. (Nav link exists but is currently a dead route.)
 - [ ] Battlecards and Settings pages behind the existing nav links.

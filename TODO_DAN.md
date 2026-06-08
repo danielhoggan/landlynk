@@ -55,6 +55,9 @@ DEPLOYMENT.md. Rough order below.
       Battlecard header and scoring reflect the real scheme, not defaults). I am
       building the form to capture these; your example content lets me validate.
 - [ ] Confirm MSOA-only for MVP is fine, or whether you want LA-level now.
+- [ ] Confirm the income-to-price affordability multiple used in the new pricing
+      rationale (default 4.5x gross household income). Tell me if you price off a
+      different multiple or net income and I will adjust.
 - [ ] If you have the Tenorite font file, share it so I can embed it in the PDF
       and PPTX exports (currently a Helvetica fallback).
 
