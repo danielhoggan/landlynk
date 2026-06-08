@@ -51,6 +51,11 @@ export async function listCatchments(): Promise<CatchmentSummary[]> {
   return res.json();
 }
 
+export async function deleteCatchment(id: string): Promise<void> {
+  const res = await fetch(`/api/catchments/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Could not delete (${res.status})`);
+}
+
 export interface ReferenceStatus {
   status: string;
   rows: number | null;

@@ -50,6 +50,17 @@ export function listCatchments(): Promise<CatchmentSummary[]> {
   return workerFetch("/catchments");
 }
 
+/** Delete a catchment and its stored areas and Battlecards. */
+export async function deleteCatchmentJob(id: string): Promise<void> {
+  const res = await fetch(`${WORKER_BASE_URL}/catchments/${id}`, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Worker delete failed: ${res.status}`);
+  }
+}
+
 /** Read one area's stored Battlecard payload. No recompute needed. */
 export function getBattlecard(
   catchmentId: string,

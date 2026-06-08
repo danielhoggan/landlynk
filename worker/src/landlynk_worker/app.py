@@ -180,6 +180,13 @@ def get_catchment(catchment_id: str) -> dict:
     return data
 
 
+@app.delete("/catchments/{catchment_id}", status_code=204)
+def delete_catchment(catchment_id: str) -> Response:
+    if not get_store().delete_catchment(catchment_id):
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    return Response(status_code=204)
+
+
 @app.get("/catchments/{catchment_id}/battlecards/{area_code}")
 def get_battlecard(catchment_id: str, area_code: str) -> dict:
     data = get_store().get_battlecard(catchment_id, area_code)

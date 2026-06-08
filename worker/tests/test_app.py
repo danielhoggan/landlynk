@@ -115,6 +115,18 @@ def test_unknown_catchment_404(client):
     assert client.get("/catchments/does-not-exist").status_code == 404
 
 
+def test_delete_catchment(client, monkeypatch):
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job_id = client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "IP14 1AA", "developmentName": "A"},
+    ).json()["id"]
+    assert client.get(f"/catchments/{job_id}").status_code == 200
+    assert client.delete(f"/catchments/{job_id}").status_code == 204
+    assert client.get(f"/catchments/{job_id}").status_code == 404
+    assert client.delete(f"/catchments/{job_id}").status_code == 404
+
+
 def test_reference_load_dispatch(client, monkeypatch):
     # Avoid building a real pool or running a real load.
     monkeypatch.setattr(app_module, "get_pool", lambda: object())

@@ -101,6 +101,14 @@ def test_missing_catchment_returns_none():
     assert store.get_battlecard("nope", "X") is None
 
 
+def test_delete_catchment():
+    store = InMemoryStore()
+    store.create_job("cid", JobInput("postcode", "X", "Y"), ScoringConfig(), "system")
+    assert store.delete_catchment("cid") is True
+    assert store.get_catchment("cid") is None
+    assert store.delete_catchment("cid") is False  # already gone
+
+
 def test_mark_status_failure():
     store = InMemoryStore()
     store.create_job("cid", JobInput("postcode", "X", "Y"), ScoringConfig(), "system")

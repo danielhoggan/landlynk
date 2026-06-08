@@ -77,6 +77,7 @@ class Storage(Protocol):
     def get_catchment(self, catchment_id: str) -> dict | None: ...
     def get_battlecard(self, catchment_id: str, area_code: str) -> dict | None: ...
     def list_catchments(self, limit: int = 100) -> list[dict]: ...
+    def delete_catchment(self, catchment_id: str) -> bool: ...
 
 
 @dataclass
@@ -157,6 +158,9 @@ class InMemoryStore:
         ]
         items.sort(key=lambda i: i["createdAt"], reverse=True)
         return items[:limit]
+
+    def delete_catchment(self, catchment_id: str) -> bool:
+        return self._records.pop(catchment_id, None) is not None
 
 
 class PostgresStore:
@@ -301,6 +305,12 @@ class PostgresStore:
                 [catchment_id, area_code],
             ).fetchone()
         return row[0] if row else None
+
+    def delete_catchment(self, catchment_id: str) -> bool:
+        # catchment_area and battlecard cascade via their foreign keys.
+        with self._pool.connection() as conn:
+            cur = conn.execute("DELETE FROM catchment WHERE id = %s", [catchment_id])
+            return cur.rowcount > 0
 
     def list_catchments(self, limit: int = 100) -> list[dict]:
         with self._pool.connection() as conn:
