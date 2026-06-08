@@ -52,7 +52,14 @@ export function OnLocationSummary({
           value={fmtPercent(stats.ownerOccupiedPercentage)}
         />
         <Stat label="Median age" value={fmtValue(stats.medianAge)} />
-        <Stat label="Bed range" value={stats.bedRange} />
+        <Stat
+          label="Income vs catchment"
+          value={
+            battlecard.catchmentContext.incomeIndex.value == null
+              ? "n/a"
+              : `${battlecard.catchmentContext.incomeIndex.value} (100=avg)`
+          }
+        />
       </dl>
     </div>
   );

@@ -44,7 +44,7 @@ export function tagsForArea(area: CatchmentArea): SignalTag[] {
 }
 
 /** Whether an area matches the selected tag filter (any of the selected tags). */
-export function areaMatchesFilter(
+export function areaMatchesTags(
   area: CatchmentArea,
   selected: Set<string>,
 ): boolean {
@@ -54,4 +54,48 @@ export function areaMatchesFilter(
     if (ids.has(id)) return true;
   }
   return false;
+}
+
+// Numeric metrics the results can be range-filtered on.
+export type MetricKey =
+  | "income"
+  | "medianAge"
+  | "ownerOccupied"
+  | "privateRented"
+  | "familyShare";
+
+export interface MetricFilterDef {
+  key: MetricKey;
+  label: string;
+  prefix?: string;
+  suffix?: string;
+}
+
+export const METRIC_FILTERS: MetricFilterDef[] = [
+  { key: "income", label: "Avg income", prefix: "£" },
+  { key: "medianAge", label: "Median age" },
+  { key: "ownerOccupied", label: "Owner-occupied", suffix: "%" },
+  { key: "privateRented", label: "Private rented", suffix: "%" },
+  { key: "familyShare", label: "Family households", suffix: "%" },
+];
+
+export type MetricRanges = Partial<
+  Record<MetricKey, { min?: number; max?: number }>
+>;
+
+/** Whether an area passes both the tag filter and all active numeric ranges. */
+export function areaMatchesFilters(
+  area: CatchmentArea,
+  tags: Set<string>,
+  ranges: MetricRanges,
+): boolean {
+  if (!areaMatchesTags(area, tags)) return false;
+  for (const [key, range] of Object.entries(ranges)) {
+    if (!range || (range.min == null && range.max == null)) continue;
+    const val = area.metrics ? area.metrics[key as MetricKey] : null;
+    if (val == null) return false;
+    if (range.min != null && val < range.min) return false;
+    if (range.max != null && val > range.max) return false;
+  }
+  return true;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, Download, ChevronDown } from "lucide-react";
+import { MapPin, Download, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { CatchmentMap } from "@/components/map/CatchmentMap";
 import { RankingList } from "@/components/map/RankingList";
 import { BattlecardDrawer } from "@/components/battlecard/BattlecardDrawer";
@@ -12,7 +12,13 @@ import type {
 } from "@/lib/types/catchment";
 import type { Battlecard } from "@/lib/types/battlecard";
 import { getBattlecard, pollCatchment, submitCatchment } from "@/lib/client";
-import { SIGNAL_TAGS, areaMatchesFilter } from "@/lib/areaTags";
+import {
+  SIGNAL_TAGS,
+  METRIC_FILTERS,
+  areaMatchesFilters,
+  type MetricKey,
+  type MetricRanges,
+} from "@/lib/areaTags";
 
 // Scoring signal weights exposed in the config panel. Keys are snake_case to
 // match the scoring engine (SCOPING.md Section 8).
@@ -75,8 +81,12 @@ export default function HomePage() {
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
 
-  // Signal filter (first-time buyer, high net worth, etc.).
+  // Results filters: preset signal tags plus numeric metric ranges.
   const [filter, setFilter] = useState<Set<string>>(new Set());
+  const [showFilters, setShowFilters] = useState(false);
+  const [rangeInputs, setRangeInputs] = useState<
+    Record<string, { min: string; max: string }>
+  >({});
   const toggleFilter = (id: string) =>
     setFilter((prev) => {
       const next = new Set(prev);
@@ -84,9 +94,32 @@ export default function HomePage() {
       else next.add(id);
       return next;
     });
-  const filteredAreas = areas.filter((a) => areaMatchesFilter(a, filter));
+  const setRange = (key: string, side: "min" | "max", v: string) =>
+    setRangeInputs((prev) => {
+      const current = prev[key] ?? { min: "", max: "" };
+      return { ...prev, [key]: { ...current, [side]: v } };
+    });
+  const ranges: MetricRanges = {};
+  for (const [key, r] of Object.entries(rangeInputs)) {
+    const min = r.min === "" ? undefined : Number(r.min);
+    const max = r.max === "" ? undefined : Number(r.max);
+    if (min !== undefined || max !== undefined) {
+      ranges[key as MetricKey] = { min, max };
+    }
+  }
+  const activeFilterCount = filter.size + Object.keys(ranges).length;
+  const filteredAreas = areas.filter((a) =>
+    areaMatchesFilters(a, filter, ranges),
+  );
   const matchedCodes =
-    filter.size === 0 ? null : new Set(filteredAreas.map((a) => a.areaCode));
+    activeFilterCount === 0
+      ? null
+      : new Set(filteredAreas.map((a) => a.areaCode));
+
+  const clearFilters = () => {
+    setFilter(new Set());
+    setRangeInputs({});
+  };
 
   // Reopen a saved catchment when arriving from the history view
   // (/?catchment=<id>). Served from stored data, no recompute.
@@ -388,42 +421,88 @@ export default function HomePage() {
       )}
 
       {catchment?.status === "complete" && areas.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-neutral-500">Filter</span>
-            {SIGNAL_TAGS.map((t) => {
-              const active = filter.has(t.id);
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => toggleFilter(t.id)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                    active
-                      ? "bg-light-accent text-white"
-                      : "border border-neutral-300 text-neutral-600 hover:bg-neutral-100"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-            {filter.size > 0 && (
+        <div className="space-y-3 rounded-card border border-neutral-200 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-neutral-500">
+                Filter
+              </span>
+              {SIGNAL_TAGS.map((t) => {
+                const active = filter.has(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => toggleFilter(t.id)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                      active
+                        ? "bg-light-accent text-white"
+                        : "border border-neutral-300 text-neutral-600 hover:bg-neutral-100"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
               <button
                 type="button"
-                onClick={() => setFilter(new Set())}
-                className="text-xs font-medium text-neutral-400 hover:text-neutral-700"
+                onClick={() => setShowFilters((s) => !s)}
+                className="flex items-center gap-1 rounded-full border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
               >
-                Clear
+                <SlidersHorizontal size={12} /> Ranges
+                <ChevronDown
+                  size={12}
+                  className={showFilters ? "rotate-180" : ""}
+                />
               </button>
-            )}
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-xs font-medium text-neutral-400 hover:text-neutral-700"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <a
+              href={`/api/catchments/${catchment.id}/kml`}
+              className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
+            >
+              <Download size={16} /> Download KML
+            </a>
           </div>
-          <a
-            href={`/api/catchments/${catchment.id}/kml`}
-            className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
-          >
-            <Download size={16} /> Download KML
-          </a>
+
+          {showFilters && (
+            <div className="grid gap-3 border-t border-neutral-200 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+              {METRIC_FILTERS.map((m) => (
+                <div key={m.key}>
+                  <span className="mb-1 block text-xs font-medium text-neutral-500">
+                    {m.label}
+                    {m.prefix ? ` (${m.prefix})` : ""}
+                    {m.suffix ? ` (${m.suffix})` : ""}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={rangeInputs[m.key]?.min ?? ""}
+                      onChange={(e) => setRange(m.key, "min", e.target.value)}
+                      placeholder="min"
+                      className="w-full rounded-card border border-neutral-300 px-2 py-1.5 text-xs outline-none focus:border-light-accent focus:ring-2 focus:ring-light-accent/20"
+                    />
+                    <span className="text-xs text-neutral-400">to</span>
+                    <input
+                      type="number"
+                      value={rangeInputs[m.key]?.max ?? ""}
+                      onChange={(e) => setRange(m.key, "max", e.target.value)}
+                      placeholder="max"
+                      className="w-full rounded-card border border-neutral-300 px-2 py-1.5 text-xs outline-none focus:border-light-accent focus:ring-2 focus:ring-light-accent/20"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -439,7 +518,7 @@ export default function HomePage() {
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-neutral-500">
             Priority ranking
-            {filter.size > 0 && (
+            {activeFilterCount > 0 && (
               <span className="ml-1 font-normal text-neutral-400">
                 ({filteredAreas.length} of {areas.length})
               </span>
