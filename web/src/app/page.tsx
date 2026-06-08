@@ -134,6 +134,11 @@ export default function HomePage() {
         battlecard={selected}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        pdfUrl={
+          catchment && selectedCode
+            ? `/api/catchments/${catchment.id}/battlecards/${selectedCode}/pdf`
+            : undefined
+        }
       />
     </div>
   );

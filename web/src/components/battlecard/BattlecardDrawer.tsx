@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Download } from "lucide-react";
 import type { Battlecard } from "@/lib/types/battlecard";
 import { OnLocationSummary } from "./OnLocationSummary";
 import { ScoreExplainer } from "./ScoreExplainer";
@@ -10,6 +10,8 @@ interface BattlecardDrawerProps {
   battlecard: Battlecard | null;
   open: boolean;
   onClose: () => void;
+  /** Download URL for the PDF export, when a catchment is loaded. */
+  pdfUrl?: string;
 }
 
 // Clicking a region opens its deep-dive in the slide-out drawer, never a full
@@ -19,6 +21,7 @@ export function BattlecardDrawer({
   battlecard,
   open,
   onClose,
+  pdfUrl,
 }: BattlecardDrawerProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -52,6 +55,16 @@ export function BattlecardDrawer({
       {battlecard ? (
         <div className="space-y-6">
           <OnLocationSummary battlecard={battlecard} onOpenFull={() => {}} />
+
+          {pdfUrl && (
+            <a
+              href={pdfUrl}
+              className="flex items-center justify-center gap-2 rounded-card border border-neutral-300 py-2 text-sm font-semibold dark:border-neutral-700"
+            >
+              <Download size={16} /> Export PDF Battlecard
+            </a>
+          )}
+
           <ScoreExplainer score={battlecard.score} />
 
           {/* Page 2 and 3 commentary. Output font, signal-driven prose. */}
