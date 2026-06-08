@@ -63,10 +63,19 @@ def test_income_fit_rewards_alignment_not_wealth():
 
 def test_income_fit_handles_suppressed_income():
     config = ScoringConfig()
-    suppressed = make_profile(median_income=None)
+    suppressed = make_profile(median_income=None, mean_income=None)
     signal = score_income_fit(suppressed, config)
     assert signal.raw_score == 0.0
     assert "suppressed" in signal.rationale.lower()
+
+
+def test_income_fit_falls_back_to_mean_when_median_missing():
+    config = ScoringConfig(price_band=PriceBand(250_000, 400_000))
+    target = config.price_band.midpoint / config.affordability_multiple
+    profile = make_profile(median_income=None, mean_income=target)
+    signal = score_income_fit(profile, config)
+    assert signal.raw_score == 1.0
+    assert "Mean income" in signal.rationale
 
 
 def test_addressable_scale_weighted_by_proportion_inside():

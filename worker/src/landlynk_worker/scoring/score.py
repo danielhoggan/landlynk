@@ -51,13 +51,18 @@ def score_income_fit(profile: AreaProfile, config: ScoringConfig) -> SignalScore
     """Reward alignment between area income and the price band, not raw wealth.
 
     The Abbots Vale logic is the model: a narrow income spread argues for
-    mid-market positioning, not luxury. Fit is highest when the area's median
-    income is close to the income the product price implies.
+    mid-market positioning, not luxury. Fit is highest when the area's income is
+    close to the income the product price implies. Prefers median income, and
+    falls back to mean when median is unavailable (ONS small-area income is often
+    mean only at MSOA level).
     """
-    if profile.median_income is None:
-        return SignalScore(
-            "income_fit", 0.0, "Median income suppressed, no income fit signal"
-        )
+    income = profile.median_income
+    income_label = "Median income"
+    if income is None:
+        income = profile.mean_income
+        income_label = "Mean income"
+    if income is None:
+        return SignalScore("income_fit", 0.0, "Income suppressed, no income fit signal")
 
     target = config.price_band.midpoint / config.affordability_multiple
     if target <= 0:
@@ -65,13 +70,13 @@ def score_income_fit(profile: AreaProfile, config: ScoringConfig) -> SignalScore
             "income_fit", 0.0, "Invalid price band, cannot compute income fit"
         )
 
-    relative_gap = abs(profile.median_income - target) / target
+    relative_gap = abs(income - target) / target
     raw = _clamp01(1.0 - relative_gap)
     return SignalScore(
         "income_fit",
         raw,
         (
-            f"Median income {profile.median_income:,.0f} against an implied target of "
+            f"{income_label} {income:,.0f} against an implied target of "
             f"{target:,.0f}, a {relative_gap * 100:.0f}% gap"
         ),
     )

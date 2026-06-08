@@ -138,14 +138,48 @@ def _fetch_csv_text(url: str, area_type: str) -> str:
         return zf.read(match).decode("utf-8-sig")
 
 
+_XLSX_CODE_HINTS = (
+    "msoa code",
+    "area code",
+    "geography code",
+    "msoa11cd",
+    "msoa21cd",
+    "lad code",
+    "la code",
+)
+
+
+def _looks_like_header(cells: list[str]) -> bool:
+    """True if a row looks like the data header (carries an area-code column).
+
+    ONS spreadsheets have title and notes rows before the real header, so we
+    scan for the first row that has an area-code column and several fields.
+    """
+    low = [c.lower() for c in cells]
+    has_code = any(c in _XLSX_CODE_HINTS for c in low) or any(
+        "msoa" in c and "code" in c for c in low
+    )
+    return has_code and sum(1 for c in cells if c) >= 3
+
+
 def _read_xlsx(content: bytes) -> list[dict]:
     from openpyxl import load_workbook
 
     wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    for ws in wb.worksheets:
+        rows = list(ws.iter_rows(values_only=True))
+        for i, row in enumerate(rows[:40]):
+            cells = [str(c).strip() if c is not None else "" for c in row]
+            if _looks_like_header(cells):
+                records = [dict(zip(cells, r, strict=False)) for r in rows[i + 1 :]]
+                records = [r for r in records if any(v is not None for v in r.values())]
+                if records:
+                    return records
+    # Fallback: first sheet, header in row 1.
     ws = wb.active
-    rows_iter = ws.iter_rows(values_only=True)
-    header = [str(c) if c is not None else "" for c in next(rows_iter)]
-    return [dict(zip(header, values, strict=False)) for values in rows_iter]
+    it = ws.iter_rows(values_only=True)
+    header = [str(c) if c is not None else "" for c in next(it)]
+    return [dict(zip(header, v, strict=False)) for v in it]
 
 
 # --- Transforms to rows ------------------------------------------------------
@@ -254,8 +288,21 @@ def _income_rows(records: list[dict], area_type: str) -> list[dict]:
     code_col = t.find_column(
         fieldnames, ("msoa code", "area code", "geography code", "code")
     )
-    mean_col = t.find_column(fieldnames, ("net annual income (mean)", "mean"))
-    median_col = t.find_column(fieldnames, ("net annual income (median)", "median"))
+    # ONS small-area income is mean-based ("Net annual income (£)"); match it
+    # broadly. Median is often absent at MSOA level.
+    mean_col = t.find_column(
+        fieldnames,
+        (
+            "net annual income (mean)",
+            "net annual income",
+            "mean income",
+            "mean",
+            "income",
+        ),
+    )
+    median_col = t.find_column(
+        fieldnames, ("net annual income (median)", "median income", "median")
+    )
     if code_col is None:
         raise ValueError(f"No area code column found in {fieldnames}")
     rows: list[dict] = []
