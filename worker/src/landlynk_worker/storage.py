@@ -47,6 +47,33 @@ def scoring_config_to_dict(config: ScoringConfig) -> dict:
     }
 
 
+def _area_metrics(payload: dict | None) -> dict | None:
+    """Compact per-area metrics for map tooltips and client-side filtering.
+
+    Pulled from the stored Battlecard payload so the catchment response carries
+    enough to drive hover info and signal filters without fetching every card.
+    """
+    if not payload:
+        return None
+    vs = payload.get("visualSummary") or {}
+    ks = vs.get("keyStatistics") or {}
+    tenure = (vs.get("charts") or {}).get("housingTenure") or {}
+    ctx = payload.get("catchmentContext") or {}
+
+    def val(d: dict | None) -> float | None:
+        return (d or {}).get("value")
+
+    return {
+        "income": val(ks.get("averageHouseholdIncome")),
+        "ownerOccupied": val(ks.get("ownerOccupiedPercentage")),
+        "medianAge": val(ks.get("medianAge")),
+        "familyShare": val(ks.get("familyHouseholdShare")),
+        "privateRented": val(tenure.get("privateRented")),
+        "ownsOutright": val(tenure.get("ownsOutright")),
+        "incomeIndex": val(ctx.get("incomeIndex")),
+    }
+
+
 def _serialise_areas_from_result(result: CatchmentResult) -> list[dict]:
     total = len(result.areas)
     return [
@@ -59,6 +86,11 @@ def _serialise_areas_from_result(result: CatchmentResult) -> list[dict]:
             "band": relative_band(a.rank, total),
             "rank": a.rank,
             "geometry": a.geometry,
+            "metrics": _area_metrics(
+                result.battlecards[a.area_code].model_dump(by_alias=True)
+                if a.area_code in result.battlecards
+                else None
+            ),
         }
         for a in result.areas
     ]
@@ -267,9 +299,11 @@ class PostgresStore:
             area_rows = conn.execute(
                 "SELECT ca.area_code, ca.area_type, gb.area_name, "
                 "ca.proportion_inside, ca.priority_score, ca.rank, "
-                "ST_AsGeoJSON(gb.geom) AS geom "
+                "ST_AsGeoJSON(gb.geom) AS geom, b.payload "
                 "FROM catchment_area ca "
                 "LEFT JOIN geo_boundaries gb ON gb.area_code = ca.area_code "
+                "LEFT JOIN battlecard b ON b.catchment_id = ca.catchment_id "
+                "AND b.area_code = ca.area_code "
                 "WHERE ca.catchment_id = %s ORDER BY ca.rank",
                 [catchment_id],
             ).fetchall()
@@ -285,8 +319,9 @@ class PostgresStore:
                 "band": relative_band(rank, total),
                 "rank": rank,
                 "geometry": json.loads(geom) if geom else None,
+                "metrics": _area_metrics(payload),
             }
-            for (code, a_type, name, prop, score, rank, geom) in area_rows
+            for (code, a_type, name, prop, score, rank, geom, payload) in area_rows
         ]
         return {
             "id": catchment_id,

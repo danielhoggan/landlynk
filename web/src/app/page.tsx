@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types/catchment";
 import type { Battlecard } from "@/lib/types/battlecard";
 import { getBattlecard, pollCatchment, submitCatchment } from "@/lib/client";
+import { SIGNAL_TAGS, areaMatchesFilter } from "@/lib/areaTags";
 
 // Scoring signal weights exposed in the config panel. Keys are snake_case to
 // match the scoring engine (SCOPING.md Section 8).
@@ -73,6 +74,19 @@ export default function HomePage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
+
+  // Signal filter (first-time buyer, high net worth, etc.).
+  const [filter, setFilter] = useState<Set<string>>(new Set());
+  const toggleFilter = (id: string) =>
+    setFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const filteredAreas = areas.filter((a) => areaMatchesFilter(a, filter));
+  const matchedCodes =
+    filter.size === 0 ? null : new Set(filteredAreas.map((a) => a.areaCode));
 
   // Reopen a saved catchment when arriving from the history view
   // (/?catchment=<id>). Served from stored data, no recompute.
@@ -374,12 +388,41 @@ export default function HomePage() {
       )}
 
       {catchment?.status === "complete" && areas.length > 0 && (
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-neutral-500">Filter</span>
+            {SIGNAL_TAGS.map((t) => {
+              const active = filter.has(t.id);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => toggleFilter(t.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    active
+                      ? "bg-light-accent text-white"
+                      : "border border-neutral-300 text-neutral-600 hover:bg-neutral-100"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+            {filter.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setFilter(new Set())}
+                className="text-xs font-medium text-neutral-400 hover:text-neutral-700"
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <a
             href={`/api/catchments/${catchment.id}/kml`}
             className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
           >
-            <Download size={16} /> Download KML for Google Earth
+            <Download size={16} /> Download KML
           </a>
         </div>
       )}
@@ -391,10 +434,16 @@ export default function HomePage() {
           coordinate={catchment?.coordinate ?? null}
           onSelectArea={onSelectArea}
           selectedAreaCode={selectedCode}
+          matchedCodes={matchedCodes}
         />
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-neutral-500">
             Priority ranking
+            {filter.size > 0 && (
+              <span className="ml-1 font-normal text-neutral-400">
+                ({filteredAreas.length} of {areas.length})
+              </span>
+            )}
           </h2>
           {areas.length === 0 ? (
             <p className="rounded-card border border-dashed border-neutral-300 p-4 text-xs text-neutral-500">
@@ -402,9 +451,13 @@ export default function HomePage() {
                 ? "Scoring areas..."
                 : "Build a catchment to see ranked areas here."}
             </p>
+          ) : filteredAreas.length === 0 ? (
+            <p className="rounded-card border border-dashed border-neutral-300 p-4 text-xs text-neutral-500">
+              No areas match this filter.
+            </p>
           ) : (
             <RankingList
-              areas={areas}
+              areas={filteredAreas}
               onSelectArea={onSelectArea}
               selectedAreaCode={selectedCode}
             />

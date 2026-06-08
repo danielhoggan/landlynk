@@ -2,6 +2,7 @@
 
 import type { CatchmentArea } from "@/lib/types/catchment";
 import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/lib/priority";
+import { tagsForArea } from "@/lib/areaTags";
 
 interface RankingListProps {
   areas: CatchmentArea[];
@@ -40,11 +41,25 @@ export function RankingList({
                 className="inline-block h-3 w-3 shrink-0 rounded-full"
                 style={{ backgroundColor: PRIORITY_COLORS[area.band] }}
               />
-              <span className="flex-1">
-                <span className="block text-sm font-semibold">{area.name}</span>
-                <span className="block text-xs text-neutral-500">
-                  {area.areaCode} - {PRIORITY_LABELS[area.band]}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold">
+                  {area.name}
                 </span>
+                <span className="block text-xs text-neutral-500">
+                  {PRIORITY_LABELS[area.band]}
+                </span>
+                {tagsForArea(area).length > 0 && (
+                  <span className="mt-1 flex flex-wrap gap-1">
+                    {tagsForArea(area).map((t) => (
+                      <span
+                        key={t.id}
+                        className="rounded-full bg-light-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-light-accent"
+                      >
+                        {t.label}
+                      </span>
+                    ))}
+                  </span>
+                )}
               </span>
               <span className="text-sm font-semibold tabular-nums">
                 {area.score.toFixed(2)}

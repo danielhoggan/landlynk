@@ -54,6 +54,17 @@ export type GeoJsonGeometry = {
   coordinates: unknown;
 };
 
+/** Compact per-area metrics for map tooltips and signal filtering. */
+export interface AreaMetrics {
+  income: number | null;
+  ownerOccupied: number | null;
+  medianAge: number | null;
+  familyShare: number | null;
+  privateRented: number | null;
+  ownsOutright: number | null;
+  incomeIndex: number | null;
+}
+
 /** A scored, ranked area inside the catchment. Drives the map and ranking list. */
 export interface CatchmentArea {
   areaCode: string;
@@ -64,6 +75,7 @@ export interface CatchmentArea {
   band: PriorityBand;
   rank: number;
   geometry: GeoJsonGeometry;
+  metrics?: AreaMetrics | null;
 }
 
 /** Summary row for the history list. */

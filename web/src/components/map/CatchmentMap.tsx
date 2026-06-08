@@ -8,7 +8,8 @@ import type {
   Coordinate,
   GeoJsonGeometry,
 } from "@/lib/types/catchment";
-import { PRIORITY_COLORS } from "@/lib/priority";
+import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/lib/priority";
+import { tagsForArea } from "@/lib/areaTags";
 
 interface CatchmentMapProps {
   areas: CatchmentArea[];
@@ -16,6 +17,8 @@ interface CatchmentMapProps {
   coordinate: Coordinate | null;
   onSelectArea: (area: CatchmentArea) => void;
   selectedAreaCode?: string;
+  /** Area codes passing the active filter; others are dimmed. null = no filter. */
+  matchedCodes?: Set<string> | null;
 }
 
 // Open vector base map. OpenFreeMap is free, OSM-based and needs no API key, so
@@ -25,7 +28,15 @@ const BASE_STYLE: string =
   process.env.NEXT_PUBLIC_MAP_STYLE ??
   "https://tiles.openfreemap.org/styles/liberty";
 
-function areasToFeatures(areas: CatchmentArea[]): GeoJSON.FeatureCollection {
+const fmtMoney = (v: number | null | undefined) =>
+  v == null ? "n/a" : `£${Math.round(v).toLocaleString()}`;
+const fmtPct = (v: number | null | undefined) =>
+  v == null ? "n/a" : `${v.toFixed(1)}%`;
+
+function areasToFeatures(
+  areas: CatchmentArea[],
+  matchedCodes: Set<string> | null | undefined,
+): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
     features: areas
@@ -38,32 +49,39 @@ function areasToFeatures(areas: CatchmentArea[]): GeoJSON.FeatureCollection {
           band: a.band,
           rank: a.rank,
           name: a.name,
+          score: a.score,
+          income: a.metrics?.income ?? null,
+          ownerOccupied: a.metrics?.ownerOccupied ?? null,
+          tags: tagsForArea(a)
+            .map((t) => t.label)
+            .join(", "),
+          match: matchedCodes ? (matchedCodes.has(a.areaCode) ? 1 : 0) : 1,
         },
       })),
   };
 }
 
 // The interactive catchment map (design-framework.md). The drive-time isochrone
-// is a translucent overlay so the boundary stays visible; each region is
-// clickable and colour-coded by priority band. Clicking opens the deep-dive
-// without leaving the map.
+// is a translucent overlay; each region is colour-coded by priority band,
+// dimmed when filtered out, hoverable for its key numbers, and clickable to open
+// the deep-dive.
 export function CatchmentMap({
   areas,
   isochrone,
   coordinate,
   onSelectArea,
   selectedAreaCode,
+  matchedCodes,
 }: CatchmentMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
-  // Keep the latest callback without re-binding map listeners.
+  const popupRef = useRef<maplibregl.Popup | null>(null);
   const onSelectRef = useRef(onSelectArea);
   onSelectRef.current = onSelectArea;
   const areasRef = useRef(areas);
   areasRef.current = areas;
 
-  // Initialise the map once.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
@@ -76,6 +94,13 @@ export function CatchmentMap({
       new maplibregl.NavigationControl({ showCompass: false }),
       "top-right",
     );
+    const popup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 12,
+      className: "ll-popup",
+    });
+    popupRef.current = popup;
 
     map.on("load", () => {
       map.addSource("isochrone", { type: "geojson", data: emptyFc() });
@@ -83,7 +108,7 @@ export function CatchmentMap({
         id: "isochrone-fill",
         type: "fill",
         source: "isochrone",
-        paint: { "fill-color": "#0071E3", "fill-opacity": 0.08 },
+        paint: { "fill-color": "#0071E3", "fill-opacity": 0.06 },
       });
       map.addLayer({
         id: "isochrone-line",
@@ -109,7 +134,8 @@ export function CatchmentMap({
             PRIORITY_COLORS.low,
             "#999999",
           ],
-          "fill-opacity": 0.55,
+          // Dim areas filtered out.
+          "fill-opacity": ["case", ["==", ["get", "match"], 1], 0.55, 0.07],
         },
       });
       map.addLayer({
@@ -127,15 +153,31 @@ export function CatchmentMap({
         const area = areasRef.current.find((a) => a.areaCode === code);
         if (area) onSelectRef.current(area);
       });
-      map.on("mouseenter", "areas-fill", () => {
+      map.on("mousemove", "areas-fill", (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
         map.getCanvas().style.cursor = "pointer";
+        const p = f.properties as Record<string, unknown>;
+        const tags = (p.tags as string) || "";
+        popup
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div class="text-xs">
+               <div class="font-semibold text-sm">#${p.rank} ${escapeHtml(String(p.name ?? ""))}</div>
+               <div class="text-neutral-500">${PRIORITY_LABELS[p.band as "high" | "mid" | "low"]} · score ${Number(p.score).toFixed(2)}</div>
+               <div class="mt-1">Avg income: ${fmtMoney(p.income as number | null)}</div>
+               <div>Owner-occupied: ${fmtPct(p.ownerOccupied as number | null)}</div>
+               ${tags ? `<div class="mt-1 text-light-accent">${escapeHtml(tags)}</div>` : ""}
+             </div>`,
+          )
+          .addTo(map);
       });
       map.on("mouseleave", "areas-fill", () => {
         map.getCanvas().style.cursor = "";
+        popup.remove();
       });
 
       mapRef.current = map;
-      // Draw any data that arrived before load completed.
       syncData();
     });
 
@@ -146,7 +188,6 @@ export function CatchmentMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Push area, isochrone and pin updates to the map.
   function syncData() {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
@@ -154,7 +195,7 @@ export function CatchmentMap({
     const areaSource = map.getSource("areas") as
       | maplibregl.GeoJSONSource
       | undefined;
-    areaSource?.setData(areasToFeatures(areas));
+    areaSource?.setData(areasToFeatures(areas, matchedCodes));
 
     const isoSource = map.getSource("isochrone") as
       | maplibregl.GeoJSONSource
@@ -182,9 +223,8 @@ export function CatchmentMap({
   useEffect(() => {
     syncData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areas, isochrone, coordinate]);
+  }, [areas, isochrone, coordinate, matchedCodes]);
 
-  // Highlight the selected region.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.getLayer("areas-line")) return;
@@ -210,7 +250,14 @@ function emptyFc(): GeoJSON.FeatureCollection {
   return { type: "FeatureCollection", features: [] };
 }
 
-// Compute a bounding box from a polygon or multipolygon geometry.
+function escapeHtml(s: string): string {
+  return s.replace(
+    /[&<>"]/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string,
+  );
+}
+
 function bounds(
   geometry: GeoJSON.Geometry,
 ): maplibregl.LngLatBoundsLike | null {
