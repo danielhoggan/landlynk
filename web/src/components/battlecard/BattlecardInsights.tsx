@@ -24,50 +24,58 @@ export function BattlecardInsights({
   context,
   confidence,
 }: {
-  pricing: PricingRationale;
-  segments: AddressableSegments;
-  context: CatchmentContext;
-  confidence: DataConfidence;
+  pricing?: PricingRationale;
+  segments?: AddressableSegments;
+  context?: CatchmentContext;
+  confidence?: DataConfidence;
 }) {
+  // Older stored Battlecards predate these sections. Render what is present and
+  // skip the rest rather than crashing the drawer on a partial payload.
   return (
     <div className="space-y-4">
-      <section className="rounded-card border border-neutral-200 p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Pricing rationale</h3>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${
-              CONFIDENCE_STYLE[confidence.level]
-            }`}
-          >
-            {confidence.level} confidence
-          </span>
-        </div>
-        <p className="output-prose text-sm leading-relaxed">
-          {pricing.positioning}
-        </p>
-      </section>
+      {pricing && (
+        <section className="rounded-card border border-neutral-200 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Pricing rationale</h3>
+            {confidence && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${
+                  CONFIDENCE_STYLE[confidence.level]
+                }`}
+              >
+                {confidence.level} confidence
+              </span>
+            )}
+          </div>
+          <p className="output-prose text-sm leading-relaxed">
+            {pricing.positioning}
+          </p>
+        </section>
+      )}
 
-      <section className="rounded-card border border-neutral-200 p-4">
-        <h3 className="mb-3 text-sm font-semibold">
-          Addressable segments in catchment
-        </h3>
-        <dl className="grid grid-cols-3 gap-3">
-          <Stat
-            label="FTB pipeline"
-            value={fmtValue(segments.firstTimeBuyerPipeline)}
-          />
-          <Stat
-            label="Downsizer pool"
-            value={fmtValue(segments.downsizerPool)}
-          />
-          <Stat
-            label="Family households"
-            value={fmtValue(segments.familyHouseholds)}
-          />
-        </dl>
-      </section>
+      {segments && (
+        <section className="rounded-card border border-neutral-200 p-4">
+          <h3 className="mb-3 text-sm font-semibold">
+            Addressable segments in catchment
+          </h3>
+          <dl className="grid grid-cols-3 gap-3">
+            <Stat
+              label="FTB pipeline"
+              value={fmtValue(segments.firstTimeBuyerPipeline)}
+            />
+            <Stat
+              label="Downsizer pool"
+              value={fmtValue(segments.downsizerPool)}
+            />
+            <Stat
+              label="Family households"
+              value={fmtValue(segments.familyHouseholds)}
+            />
+          </dl>
+        </section>
+      )}
 
-      {context.incomeIndex.value !== null && (
+      {context && context.incomeIndex.value !== null && (
         <section className="rounded-card border border-neutral-200 p-4">
           <h3 className="mb-3 text-sm font-semibold">Versus the catchment</h3>
           <dl className="grid grid-cols-2 gap-3">
@@ -87,7 +95,7 @@ export function BattlecardInsights({
         </section>
       )}
 
-      {confidence.suppressedFields.length > 0 && (
+      {confidence && confidence.suppressedFields.length > 0 && (
         <p className="text-xs text-neutral-500">
           Suppressed inputs: {confidence.suppressedFields.join(", ")}.{" "}
           {confidence.note}

@@ -91,25 +91,29 @@ export function BattlecardDrawer({
             confidence={battlecard.dataConfidence}
           />
 
-          <BattlecardCharts charts={battlecard.visualSummary.charts} />
+          {battlecard.visualSummary?.charts && (
+            <BattlecardCharts charts={battlecard.visualSummary.charts} />
+          )}
 
-          <ScoreExplainer score={battlecard.score} />
+          {battlecard.score && <ScoreExplainer score={battlecard.score} />}
 
           {/* Page 2 and 3 commentary. Output font, signal-driven prose. */}
-          <section className="output-prose space-y-4 text-sm leading-relaxed">
-            <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                Household income
-              </p>
-              <p>{battlecard.incomeAndTenure.incomeCommentary}</p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                Housing tenure
-              </p>
-              <p>{battlecard.incomeAndTenure.tenureCommentary}</p>
-            </div>
-          </section>
+          {battlecard.incomeAndTenure && (
+            <section className="output-prose space-y-4 text-sm leading-relaxed">
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                  Household income
+                </p>
+                <p>{battlecard.incomeAndTenure.incomeCommentary}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                  Housing tenure
+                </p>
+                <p>{battlecard.incomeAndTenure.tenureCommentary}</p>
+              </div>
+            </section>
+          )}
         </div>
       ) : (
         <p className="text-sm text-neutral-500">Loading Battlecard...</p>
