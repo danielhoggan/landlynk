@@ -5,6 +5,7 @@ import { X, Download } from "lucide-react";
 import type { Battlecard } from "@/lib/types/battlecard";
 import { OnLocationSummary } from "./OnLocationSummary";
 import { ScoreExplainer } from "./ScoreExplainer";
+import { BattlecardCharts } from "./BattlecardCharts";
 
 interface BattlecardDrawerProps {
   battlecard: Battlecard | null;
@@ -64,6 +65,8 @@ export function BattlecardDrawer({
               <Download size={16} /> Export PDF Battlecard
             </a>
           )}
+
+          <BattlecardCharts charts={battlecard.visualSummary.charts} />
 
           <ScoreExplainer score={battlecard.score} />
 
