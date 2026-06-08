@@ -1,0 +1,5 @@
+# Reference data loader dependencies. Pinned. All sources are open or free tier.
+psycopg[binary]==3.2.1
+pyproj==3.6.1
+openpyxl==3.1.5
+PyYAML==6.0.2

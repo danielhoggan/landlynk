@@ -1,0 +1,5 @@
+# Dev and test tooling for the loaders. Install with: pip install -r requirements-dev.txt
+-r requirements.txt
+pytest==8.2.2
+black==24.4.2
+ruff==0.5.2
