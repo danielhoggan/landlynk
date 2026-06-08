@@ -19,10 +19,17 @@ from typing import TYPE_CHECKING
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Response
+from pydantic import BaseModel
 
 from . import refdata
 from .api_models import CatchmentJobRequest, to_development_info, to_scoring_config
-from .battlecard import Battlecard, render_battlecard_pdf, render_battlecard_pptx
+from .battlecard import (
+    Battlecard,
+    render_battlecard_pdf,
+    render_battlecard_pptx,
+    render_battlecards_pdf,
+    render_battlecards_pptx,
+)
 from .config import settings
 from .pipeline.isochrone import (
     InMemoryIsochroneCache,
@@ -211,6 +218,59 @@ def get_catchment_kml(catchment_id: str) -> Response:
         media_type="application/vnd.google-earth.kml+xml",
         headers={
             "Content-Disposition": f'attachment; filename="catchment-{catchment_id}.kml"'
+        },
+    )
+
+
+class ShortlistRequest(BaseModel):
+    """Selected areas to combine into one export document."""
+
+    area_codes: list[str]
+
+
+def _shortlist_cards(catchment_id: str, area_codes: list[str]) -> list[Battlecard]:
+    """Fetch and validate the Battlecards for a shortlist, in the order given.
+
+    Missing area codes are skipped rather than failing the whole export, so a
+    stale selection still produces a document for the areas that resolve.
+    """
+    store = get_store()
+    cards: list[Battlecard] = []
+    for code in area_codes:
+        data = store.get_battlecard(catchment_id, code)
+        if data is not None:
+            cards.append(Battlecard.model_validate(data))
+    return cards
+
+
+@app.post("/catchments/{catchment_id}/shortlist/pdf")
+def shortlist_pdf(catchment_id: str, request: ShortlistRequest) -> Response:
+    cards = _shortlist_cards(catchment_id, request.area_codes)
+    if not cards:
+        raise HTTPException(status_code=404, detail="No battlecards for shortlist")
+    pdf = render_battlecards_pdf(cards)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'attachment; filename="landlynk-shortlist.pdf"'
+        },
+    )
+
+
+@app.post("/catchments/{catchment_id}/shortlist/pptx")
+def shortlist_pptx(catchment_id: str, request: ShortlistRequest) -> Response:
+    cards = _shortlist_cards(catchment_id, request.area_codes)
+    if not cards:
+        raise HTTPException(status_code=404, detail="No battlecards for shortlist")
+    pptx = render_battlecards_pptx(cards)
+    return Response(
+        content=pptx,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
+        headers={
+            "Content-Disposition": 'attachment; filename="landlynk-shortlist.pptx"'
         },
     )
 

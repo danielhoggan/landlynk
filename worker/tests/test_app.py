@@ -115,6 +115,41 @@ def test_unknown_catchment_404(client):
     assert client.get("/catchments/does-not-exist").status_code == 404
 
 
+def test_shortlist_export(client, monkeypatch):
+    # Star one area and combine into one PDF and one PPTX through the shortlist
+    # endpoints, the combined-export path a builder uses for a multi-area pitch.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job_id = client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "IP14 1AA", "developmentName": "A"},
+    ).json()["id"]
+
+    pdf = client.post(
+        f"/catchments/{job_id}/shortlist/pdf", json={"area_codes": ["E02000001"]}
+    )
+    assert pdf.status_code == 200
+    assert pdf.content[:5] == b"%PDF-"
+
+    pptx = client.post(
+        f"/catchments/{job_id}/shortlist/pptx", json={"area_codes": ["E02000001"]}
+    )
+    assert pptx.status_code == 200
+    assert pptx.content[:2] == b"PK"
+
+
+def test_shortlist_export_empty_selection_404(client, monkeypatch):
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job_id = client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "IP14 1AA", "developmentName": "A"},
+    ).json()["id"]
+    # Codes that do not resolve to a stored battlecard yield no document.
+    res = client.post(
+        f"/catchments/{job_id}/shortlist/pdf", json={"area_codes": ["E02999999"]}
+    )
+    assert res.status_code == 404
+
+
 def test_delete_catchment(client, monkeypatch):
     monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
     job_id = client.post(

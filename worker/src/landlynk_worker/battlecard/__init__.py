@@ -6,8 +6,8 @@ from .assemble import (
     IncomeContext,
     assemble_battlecard,
 )
-from .pdf import render_battlecard_pdf
-from .pptx import render_battlecard_pptx
+from .pdf import render_battlecard_pdf, render_battlecards_pdf
+from .pptx import render_battlecard_pptx, render_battlecards_pptx
 from .schema import BATTLECARD_SCHEMA_VERSION, Battlecard
 
 __all__ = [
@@ -18,5 +18,7 @@ __all__ = [
     "IncomeContext",
     "assemble_battlecard",
     "render_battlecard_pdf",
+    "render_battlecards_pdf",
     "render_battlecard_pptx",
+    "render_battlecards_pptx",
 ]

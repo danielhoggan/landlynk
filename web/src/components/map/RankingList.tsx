@@ -1,5 +1,6 @@
 "use client";
 
+import { Star } from "lucide-react";
 import type { CatchmentArea } from "@/lib/types/catchment";
 import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/lib/priority";
 import { tagsForArea } from "@/lib/areaTags";
@@ -8,6 +9,8 @@ interface RankingListProps {
   areas: CatchmentArea[];
   onSelectArea: (area: CatchmentArea) => void;
   selectedAreaCode?: string;
+  starredCodes?: Set<string>;
+  onToggleStar?: (areaCode: string) => void;
 }
 
 // The shortlist: areas ordered by priority so the user sees where to focus, not
@@ -17,19 +20,22 @@ export function RankingList({
   areas,
   onSelectArea,
   selectedAreaCode,
+  starredCodes,
+  onToggleStar,
 }: RankingListProps) {
   if (areas.length === 0) return null;
   return (
     <ol className="divide-y divide-neutral-200 overflow-hidden rounded-card border border-neutral-200">
       {areas.map((area) => {
         const selected = area.areaCode === selectedAreaCode;
+        const starred = starredCodes?.has(area.areaCode) ?? false;
         return (
-          <li key={area.areaCode}>
+          <li key={area.areaCode} className="flex items-stretch">
             <button
               type="button"
               onClick={() => onSelectArea(area)}
               aria-pressed={selected}
-              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-50 ${
+              className={`flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-50 ${
                 selected ? "bg-neutral-50" : ""
               }`}
             >
@@ -65,6 +71,26 @@ export function RankingList({
                 {area.score.toFixed(2)}
               </span>
             </button>
+            {onToggleStar && (
+              <button
+                type="button"
+                onClick={() => onToggleStar(area.areaCode)}
+                aria-pressed={starred}
+                aria-label={
+                  starred
+                    ? `Remove ${area.name} from shortlist`
+                    : `Add ${area.name} to shortlist`
+                }
+                title={starred ? "Remove from shortlist" : "Add to shortlist"}
+                className="flex shrink-0 items-center px-3 text-neutral-300 transition-colors hover:text-light-accent"
+              >
+                <Star
+                  className={`h-4 w-4 ${
+                    starred ? "fill-light-accent text-light-accent" : ""
+                  }`}
+                />
+              </button>
+            )}
           </li>
         );
       })}

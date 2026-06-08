@@ -121,6 +121,46 @@ export default function HomePage() {
     setRangeInputs({});
   };
 
+  // Shortlist: starred areas the user wants combined into one export document.
+  const [starred, setStarred] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState<"pdf" | "pptx" | null>(null);
+  const toggleStar = (areaCode: string) =>
+    setStarred((prev) => {
+      const next = new Set(prev);
+      if (next.has(areaCode)) next.delete(areaCode);
+      else next.add(areaCode);
+      return next;
+    });
+
+  async function exportShortlist(format: "pdf" | "pptx") {
+    if (!catchment || starred.size === 0) return;
+    setExporting(format);
+    try {
+      const res = await fetch(
+        `/api/catchments/${catchment.id}/shortlist/${format}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ areaCodes: Array.from(starred) }),
+        },
+      );
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `landlynk-shortlist.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setStatus("Could not build the shortlist export.");
+    } finally {
+      setExporting(null);
+    }
+  }
+
   // Reopen a saved catchment when arriving from the history view
   // (/?catchment=<id>). Served from stored data, no recompute.
   useEffect(() => {
@@ -465,12 +505,46 @@ export default function HomePage() {
                 </button>
               )}
             </div>
-            <a
-              href={`/api/catchments/${catchment.id}/kml`}
-              className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
-            >
-              <Download size={16} /> Download KML
-            </a>
+            <div className="flex flex-wrap items-center gap-2">
+              {starred.size > 0 && (
+                <>
+                  <span className="text-xs font-medium text-neutral-500">
+                    {starred.size} starred
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => exportShortlist("pdf")}
+                    disabled={exporting !== null}
+                    className="flex items-center gap-2 rounded-card bg-light-accent px-3 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
+                  >
+                    <Download size={16} />
+                    {exporting === "pdf" ? "Building..." : "Shortlist PDF"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => exportShortlist("pptx")}
+                    disabled={exporting !== null}
+                    className="flex items-center gap-2 rounded-card border border-light-accent px-3 py-2 text-sm font-semibold text-light-accent transition hover:bg-light-accent/5 disabled:opacity-50"
+                  >
+                    <Download size={16} />
+                    {exporting === "pptx" ? "Building..." : "Shortlist PPTX"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStarred(new Set())}
+                    className="text-xs font-medium text-neutral-400 hover:text-neutral-700"
+                  >
+                    Clear stars
+                  </button>
+                </>
+              )}
+              <a
+                href={`/api/catchments/${catchment.id}/kml`}
+                className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
+              >
+                <Download size={16} /> Download KML
+              </a>
+            </div>
           </div>
 
           {showFilters && (
@@ -539,6 +613,8 @@ export default function HomePage() {
               areas={filteredAreas}
               onSelectArea={onSelectArea}
               selectedAreaCode={selectedCode}
+              starredCodes={starred}
+              onToggleStar={toggleStar}
             />
           )}
         </div>

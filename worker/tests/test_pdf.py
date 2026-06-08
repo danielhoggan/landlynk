@@ -8,6 +8,8 @@ from landlynk_worker.battlecard import (
     assemble_battlecard,
     render_battlecard_pdf,
     render_battlecard_pptx,
+    render_battlecards_pdf,
+    render_battlecards_pptx,
 )
 from landlynk_worker.scoring import (
     AgeProfile,
@@ -78,3 +80,22 @@ def test_pptx_handles_suppressed_and_theme():
     card.visual_summary.key_statistics.median_age.suppressed = True
     pptx = render_battlecard_pptx(card, heading_color="#0A1F44")
     assert pptx[:2] == b"PK"
+
+
+def test_combined_pdf_includes_every_area():
+    # The shortlist export: several Battlecards combined into one document, each
+    # on its own page. More cards must mean more pages, never a single overwrite.
+    one = render_battlecards_pdf([_card()])
+    three = render_battlecards_pdf([_card(), _card(), _card()])
+    assert one[:5] == b"%PDF-"
+    assert three[:5] == b"%PDF-"
+    assert three.count(b"/Type /Page") > one.count(b"/Type /Page")
+
+
+def test_combined_pptx_has_slides_per_area():
+    one = render_battlecards_pptx([_card()])
+    two = render_battlecards_pptx([_card(), _card()])
+    assert one[:2] == b"PK"
+    assert two[:2] == b"PK"
+    # Each card adds four slides, so two cards is a larger deck than one.
+    assert len(two) > len(one)

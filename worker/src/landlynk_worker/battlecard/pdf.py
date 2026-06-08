@@ -21,6 +21,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -46,20 +47,7 @@ def _fmt(dv: DataValue, *, money: bool = False, pct: bool = False) -> str:
     return f"{dv.value:,.0f}"
 
 
-def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) -> bytes:
-    """Render a Battlecard payload to PDF bytes."""
-    heading_hex = heading_color or _DEFAULT_HEADING
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
-        topMargin=16 * mm,
-        bottomMargin=16 * mm,
-        title=f"Battlecard {card.area_code}",
-    )
-
+def _styles(heading_hex: str) -> tuple:
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle(
         "H1",
@@ -76,7 +64,53 @@ def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) ->
     body = ParagraphStyle(
         "Body", parent=styles["BodyText"], fontName=_BODY_FONT, leading=14
     )
+    return h1, h2, body
 
+
+def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) -> bytes:
+    """Render a single Battlecard payload to PDF bytes."""
+    return render_battlecards_pdf([card], heading_color)
+
+
+def render_battlecards_pdf(
+    cards: list[Battlecard], heading_color: str | None = None
+) -> bytes:
+    """Render one or more Battlecards into a single PDF, one per page break.
+
+    Used for the shortlist export, so a builder gets every selected area as one
+    combined document.
+    """
+    heading_hex = heading_color or _DEFAULT_HEADING
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+        topMargin=16 * mm,
+        bottomMargin=16 * mm,
+        title=(
+            "LandLynk Battlecards"
+            if len(cards) != 1
+            else f"Battlecard {cards[0].area_code}"
+        ),
+    )
+    h1, h2, body = _styles(heading_hex)
+    story: list = []
+    for i, card in enumerate(cards):
+        if i > 0:
+            story.append(PageBreak())
+        story.extend(_card_flowables(card, h1, h2, body))
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def _card_flowables(
+    card: Battlecard,
+    h1: ParagraphStyle,
+    h2: ParagraphStyle,
+    body: ParagraphStyle,
+) -> list:
     vs = card.visual_summary
     story: list = []
 
@@ -211,8 +245,7 @@ def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) ->
             Paragraph("Suppressed inputs: " + ", ".join(dc.suppressed_fields), body)
         )
 
-    doc.build(story)
-    return buffer.getvalue()
+    return story
 
 
 def _two_col_table(rows: list[tuple[str, str]]) -> Table:

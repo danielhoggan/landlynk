@@ -12,7 +12,7 @@ import io
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
-from pptx.slide import Slide
+from pptx.slide import Slide, SlideLayout
 from pptx.util import Inches, Pt
 
 from .schema import Battlecard, DataValue
@@ -35,38 +35,59 @@ def _fmt(dv: DataValue, *, money: bool = False, pct: bool = False) -> str:
     return f"{dv.value:,.0f}"
 
 
+def _add_title(slide: Slide, text: str, heading: RGBColor) -> None:
+    box = slide.shapes.add_textbox(Inches(0.6), Inches(0.4), Inches(12), Inches(0.9))
+    p = box.text_frame.paragraphs[0]
+    run = p.add_run()
+    run.text = text
+    run.font.size = Pt(30)
+    run.font.bold = True
+    run.font.color.rgb = heading
+
+
+def _add_body(slide: Slide, lines: list[str], top: float = 1.5, size: int = 16) -> None:
+    box = slide.shapes.add_textbox(Inches(0.6), Inches(top), Inches(12), Inches(5.4))
+    tf = box.text_frame
+    tf.word_wrap = True
+    for i, line in enumerate(lines):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.text = line
+        p.font.size = Pt(size)
+
+
 def render_battlecard_pptx(card: Battlecard, heading_color: str | None = None) -> bytes:
-    """Render a Battlecard payload to PPTX bytes."""
+    """Render a single Battlecard payload to PPTX bytes."""
+    return render_battlecards_pptx([card], heading_color)
+
+
+def render_battlecards_pptx(
+    cards: list[Battlecard], heading_color: str | None = None
+) -> bytes:
+    """Render one or more Battlecards into a single deck (slides per area)."""
     heading = _hex(heading_color)
     prs = Presentation()
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
     blank = prs.slide_layouts[6]
+    for card in cards:
+        _add_card_slides(prs, blank, card, heading)
+    buffer = io.BytesIO()
+    prs.save(buffer)
+    return buffer.getvalue()
+
+
+def _add_card_slides(
+    prs: Presentation, blank: SlideLayout, card: Battlecard, heading: RGBColor
+) -> None:
     vs = card.visual_summary
 
     def add_title(slide: Slide, text: str) -> None:
-        box = slide.shapes.add_textbox(
-            Inches(0.6), Inches(0.4), Inches(12), Inches(0.9)
-        )
-        p = box.text_frame.paragraphs[0]
-        run = p.add_run()
-        run.text = text
-        run.font.size = Pt(30)
-        run.font.bold = True
-        run.font.color.rgb = heading
+        _add_title(slide, text, heading)
 
     def add_body(
         slide: Slide, lines: list[str], top: float = 1.5, size: int = 16
     ) -> None:
-        box = slide.shapes.add_textbox(
-            Inches(0.6), Inches(top), Inches(12), Inches(5.4)
-        )
-        tf = box.text_frame
-        tf.word_wrap = True
-        for i, line in enumerate(lines):
-            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-            p.text = line
-            p.font.size = Pt(size)
+        _add_body(slide, lines, top, size)
 
     # Slide 1: visual summary
     s1 = prs.slides.add_slide(blank)
@@ -135,7 +156,3 @@ def render_battlecard_pptx(card: Battlecard, heading_color: str | None = None) -
             f"Data confidence: {card.data_confidence.level}. {card.data_confidence.note}",
         ],
     )
-
-    buffer = io.BytesIO()
-    prs.save(buffer)
-    return buffer.getvalue()
