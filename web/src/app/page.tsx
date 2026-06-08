@@ -30,6 +30,7 @@ export default function HomePage() {
   const [kind, setKind] = useState<InputKind>("postcode");
   const [value, setValue] = useState("");
   const [developmentName, setDevelopmentName] = useState("");
+  const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -114,6 +115,7 @@ export default function HomePage() {
         kind,
         value,
         developmentName,
+        areaType,
         town: town || undefined,
         strapline: strapline || undefined,
         lifestylePillars: splitList(pillars),
@@ -174,21 +176,41 @@ export default function HomePage() {
           <MapPin size={18} /> New catchment
         </h2>
 
-        <div className="flex gap-2">
-          {(["postcode", "gridref"] as InputKind[]).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setKind(k)}
-              className={`rounded-card px-3 py-1.5 text-sm font-medium ${
-                kind === k
-                  ? "bg-light-accent text-white"
-                  : "border border-neutral-300"
-              }`}
-            >
-              {k === "postcode" ? "Postcode" : "OS grid ref"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex gap-2">
+            {(["postcode", "gridref"] as InputKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setKind(k)}
+                className={`rounded-card px-3 py-1.5 text-sm font-medium ${
+                  kind === k
+                    ? "bg-light-accent text-white"
+                    : "border border-neutral-300"
+                }`}
+              >
+                {k === "postcode" ? "Postcode" : "OS grid ref"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-neutral-500">Area level</span>
+            {(["MSOA", "LA"] as const).map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => setAreaType(a)}
+                className={`rounded-card px-3 py-1.5 text-sm font-medium ${
+                  areaType === a
+                    ? "bg-light-accent text-white"
+                    : "border border-neutral-300"
+                }`}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
         </div>
 
         <input
@@ -327,10 +349,7 @@ export default function HomePage() {
           <p className="mt-1 text-neutral-600">
             The drive-time zone was built, but no boundaries matched. Load the
             MSOA boundaries on the{" "}
-            <a
-              href="/data"
-              className="font-medium text-light-accent underline"
-            >
+            <a href="/data" className="font-medium text-light-accent underline">
               Reference data
             </a>{" "}
             page, then build again.

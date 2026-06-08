@@ -33,10 +33,10 @@ interface DatasetDef {
 const DATASETS: DatasetDef[] = [
   {
     id: "geo_boundaries",
-    title: "MSOA boundaries",
+    title: "Area boundaries",
     essential: true,
     blurb:
-      "Required for areas to appear. From the ONS Open Geography Portal ArcGIS service (the layer's /query URL). The default is MSOA December 2021 (BGC); replace if a newer vintage exists.",
+      "Required for areas to appear. From the ONS Open Geography Portal ArcGIS service (the layer's /query URL). The default is MSOA December 2021 (BGC); for LA level, select LA above and paste the LAD boundaries query URL.",
     fields: [
       {
         key: "url",
@@ -96,6 +96,7 @@ export default function DataPage() {
   const [values, setValues] = useState<Record<string, Record<string, string>>>({
     geo_boundaries: { url: DEFAULT_BOUNDARIES },
   });
+  const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const refresh = useCallback(() => {
@@ -116,7 +117,7 @@ export default function DataPage() {
   async function onLoad(d: DatasetDef) {
     setErrors((e) => ({ ...e, [d.id]: "" }));
     try {
-      await loadReference(d.id, { areaType: "MSOA", ...(values[d.id] ?? {}) });
+      await loadReference(d.id, { areaType, ...(values[d.id] ?? {}) });
       refresh();
     } catch (err) {
       setErrors((e) => ({
@@ -134,9 +135,29 @@ export default function DataPage() {
         </h1>
         <p className="mt-1 text-sm text-neutral-600">
           Load the open ONS data the engine scores against. The worker downloads
-          and loads it for you. Start with MSOA boundaries so areas appear, then
-          add census and income for the full Battlecard numbers.
+          and loads it for you. Start with boundaries so areas appear, then add
+          census and income for the full Battlecard numbers.
         </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-neutral-500">Area level</span>
+          {(["MSOA", "LA"] as const).map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => setAreaType(a)}
+              className={`rounded-card px-3 py-1.5 text-sm font-medium ${
+                areaType === a
+                  ? "bg-light-accent text-white"
+                  : "border border-neutral-300"
+              }`}
+            >
+              {a}
+            </button>
+          ))}
+          <span className="text-xs text-neutral-400">
+            Loads apply to {areaType}. For LA, paste LA-level source URLs.
+          </span>
+        </div>
       </header>
 
       {DATASETS.map((d) => {

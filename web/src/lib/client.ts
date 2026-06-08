@@ -8,6 +8,7 @@ export interface SubmitPayload {
   kind: "postcode" | "gridref";
   value: string;
   developmentName: string;
+  areaType?: "MSOA" | "LA";
   town?: string;
   strapline?: string;
   lifestylePillars?: string[];

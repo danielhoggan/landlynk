@@ -59,7 +59,8 @@ the App Registration and the variables.
       Worker endpoint and web download wired.
 - [x] PPTX export to the client brand template (worker renderer, endpoint and
       web download). Brand heading colour themeable.
-- [ ] LA-level support for the leisure use case (PfP pattern).
+- [x] LA-level support: area-level selector on the catchment form and the
+      Reference data loader (the pipeline already threaded area_type through).
 - [ ] GWI persona channel enrichment in audience messaging (pending your licence
       confirmation).
 
