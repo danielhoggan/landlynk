@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin } from "lucide-react";
+import { MapPin, Download } from "lucide-react";
 import { CatchmentMap } from "@/components/map/CatchmentMap";
 import { RankingList } from "@/components/map/RankingList";
 import { BattlecardDrawer } from "@/components/battlecard/BattlecardDrawer";
@@ -260,6 +260,17 @@ export default function HomePage() {
 
         {status && <p className="text-xs text-neutral-500">{status}</p>}
       </form>
+
+      {catchment?.status === "complete" && areas.length > 0 && (
+        <div className="flex items-center gap-3">
+          <a
+            href={`/api/catchments/${catchment.id}/kml`}
+            className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold dark:border-neutral-700"
+          >
+            <Download size={16} /> Download KML for Google Earth
+          </a>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
         <CatchmentMap

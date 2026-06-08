@@ -26,6 +26,6 @@ pydantic-settings==2.3.4
 # HTTP for geocode and isochrone providers (postcodes.io, OpenRouteService)
 httpx==0.27.0
 
-# Output generation (KML for Google Earth, PDF Battlecard export)
-simplekml==1.3.6
+# Output generation. KML is emitted directly as XML (no native build
+# dependency); PDF Battlecards via reportlab.
 reportlab==4.2.2

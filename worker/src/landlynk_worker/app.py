@@ -32,6 +32,7 @@ from .pipeline.isochrone import (
 if TYPE_CHECKING:
     from psycopg_pool import ConnectionPool
 from .pipeline.orchestrate import PipelineDeps, run_catchment
+from .pipeline.outputs.kml import render_catchment_kml
 from .pipeline.reference import PostgresReferenceData
 from .scoring.profile import ScoringConfig
 from .storage import InMemoryStore, JobInput, PostgresStore, Storage
@@ -149,6 +150,26 @@ def get_battlecard(catchment_id: str, area_code: str) -> dict:
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
     return data
+
+
+@app.get("/catchments/{catchment_id}/kml")
+def get_catchment_kml(catchment_id: str) -> Response:
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    battlecards = {
+        area["areaCode"]: store.get_battlecard(catchment_id, area["areaCode"])
+        for area in catchment.get("areas", [])
+    }
+    kml = render_catchment_kml(catchment, battlecards)
+    return Response(
+        content=kml,
+        media_type="application/vnd.google-earth.kml+xml",
+        headers={
+            "Content-Disposition": f'attachment; filename="catchment-{catchment_id}.kml"'
+        },
+    )
 
 
 @app.get("/catchments/{catchment_id}/battlecards/{area_code}/pdf")
