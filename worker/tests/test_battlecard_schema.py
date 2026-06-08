@@ -45,6 +45,8 @@ def sample_payload() -> dict:
                 "priceFrom": {"value": 280000},
                 "medianAge": {"value": 39},
                 "populationCatchment": {"value": 120000},
+                "householdsCatchment": {"value": 50000},
+                "familyHouseholdShare": {"value": 55.0},
             },
             "audienceMessaging": [
                 {
@@ -88,6 +90,26 @@ def sample_payload() -> dict:
         "incomeAndTenure": {
             "incomeCommentary": "A narrow income spread argues for mid-market positioning",
             "tenureCommentary": "A healthy private rented share signals a buyer pipeline",
+        },
+        "pricingRationale": {
+            "impliedAffordablePrice": {"value": 270000},
+            "affordabilityMultiple": 4.5,
+            "priceFrom": {"value": 280000},
+            "positioning": "Homes from 280000 are a modest stretch on local income",
+        },
+        "addressableSegments": {
+            "firstTimeBuyerPipeline": {"value": 12500},
+            "downsizerPool": {"value": 12500},
+            "familyHouseholds": {"value": 27500},
+        },
+        "catchmentContext": {
+            "incomeIndex": {"value": 104},
+            "shareOfCatchmentPopulation": {"value": 8.5},
+        },
+        "dataConfidence": {
+            "level": "high",
+            "suppressedFields": [],
+            "note": "All key inputs are present for this area.",
         },
     }
 

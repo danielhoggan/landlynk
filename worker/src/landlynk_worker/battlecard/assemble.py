@@ -18,6 +18,7 @@ from ..scoring.profile import AreaProfile, ScoringConfig
 from ..scoring.score import ScoreBreakdown
 from .schema import (
     BATTLECARD_SCHEMA_VERSION,
+    AddressableSegments,
     AgeBand,
     AudienceAndDemographics,
     AudienceCommentary,
@@ -25,12 +26,15 @@ from .schema import (
     Battlecard,
     BattlecardCharts,
     BattlecardHeader,
+    CatchmentContext,
     CohortCommentary,
+    DataConfidence,
     DataValue,
     IncomeAndTenure,
     IncomeChart,
     KeyStatistics,
     LaCallout,
+    PricingRationale,
     ScoreBreakdownModel,
     ScoreContribution,
     TenureChart,
@@ -77,6 +81,16 @@ class IncomeContext:
     highest_la_value: float | None
 
 
+@dataclass(frozen=True)
+class CatchmentStats:
+    """Catchment-wide aggregates so an area can be shown relative to the whole."""
+
+    # Population-weighted mean of area mean incomes across the catchment.
+    mean_income: float | None
+    # Total population inside the catchment, summed across areas.
+    total_population_inside: float | None
+
+
 def _dv(value: float | None) -> DataValue:
     """Wrap a value, marking it suppressed when missing."""
     if value is None:
@@ -97,19 +111,23 @@ def _owner_occupied_pct(profile: AreaProfile) -> float | None:
     return round(((outright or 0.0) + (mortgage or 0.0)) * 100, 1)
 
 
+def _inside(value: float | None, proportion: float) -> float | None:
+    """Scale a whole-area count to the part inside the catchment."""
+    return None if value is None else value * proportion
+
+
 def _key_statistics(profile: AreaProfile, config: ScoringConfig) -> KeyStatistics:
-    pop_inside = (
-        None
-        if profile.population is None
-        else round(profile.population * profile.proportion_inside)
-    )
+    pop_inside = _inside(profile.population, profile.proportion_inside)
+    hh_inside = _inside(profile.households, profile.proportion_inside)
     return KeyStatistics(
         bed_range=config.bed_range,
         average_household_income=_dv(profile.mean_income),
         owner_occupied_percentage=_dv(_owner_occupied_pct(profile)),
         price_from=_dv(config.price_band.frm),
         median_age=_dv(profile.median_age),
-        population_catchment=_dv(pop_inside),
+        population_catchment=_dv(None if pop_inside is None else round(pop_inside)),
+        households_catchment=_dv(None if hh_inside is None else round(hh_inside)),
+        family_household_share=_dv(_pct(profile.family_household_share)),
     )
 
 
@@ -275,6 +293,110 @@ def _cohort_commentary(profile: AreaProfile) -> list[CohortCommentary]:
     return cohorts
 
 
+def _pricing_rationale(profile: AreaProfile, config: ScoringConfig) -> PricingRationale:
+    """Implied affordable price from local income against the scheme price."""
+    median = profile.median_income
+    mult = config.affordability_multiple
+    price_from = config.price_band.frm
+    implied = None if median is None else round(median * mult)
+
+    if implied is None:
+        positioning = (
+            "Income data is incomplete here, so confirm pricing against "
+            "neighbouring areas before setting the entry point."
+        )
+    elif price_from <= implied:
+        positioning = (
+            f"A median income of {median:,.0f} supports about {implied:,.0f} at "
+            f"{mult:g}x income. With homes from {price_from:,.0f} the entry price is "
+            "within local reach, so lead on attainability and first-time buyer support."
+        )
+    elif price_from <= implied * 1.2:
+        positioning = (
+            f"A median income of {median:,.0f} supports about {implied:,.0f} at "
+            f"{mult:g}x income. Homes from {price_from:,.0f} are a modest stretch, so "
+            "emphasise value, specification and purchase incentives."
+        )
+    else:
+        positioning = (
+            f"A median income of {median:,.0f} supports about {implied:,.0f} at "
+            f"{mult:g}x income. Homes from {price_from:,.0f} sit above local means, so "
+            "target equity-rich movers and in-migration rather than local first buyers."
+        )
+
+    return PricingRationale(
+        implied_affordable_price=_dv(implied),
+        affordability_multiple=mult,
+        price_from=_dv(price_from),
+        positioning=positioning,
+    )
+
+
+def _addressable_segments(profile: AreaProfile) -> AddressableSegments:
+    """Estimated household counts inside the catchment, by strategic segment."""
+    hh_inside = _inside(profile.households, profile.proportion_inside)
+
+    def segment(share: float | None) -> float | None:
+        if hh_inside is None or share is None:
+            return None
+        return round(hh_inside * share)
+
+    return AddressableSegments(
+        first_time_buyer_pipeline=_dv(segment(profile.tenure.private_rented)),
+        downsizer_pool=_dv(segment(profile.tenure.owns_outright)),
+        family_households=_dv(segment(profile.family_household_share)),
+    )
+
+
+def _catchment_context(
+    profile: AreaProfile, catchment: CatchmentStats
+) -> CatchmentContext:
+    """This area indexed against the catchment average."""
+    income_index = None
+    if profile.mean_income is not None and catchment.mean_income:
+        income_index = round(profile.mean_income / catchment.mean_income * 100)
+
+    share = None
+    pop_inside = _inside(profile.population, profile.proportion_inside)
+    if pop_inside is not None and catchment.total_population_inside:
+        share = round(pop_inside / catchment.total_population_inside * 100, 1)
+
+    return CatchmentContext(
+        income_index=_dv(income_index),
+        share_of_catchment_population=_dv(share),
+    )
+
+
+# Human labels for the inputs whose suppression we report.
+_CONFIDENCE_FIELDS = {
+    "median income": lambda p: p.median_income,
+    "mean income": lambda p: p.mean_income,
+    "population": lambda p: p.population,
+    "households": lambda p: p.households,
+    "tenure": lambda p: p.tenure.private_rented,
+    "age profile": lambda p: p.age.age_35_54,
+    "household type": lambda p: p.family_household_share,
+}
+
+
+def _data_confidence(profile: AreaProfile) -> DataConfidence:
+    """Report which inputs were suppressed and an overall confidence level."""
+    suppressed = [
+        name for name, getter in _CONFIDENCE_FIELDS.items() if getter(profile) is None
+    ]
+    count = len(suppressed)
+    if count == 0:
+        level = "high"
+        note = "All key inputs are present for this area."
+    elif count <= 2:
+        level = "medium"
+        note = "Some inputs are suppressed by ONS, so read those signals with care."
+    else:
+        level = "low"
+        note = "Several inputs are suppressed, so treat this area as indicative."
+    return DataConfidence(level=level, suppressed_fields=suppressed, note=note)
+
+
 def _score_model(score: ScoreBreakdown) -> ScoreBreakdownModel:
     return ScoreBreakdownModel(
         total=round(score.total, 4),
@@ -299,8 +421,14 @@ def assemble_battlecard(
     rank: int,
     development: DevelopmentInfo,
     income_context: IncomeContext,
+    catchment_stats: CatchmentStats | None = None,
 ) -> Battlecard:
     """Build the validated Battlecard payload for one scored area."""
+    # When catchment aggregates are not supplied, context indices are null
+    # rather than guessed.
+    catchment_stats = catchment_stats or CatchmentStats(
+        mean_income=None, total_population_inside=None
+    )
     messages = _audience_messages(profile)
     visual_summary = VisualSummary(
         header=BattlecardHeader(
@@ -336,4 +464,8 @@ def assemble_battlecard(
             income_commentary=_income_commentary(profile),
             tenure_commentary=_tenure_commentary(profile),
         ),
+        pricing_rationale=_pricing_rationale(profile, config),
+        addressable_segments=_addressable_segments(profile),
+        catchment_context=_catchment_context(profile, catchment_stats),
+        data_confidence=_data_confidence(profile),
     )

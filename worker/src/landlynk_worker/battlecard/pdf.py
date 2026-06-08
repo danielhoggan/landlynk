@@ -103,6 +103,8 @@ def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) ->
                 ("Price from", _fmt(stats.price_from, money=True)),
                 ("Median age", _fmt(stats.median_age)),
                 ("Population catchment", _fmt(stats.population_catchment)),
+                ("Households catchment", _fmt(stats.households_catchment)),
+                ("Family households", _fmt(stats.family_household_share, pct=True)),
             ]
         )
     )
@@ -113,6 +115,33 @@ def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) ->
         Paragraph(
             f"Rank {card.rank}. Score {card.score.total:.2f} ({card.score.band} priority).",
             body,
+        )
+    )
+    ctx = card.catchment_context
+    if ctx.income_index.value is not None:
+        story.append(
+            Paragraph(
+                f"Income index {ctx.income_index.value:.0f} versus the catchment "
+                f"average of 100. {_fmt(ctx.share_of_catchment_population, pct=True)} "
+                "of the catchment population.",
+                body,
+            )
+        )
+    story.append(Spacer(1, 5 * mm))
+
+    story.append(Paragraph("Pricing rationale", h2))
+    story.append(Paragraph(card.pricing_rationale.positioning, body))
+    story.append(Spacer(1, 4 * mm))
+
+    story.append(Paragraph("Addressable segments inside the catchment", h2))
+    seg = card.addressable_segments
+    story.append(
+        _two_col_table(
+            [
+                ("First-time buyer pipeline", _fmt(seg.first_time_buyer_pipeline)),
+                ("Downsizer pool", _fmt(seg.downsizer_pool)),
+                ("Family households", _fmt(seg.family_households)),
+            ]
         )
     )
     story.append(Spacer(1, 5 * mm))
@@ -172,6 +201,15 @@ def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) ->
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Housing tenure", h2))
     story.append(Paragraph(it.tenure_commentary, body))
+    story.append(Spacer(1, 5 * mm))
+
+    dc = card.data_confidence
+    story.append(Paragraph(f"Data confidence: {dc.level}", h2))
+    story.append(Paragraph(dc.note, body))
+    if dc.suppressed_fields:
+        story.append(
+            Paragraph("Suppressed inputs: " + ", ".join(dc.suppressed_fields), body)
+        )
 
     doc.build(story)
     return buffer.getvalue()

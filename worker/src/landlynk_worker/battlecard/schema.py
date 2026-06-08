@@ -49,6 +49,8 @@ class KeyStatistics(BaseModel):
     price_from: DataValue = Field(alias="priceFrom")
     median_age: DataValue = Field(alias="medianAge")
     population_catchment: DataValue = Field(alias="populationCatchment")
+    households_catchment: DataValue = Field(alias="householdsCatchment")
+    family_household_share: DataValue = Field(alias="familyHouseholdShare")
 
     model_config = {"populate_by_name": True}
 
@@ -152,6 +154,53 @@ class ScoreBreakdownModel(BaseModel):
     contributions: list[ScoreContribution]
 
 
+# --- Data-driven sections beyond the Abbots Vale reference --------------------
+# These are derived from the same ONS inputs and are reproducible. They extend
+# the reference card with pricing rationale, addressable segment sizes,
+# catchment-relative context and explicit data confidence.
+
+
+class PricingRationale(BaseModel):
+    """Implied affordability against the scheme price, with a positioning stance."""
+
+    implied_affordable_price: DataValue = Field(alias="impliedAffordablePrice")
+    affordability_multiple: float = Field(alias="affordabilityMultiple")
+    price_from: DataValue = Field(alias="priceFrom")
+    positioning: str
+
+    model_config = {"populate_by_name": True}
+
+
+class AddressableSegments(BaseModel):
+    """Estimated household counts inside the catchment, by strategic segment."""
+
+    first_time_buyer_pipeline: DataValue = Field(alias="firstTimeBuyerPipeline")
+    downsizer_pool: DataValue = Field(alias="downsizerPool")
+    family_households: DataValue = Field(alias="familyHouseholds")
+
+    model_config = {"populate_by_name": True}
+
+
+class CatchmentContext(BaseModel):
+    """This area relative to the whole catchment, so the rank has a reason."""
+
+    # 100 means the catchment average; above is richer, below is poorer.
+    income_index: DataValue = Field(alias="incomeIndex")
+    share_of_catchment_population: DataValue = Field(alias="shareOfCatchmentPopulation")
+
+    model_config = {"populate_by_name": True}
+
+
+class DataConfidence(BaseModel):
+    """Explicit data quality. Surfaced, not hidden (house-standards.md)."""
+
+    level: Confidence
+    suppressed_fields: list[str] = Field(alias="suppressedFields")
+    note: str
+
+    model_config = {"populate_by_name": True}
+
+
 class Battlecard(BaseModel):
     schema_version: str = Field(
         default=BATTLECARD_SCHEMA_VERSION, alias="schemaVersion"
@@ -166,5 +215,9 @@ class Battlecard(BaseModel):
         alias="audienceAndDemographics"
     )
     income_and_tenure: IncomeAndTenure = Field(alias="incomeAndTenure")
+    pricing_rationale: PricingRationale = Field(alias="pricingRationale")
+    addressable_segments: AddressableSegments = Field(alias="addressableSegments")
+    catchment_context: CatchmentContext = Field(alias="catchmentContext")
+    data_confidence: DataConfidence = Field(alias="dataConfidence")
 
     model_config = {"populate_by_name": True}

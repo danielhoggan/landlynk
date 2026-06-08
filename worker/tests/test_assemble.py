@@ -158,3 +158,84 @@ def test_score_contributions_use_contract_signal_names():
         "addressableScale",
         "householdType",
     }
+
+
+# --- Data-driven sections beyond the reference card --------------------------
+
+
+def test_pricing_rationale_implied_price_from_income():
+    card = _assemble(make_profile(median_income=60_000))
+    # 60,000 * 4.5 default multiple = 270,000.
+    assert card.pricing_rationale.implied_affordable_price.value == 270_000
+    assert card.pricing_rationale.affordability_multiple == 4.5
+    assert card.pricing_rationale.positioning
+
+
+def test_pricing_rationale_flags_unaffordable_entry():
+    # Low income, high price band entry: positioning should target equity movers.
+    profile = make_profile(median_income=20_000)
+    from landlynk_worker.scoring import PriceBand
+
+    config = ScoringConfig(price_band=PriceBand(400_000, 600_000))
+    score = compute_score(profile, config)
+    card = assemble_battlecard(
+        profile,
+        config,
+        score,
+        rank=1,
+        development=_development(),
+        income_context=_income_context(),
+    )
+    assert "above local means" in card.pricing_rationale.positioning
+
+
+def test_addressable_segments_counts_inside_catchment():
+    # 3200 households * 0.8 inside = 2560; private rented 0.25 -> 640.
+    card = _assemble(make_profile(households=3200, proportion_inside=0.8))
+    assert card.addressable_segments.first_time_buyer_pipeline.value == 640
+    assert card.addressable_segments.downsizer_pool.value == 640  # outright 0.25
+    assert card.addressable_segments.family_households.value == round(2560 * 0.55)
+
+
+def test_data_confidence_high_when_complete():
+    card = _assemble(make_profile())
+    assert card.data_confidence.level == "high"
+    assert card.data_confidence.suppressed_fields == []
+
+
+def test_data_confidence_drops_with_suppression():
+    profile = make_profile(median_income=None, mean_income=None, population=None)
+    config = ScoringConfig()
+    score = compute_score(profile, config)
+    card = assemble_battlecard(
+        profile,
+        config,
+        score,
+        rank=1,
+        development=_development(),
+        income_context=_income_context(),
+    )
+    assert card.data_confidence.level == "low"
+    assert "median income" in card.data_confidence.suppressed_fields
+
+
+def test_catchment_context_income_index():
+    from landlynk_worker.battlecard import CatchmentStats
+
+    profile = make_profile(mean_income=80_000, population=10_000, proportion_inside=1.0)
+    config = ScoringConfig()
+    score = compute_score(profile, config)
+    card = assemble_battlecard(
+        profile,
+        config,
+        score,
+        rank=1,
+        development=_development(),
+        income_context=_income_context(),
+        catchment_stats=CatchmentStats(
+            mean_income=64_000, total_population_inside=50_000
+        ),
+    )
+    # 80,000 / 64,000 * 100 = 125; 10,000 / 50,000 = 20%.
+    assert card.catchment_context.income_index.value == 125
+    assert card.catchment_context.share_of_catchment_population.value == 20.0

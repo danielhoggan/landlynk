@@ -15,7 +15,12 @@ from dataclasses import dataclass
 
 from shapely.geometry import mapping, shape
 
-from ..battlecard import DevelopmentInfo, IncomeContext, assemble_battlecard
+from ..battlecard import (
+    CatchmentStats,
+    DevelopmentInfo,
+    IncomeContext,
+    assemble_battlecard,
+)
 from ..battlecard.schema import Battlecard
 from ..scoring.profile import ScoringConfig
 from ..scoring.score import ScoreBreakdown, compute_score
@@ -82,6 +87,35 @@ def _income_context(areas: list, references: dict) -> IncomeContext:
     )
 
 
+def _catchment_stats(areas: list, references: dict) -> CatchmentStats:
+    """Catchment-wide aggregates for the per-area context block.
+
+    Mean income is population-weighted across areas with both income and
+    population. Total population is summed across the part of each area inside
+    the catchment. Suppressed inputs are skipped, never treated as zero.
+    """
+    total_pop_inside = 0.0
+    weighted_income = 0.0
+    income_weight = 0.0
+    for a in areas:
+        profile = references[a.area_code].profile
+        pop_inside = (
+            None
+            if profile.population is None
+            else profile.population * profile.proportion_inside
+        )
+        if pop_inside is not None:
+            total_pop_inside += pop_inside
+            if profile.mean_income is not None:
+                weighted_income += profile.mean_income * pop_inside
+                income_weight += pop_inside
+
+    return CatchmentStats(
+        mean_income=(weighted_income / income_weight if income_weight else None),
+        total_population_inside=(total_pop_inside or None),
+    )
+
+
 def run_catchment(
     raw_input: str,
     development: DevelopmentInfo,
@@ -123,6 +157,7 @@ def run_catchment(
     areas: list[ScoredArea] = []
     ordered_for_context = [m for m, _ in scored]
     income_context = _income_context(ordered_for_context, references)
+    catchment_stats = _catchment_stats(ordered_for_context, references)
 
     # 6. Assemble one Battlecard per area from the single payload contract.
     battlecards: dict[str, Battlecard] = {}
@@ -146,6 +181,7 @@ def run_catchment(
             rank=rank,
             development=development,
             income_context=income_context,
+            catchment_stats=catchment_stats,
         )
 
     return CatchmentResult(
