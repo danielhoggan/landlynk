@@ -81,6 +81,7 @@ class PostgresReferenceData:
             demographics = _one(conn, "census_demographics", area_code)
             tenure = _one(conn, "census_tenure", area_code)
             income = _one(conn, "income_estimates", area_code)
+            house_prices = _one(conn, "house_prices", area_code)
             name = _area_name(conn, area_code)
         profile = build_area_profile(
             area_code=area_code,
@@ -89,6 +90,7 @@ class PostgresReferenceData:
             demographics_row=demographics,
             tenure_row=tenure,
             income_row=income,
+            house_price_row=house_prices,
         )
         return AreaReference(profile=profile, name=name or area_code)
 

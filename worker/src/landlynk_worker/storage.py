@@ -65,6 +65,7 @@ def _area_metrics(payload: dict | None) -> dict | None:
 
     return {
         "income": val(ks.get("averageHouseholdIncome")),
+        "housePrice": val(ks.get("medianHousePrice")),
         "ownerOccupied": val(ks.get("ownerOccupiedPercentage")),
         "medianAge": val(ks.get("medianAge")),
         "familyShare": val(ks.get("familyHouseholdShare")),

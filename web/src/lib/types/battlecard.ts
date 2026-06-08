@@ -48,6 +48,8 @@ export interface KeyStatistics {
   householdsCatchment: DataValue;
   /** Share of households that are one-family households, as a percentage. */
   familyHouseholdShare: DataValue;
+  /** Local median house price (ONS HPSSA). */
+  medianHousePrice: DataValue;
 }
 
 export type AudienceTier = "primary" | "secondary" | "tertiary";

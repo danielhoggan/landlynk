@@ -48,6 +48,10 @@ export function OnLocationSummary({
           value={fmtCurrency(stats.averageHouseholdIncome)}
         />
         <Stat
+          label="Local house price"
+          value={fmtCurrency(stats.medianHousePrice)}
+        />
+        <Stat
           label="Owner-occupied"
           value={fmtPercent(stats.ownerOccupiedPercentage)}
         />

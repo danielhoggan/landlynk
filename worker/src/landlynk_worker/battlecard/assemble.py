@@ -128,6 +128,7 @@ def _key_statistics(profile: AreaProfile, config: ScoringConfig) -> KeyStatistic
         population_catchment=_dv(None if pop_inside is None else round(pop_inside)),
         households_catchment=_dv(None if hh_inside is None else round(hh_inside)),
         family_household_share=_dv(_pct(profile.family_household_share)),
+        median_house_price=_dv(profile.median_house_price),
     )
 
 
@@ -331,6 +332,22 @@ def _pricing_rationale(profile: AreaProfile, config: ScoringConfig) -> PricingRa
             f"{mult:g}x income. Homes from {price_from:,.0f} sit above local means, so "
             "target equity-rich movers and in-migration rather than local first buyers."
         )
+
+    # Local sales values anchor the scheme price for a land or site appraisal.
+    hp = profile.median_house_price
+    if hp:
+        if price_from <= hp:
+            positioning += (
+                f" Local homes sell for around {hp:,.0f}, so a price from "
+                f"{price_from:,.0f} is at or below prevailing values."
+            )
+        else:
+            premium = (price_from / hp - 1) * 100
+            positioning += (
+                f" Local homes sell for around {hp:,.0f}, so a price from "
+                f"{price_from:,.0f} is a {premium:.0f}% new-build premium to confirm "
+                "against the specification and local comparables."
+            )
 
     return PricingRationale(
         implied_affordable_price=_dv(implied),

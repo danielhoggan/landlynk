@@ -51,6 +51,7 @@ class KeyStatistics(BaseModel):
     population_catchment: DataValue = Field(alias="populationCatchment")
     households_catchment: DataValue = Field(alias="householdsCatchment")
     family_household_share: DataValue = Field(alias="familyHouseholdShare")
+    median_house_price: DataValue = Field(alias="medianHousePrice")
 
     model_config = {"populate_by_name": True}
 

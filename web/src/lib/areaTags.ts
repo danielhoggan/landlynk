@@ -59,6 +59,7 @@ export function areaMatchesTags(
 // Numeric metrics the results can be range-filtered on.
 export type MetricKey =
   | "income"
+  | "housePrice"
   | "medianAge"
   | "ownerOccupied"
   | "privateRented"
@@ -73,6 +74,7 @@ export interface MetricFilterDef {
 
 export const METRIC_FILTERS: MetricFilterDef[] = [
   { key: "income", label: "Avg income", prefix: "£" },
+  { key: "housePrice", label: "House price", prefix: "£" },
   { key: "medianAge", label: "Median age" },
   { key: "ownerOccupied", label: "Owner-occupied", suffix: "%" },
   { key: "privateRented", label: "Private rented", suffix: "%" },

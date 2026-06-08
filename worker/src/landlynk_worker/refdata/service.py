@@ -20,6 +20,7 @@ DATASETS = (
     "census_demographics",
     "census_tenure",
     "income_estimates",
+    "house_prices",
 )
 
 # dataset -> {status, rows, error, updatedAt}
@@ -56,6 +57,8 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
             n = loaders.load_tenure(pool, params["url"], area_type)
         elif dataset == "income_estimates":
             n = loaders.load_income(pool, params["url"], area_type)
+        elif dataset == "house_prices":
+            n = loaders.load_house_prices(pool, params["url"], area_type)
         else:
             raise ValueError(f"Unknown dataset: {dataset}")
         _set(dataset, "loaded", rows=n)

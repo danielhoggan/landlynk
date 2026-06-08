@@ -23,6 +23,14 @@ const DEFAULT_AGE = `${NOMIS}ts007.zip`;
 const DEFAULT_HOUSEHOLDS = `${NOMIS}ts003.zip`;
 const DEFAULT_TENURE = `${NOMIS}ts054.zip`;
 
+// ONS House Price Statistics for Small Areas: median price paid by MSOA. Best
+// known URL; update if ONS publishes a newer release.
+const DEFAULT_HOUSE_PRICES =
+  "https://www.ons.gov.uk/file?uri=/peoplepopulationandcommunity/" +
+  "housing/datasets/" +
+  "hpssadataset2medianhousepricebymsoaquarterlyrollingyear/current/" +
+  "hpssadataset2medianpricepaidbymsoa.xls";
+
 // ONS small-area income (MSOA, financial year ending 2020). Best-known URL;
 // update here if ONS publishes a newer release.
 const DEFAULT_INCOME =
@@ -104,6 +112,19 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
+  {
+    id: "house_prices",
+    title: "House prices",
+    blurb:
+      "Local median house price by MSOA, for site appraisal and scheme pricing. ONS House Price Statistics for Small Areas (HPSSA), median price paid (XLSX).",
+    fields: [
+      {
+        key: "url",
+        label: "HPSSA XLSX or CSV URL",
+        placeholder: "https://www.ons.gov.uk/...hpssa...xlsx",
+      },
+    ],
+  },
 ];
 
 export default function DataPage() {
@@ -116,6 +137,7 @@ export default function DataPage() {
     },
     census_tenure: { url: DEFAULT_TENURE },
     income_estimates: { url: DEFAULT_INCOME },
+    house_prices: { url: DEFAULT_HOUSE_PRICES },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});

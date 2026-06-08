@@ -325,6 +325,42 @@ def _income_rows(records: list[dict], area_type: str) -> list[dict]:
     return rows
 
 
+def _house_price_rows(records: list[dict], area_type: str) -> list[dict]:
+    """ONS HPSSA median price paid by area. The price is the last year column.
+
+    HPSSA sheets carry a column per period; we take the rightmost numeric value
+    column (the most recent) after detecting the area code column.
+    """
+    if not records:
+        return []
+    fieldnames = list(records[0].keys())
+    code_col = t.find_column(
+        fieldnames, ("msoa code", "area code", "geography code", "code")
+    )
+    if code_col is None:
+        raise ValueError(f"No area code column found in {fieldnames}")
+    # Prefer an explicit median price column; else the last column with a year.
+    price_col = t.find_column(fieldnames, ("year ending", "median price", "price"))
+    if price_col is None:
+        year_cols = [f for f in fieldnames if any(c.isdigit() for c in str(f))]
+        price_col = year_cols[-1] if year_cols else None
+    rows: list[dict] = []
+    for record in records:
+        code = str(record.get(code_col) or "").strip()
+        if not code:
+            continue
+        rows.append(
+            {
+                "area_code": code,
+                "area_type": area_type,
+                "median_price": (
+                    t.parse_number(record.get(price_col)) if price_col else None
+                ),
+            }
+        )
+    return rows
+
+
 # --- DB write ----------------------------------------------------------------
 
 
@@ -430,4 +466,25 @@ def load_income(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
         ("area_code", "area_type", "median_income", "mean_income"),
         rows,
         source="ONS income estimates",
+    )
+
+
+def load_house_prices(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
+    low = url.lower()
+    if low.endswith(".xls"):
+        raise ValueError(
+            "ONS publishes HPSSA as a legacy .xls which is not supported. "
+            "Download it, save as .xlsx or CSV, and host that URL."
+        )
+    if low.endswith((".xlsx", ".xlsm")):
+        records = _read_xlsx(_get_bytes(url))
+    else:
+        records, _ = _read_csv(_get_text(url))
+    rows = _house_price_rows(records, area_type)
+    return _replace_table(
+        pool,
+        "house_prices",
+        ("area_code", "area_type", "median_price"),
+        rows,
+        source="ONS HPSSA",
     )

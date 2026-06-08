@@ -51,6 +51,8 @@ class AreaProfile:
     family_household_share: float | None
     # Proportion of this area inside the drive-time isochrone, 0..1.
     proportion_inside: float
+    # Local median house price (ONS HPSSA). Optional; for the builder use case.
+    median_house_price: float | None = None
 
 
 @dataclass(frozen=True)

@@ -13,7 +13,11 @@ from landlynk_worker.migrate import MIGRATIONS_DIR
 def test_migrations_dir_ships_with_the_package():
     assert MIGRATIONS_DIR.is_dir()
     names = sorted(p.name for p in MIGRATIONS_DIR.glob("*.sql"))
-    assert names == ["0001_init.sql", "0002_isochrone_cache.sql"]
+    assert names == [
+        "0001_init.sql",
+        "0002_isochrone_cache.sql",
+        "0003_house_prices.sql",
+    ]
 
 
 def test_first_migration_enables_postgis():

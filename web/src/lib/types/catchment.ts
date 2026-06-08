@@ -57,6 +57,7 @@ export type GeoJsonGeometry = {
 /** Compact per-area metrics for map tooltips and signal filtering. */
 export interface AreaMetrics {
   income: number | null;
+  housePrice: number | null;
   ownerOccupied: number | null;
   medianAge: number | null;
   familyShare: number | null;

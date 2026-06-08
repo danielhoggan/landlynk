@@ -47,6 +47,7 @@ def sample_payload() -> dict:
                 "populationCatchment": {"value": 120000},
                 "householdsCatchment": {"value": 50000},
                 "familyHouseholdShare": {"value": 55.0},
+                "medianHousePrice": {"value": 295000},
             },
             "audienceMessaging": [
                 {

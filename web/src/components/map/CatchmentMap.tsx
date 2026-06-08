@@ -51,6 +51,7 @@ function areasToFeatures(
           name: a.name,
           score: a.score,
           income: a.metrics?.income ?? null,
+          housePrice: a.metrics?.housePrice ?? null,
           ownerOccupied: a.metrics?.ownerOccupied ?? null,
           tags: tagsForArea(a)
             .map((t) => t.label)
@@ -166,6 +167,7 @@ export function CatchmentMap({
                <div class="font-semibold text-sm">#${p.rank} ${escapeHtml(String(p.name ?? ""))}</div>
                <div class="text-neutral-500">${PRIORITY_LABELS[p.band as "high" | "mid" | "low"]} · score ${Number(p.score).toFixed(2)}</div>
                <div class="mt-1">Avg income: ${fmtMoney(p.income as number | null)}</div>
+               <div>House price: ${fmtMoney(p.housePrice as number | null)}</div>
                <div>Owner-occupied: ${fmtPct(p.ownerOccupied as number | null)}</div>
                ${tags ? `<div class="mt-1 text-light-accent">${escapeHtml(tags)}</div>` : ""}
              </div>`,
