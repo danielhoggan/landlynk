@@ -7,6 +7,7 @@ from landlynk_worker.battlecard import (
     IncomeContext,
     assemble_battlecard,
     render_battlecard_pdf,
+    render_battlecard_pptx,
 )
 from landlynk_worker.scoring import (
     AgeProfile,
@@ -62,3 +63,18 @@ def test_handles_suppressed_values():
 def test_theme_heading_colour_accepted():
     pdf = render_battlecard_pdf(_card(), heading_color="#0A1F44")
     assert pdf[:5] == b"%PDF-"
+
+
+def test_renders_a_pptx():
+    pptx = render_battlecard_pptx(_card())
+    # PPTX is a zip (Office Open XML); zip files start with "PK".
+    assert pptx[:2] == b"PK"
+    assert len(pptx) > 1000
+
+
+def test_pptx_handles_suppressed_and_theme():
+    card = _card()
+    card.visual_summary.key_statistics.median_age.value = None
+    card.visual_summary.key_statistics.median_age.suppressed = True
+    pptx = render_battlecard_pptx(card, heading_color="#0A1F44")
+    assert pptx[:2] == b"PK"

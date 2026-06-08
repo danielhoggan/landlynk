@@ -386,6 +386,11 @@ export default function HomePage() {
             ? `/api/catchments/${catchment.id}/battlecards/${selectedCode}/pdf`
             : undefined
         }
+        pptxUrl={
+          catchment && selectedCode
+            ? `/api/catchments/${catchment.id}/battlecards/${selectedCode}/pptx`
+            : undefined
+        }
       />
     </div>
   );

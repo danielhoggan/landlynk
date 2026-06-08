@@ -14,6 +14,8 @@ interface BattlecardDrawerProps {
   onClose: () => void;
   /** Download URL for the PDF export, when a catchment is loaded. */
   pdfUrl?: string;
+  /** Download URL for the PPTX deck export. */
+  pptxUrl?: string;
 }
 
 // Clicking a region opens its deep-dive in the slide-out drawer, never a full
@@ -24,6 +26,7 @@ export function BattlecardDrawer({
   open,
   onClose,
   pdfUrl,
+  pptxUrl,
 }: BattlecardDrawerProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -58,13 +61,25 @@ export function BattlecardDrawer({
         <div className="space-y-6">
           <OnLocationSummary battlecard={battlecard} onOpenFull={() => {}} />
 
-          {pdfUrl && (
-            <a
-              href={pdfUrl}
-              className="flex items-center justify-center gap-2 rounded-card border border-neutral-300 py-2 text-sm font-semibold"
-            >
-              <Download size={16} /> Export PDF Battlecard
-            </a>
+          {(pdfUrl || pptxUrl) && (
+            <div className="grid grid-cols-2 gap-2">
+              {pdfUrl && (
+                <a
+                  href={pdfUrl}
+                  className="flex items-center justify-center gap-2 rounded-card border border-neutral-300 py-2 text-sm font-semibold"
+                >
+                  <Download size={16} /> PDF
+                </a>
+              )}
+              {pptxUrl && (
+                <a
+                  href={pptxUrl}
+                  className="flex items-center justify-center gap-2 rounded-card border border-neutral-300 py-2 text-sm font-semibold"
+                >
+                  <Download size={16} /> PPTX
+                </a>
+              )}
+            </div>
           )}
 
           <BattlecardInsights

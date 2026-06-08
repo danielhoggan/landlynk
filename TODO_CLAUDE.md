@@ -57,7 +57,8 @@ the App Registration and the variables.
 - [x] KML export: catchment polygon plus foldered, colour-coded area pins with
       Battlecard info balloons, emitted as XML (no native build dependency).
       Worker endpoint and web download wired.
-- [ ] PPTX export to the client brand template.
+- [x] PPTX export to the client brand template (worker renderer, endpoint and
+      web download). Brand heading colour themeable.
 - [ ] LA-level support for the leisure use case (PfP pattern).
 - [ ] GWI persona channel enrichment in audience messaging (pending your licence
       confirmation).

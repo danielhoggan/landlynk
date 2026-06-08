@@ -21,7 +21,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Response
 
 from . import refdata
 from .api_models import CatchmentJobRequest, to_development_info, to_scoring_config
-from .battlecard import Battlecard, render_battlecard_pdf
+from .battlecard import Battlecard, render_battlecard_pdf, render_battlecard_pptx
 from .config import settings
 from .pipeline.isochrone import (
     InMemoryIsochroneCache,
@@ -210,5 +210,22 @@ def get_battlecard_pdf(catchment_id: str, area_code: str) -> Response:
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="battlecard-{area_code}.pdf"'
+        },
+    )
+
+
+@app.get("/catchments/{catchment_id}/battlecards/{area_code}/pptx")
+def get_battlecard_pptx(catchment_id: str, area_code: str) -> Response:
+    data = get_store().get_battlecard(catchment_id, area_code)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Battlecard not found")
+    pptx = render_battlecard_pptx(Battlecard.model_validate(data))
+    return Response(
+        content=pptx,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
+        headers={
+            "Content-Disposition": f'attachment; filename="battlecard-{area_code}.pptx"'
         },
     )
