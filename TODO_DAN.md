@@ -37,10 +37,18 @@ DEPLOYMENT.md. Rough order below.
 - [ ] Create the Railway project.
 - [ ] Add a Postgres plugin and confirm PostGIS can be enabled. Note its
       connection string (Railway exposes it as `DATABASE_URL` on the plugin).
-- [ ] Create the `web` service from the repo, root directory `web`, Dockerfile
-      build.
-- [ ] Create the `worker` service from the repo, root directory `worker`,
-      Dockerfile build.
+- [ ] Create the `web` service from the repo.
+- [ ] Create the `worker` service from the repo.
+- [ ] IMPORTANT set each service's Root Directory (Service -> Settings ->
+      Source -> Root Directory). Without this the build fails with
+      "Railpack could not determine how to build the app":
+  - `web` service Root Directory = `web`
+  - `worker` service Root Directory = `worker`
+
+  With the Root Directory set, Railway picks up `web/railway.json` and
+  `worker/railway.json`, which select the Dockerfile build. You should not need
+  to choose a builder manually; if a service still shows the Railpack builder,
+  set Builder to Dockerfile in Settings.
 
 ### Worker service variables (set these exact names on the `worker` service)
 

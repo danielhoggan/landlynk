@@ -41,7 +41,12 @@ python -m loaders.run postcode_lookup --source codepoint_open.csv
 
 ## 3. Worker service
 
-Build from `worker/Dockerfile`. Environment variables (all prefixed `WORKER_`):
+In the Railway service settings, set **Root Directory = `worker`**. This is
+required: Railway reads `worker/railway.json` and `worker/Dockerfile` from there.
+Without it the builder analyses the repo root and fails. `worker/railway.json`
+already pins the Dockerfile builder and the `/health` check.
+
+Environment variables (all prefixed `WORKER_`):
 
 | Variable | Required | Notes |
 |---|---|---|
@@ -56,7 +61,11 @@ Health check: `GET /health`.
 
 ## 4. Web service
 
-Build from `web/Dockerfile`. Environment variables:
+In the Railway service settings, set **Root Directory = `web`**. Railway then
+reads `web/railway.json` and `web/Dockerfile`. `web/railway.json` pins the
+Dockerfile builder and the `/signin` health check.
+
+Environment variables:
 
 | Variable | Required | Notes |
 |---|---|---|
