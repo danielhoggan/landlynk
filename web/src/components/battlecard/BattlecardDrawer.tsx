@@ -6,6 +6,7 @@ import type { Battlecard } from "@/lib/types/battlecard";
 import { OnLocationSummary } from "./OnLocationSummary";
 import { ScoreExplainer } from "./ScoreExplainer";
 import { BattlecardCharts } from "./BattlecardCharts";
+import { BattlecardInsights } from "./BattlecardInsights";
 
 interface BattlecardDrawerProps {
   battlecard: Battlecard | null;
@@ -65,6 +66,13 @@ export function BattlecardDrawer({
               <Download size={16} /> Export PDF Battlecard
             </a>
           )}
+
+          <BattlecardInsights
+            pricing={battlecard.pricingRationale}
+            segments={battlecard.addressableSegments}
+            context={battlecard.catchmentContext}
+            confidence={battlecard.dataConfidence}
+          />
 
           <BattlecardCharts charts={battlecard.visualSummary.charts} />
 

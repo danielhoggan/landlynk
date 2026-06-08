@@ -44,6 +44,10 @@ export interface KeyStatistics {
   medianAge: DataValue;
   /** Addressable population inside the catchment for this area. */
   populationCatchment: DataValue;
+  /** Households inside the catchment for this area. */
+  householdsCatchment: DataValue;
+  /** Share of households that are one-family households, as a percentage. */
+  familyHouseholdShare: DataValue;
 }
 
 export type AudienceTier = "primary" | "secondary" | "tertiary";
@@ -150,6 +154,38 @@ export interface ScoreBreakdown {
   contributions: ScoreContribution[];
 }
 
+// --- Data-driven sections beyond the Abbots Vale reference --------------------
+// Derived from the same ONS inputs, reproducible, no extra data sources.
+
+/** Implied affordability against the scheme price, with a positioning stance. */
+export interface PricingRationale {
+  impliedAffordablePrice: DataValue;
+  affordabilityMultiple: number;
+  priceFrom: DataValue;
+  positioning: string;
+}
+
+/** Estimated household counts inside the catchment, by strategic segment. */
+export interface AddressableSegments {
+  firstTimeBuyerPipeline: DataValue;
+  downsizerPool: DataValue;
+  familyHouseholds: DataValue;
+}
+
+/** This area relative to the whole catchment, so the rank has a reason. */
+export interface CatchmentContext {
+  /** 100 means the catchment average; above is richer, below is poorer. */
+  incomeIndex: DataValue;
+  shareOfCatchmentPopulation: DataValue;
+}
+
+/** Explicit data quality, surfaced rather than hidden. */
+export interface DataConfidence {
+  level: "high" | "medium" | "low";
+  suppressedFields: string[];
+  note: string;
+}
+
 // --- The full payload ---------------------------------------------------------
 
 export interface Battlecard {
@@ -164,6 +200,10 @@ export interface Battlecard {
   visualSummary: VisualSummary;
   audienceAndDemographics: AudienceAndDemographics;
   incomeAndTenure: IncomeAndTenure;
+  pricingRationale: PricingRationale;
+  addressableSegments: AddressableSegments;
+  catchmentContext: CatchmentContext;
+  dataConfidence: DataConfidence;
 }
 
 /** Current Battlecard schema version. Bump on any breaking shape change. */
