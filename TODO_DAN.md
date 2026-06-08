@@ -14,22 +14,58 @@ DEPLOYMENT.md. Rough order below.
 ## Azure App Registration (SSO)
 
 - [ ] Register an app in Entra ID (Azure AD) in the Mediaworks tenant.
-- [ ] Add the Web redirect URI: `${NEXTAUTH_URL}/api/auth/callback/azure-ad`.
-- [ ] Create a client secret.
-- [ ] Note the client id, client secret and tenant id for the web env vars.
-- [ ] Confirm delegated `User.Read` is granted (usually default).
+- [ ] Under Authentication, add a platform of type **Web** and add this exact
+      Redirect URI (replace the host with your real web URL, keep the path):
+
+      https://YOUR-WEB-URL/api/auth/callback/azure-ad
+
+      Example for a Railway domain:
+      `https://landlynk-web.up.railway.app/api/auth/callback/azure-ad`
+- [ ] Under Certificates and secrets, create a **client secret** and copy its
+      **Value** (not the Secret ID). You set this as `AZURE_AD_CLIENT_SECRET`.
+- [ ] From the app Overview, copy these three values for the web env vars below:
+  - Application (client) ID  ->  `AZURE_AD_CLIENT_ID`
+  - Directory (tenant) ID    ->  `AZURE_AD_TENANT_ID`
+  - the client secret Value  ->  `AZURE_AD_CLIENT_SECRET`
+- [ ] Under API permissions, confirm delegated `User.Read` is granted (default).
 
 ## Railway project
 
 - [ ] Create the Railway project.
-- [ ] Add a Postgres plugin and confirm PostGIS can be enabled.
+- [ ] Add a Postgres plugin and confirm PostGIS can be enabled. Note its
+      connection string (Railway exposes it as `DATABASE_URL` on the plugin).
 - [ ] Create the `web` service from the repo, root directory `web`, Dockerfile
       build.
 - [ ] Create the `worker` service from the repo, root directory `worker`,
       Dockerfile build.
-- [ ] Set the worker environment variables (see DEPLOYMENT.md section 3).
-- [ ] Set the web environment variables (see DEPLOYMENT.md section 4).
-- [ ] Point `WORKER_BASE_URL` (web) at the worker service URL.
+
+### Worker service variables (set these exact names on the `worker` service)
+
+- [ ] `WORKER_DATABASE_URL` = the Postgres connection string (same value as the
+      plugin's `DATABASE_URL`). Required.
+- [ ] `WORKER_ISOCHRONE_API_KEY` = your OpenRouteService API key. Required.
+- [ ] `WORKER_ISOCHRONE_PROVIDER` = `openrouteservice`. Optional, this is the
+      default; only set it to change provider.
+- [ ] `WORKER_ISOCHRONE_BASE_URL` = `https://api.openrouteservice.org`. Optional,
+      this is the default; set it only to point at a self-hosted ORS or Valhalla.
+- [ ] `WORKER_PERSIST_RESULTS` = `true`. Optional, default is true.
+- [ ] `WORKER_DEFAULT_DRIVE_TIME_MINUTES` = `30`. Optional, default is 30.
+
+### Web service variables (set these exact names on the `web` service)
+
+- [ ] `NEXTAUTH_URL` = your public web URL, e.g. `https://landlynk-web.up.railway.app`.
+      No trailing slash. Required.
+- [ ] `NEXTAUTH_SECRET` = the output of `openssl rand -base64 32`. Required.
+- [ ] `AZURE_AD_CLIENT_ID` = Application (client) ID from the App Registration.
+      Required.
+- [ ] `AZURE_AD_CLIENT_SECRET` = the client secret Value. Required.
+- [ ] `AZURE_AD_TENANT_ID` = Directory (tenant) ID. Required.
+- [ ] `WORKER_BASE_URL` = the worker service URL Railway gives the `worker`
+      service (the internal/private URL is fine), e.g.
+      `http://worker.railway.internal:8000` or the public worker URL. Required.
+
+  Note: the web service does NOT need `DATABASE_URL`; only the worker talks to
+  the database.
 
 ## Database and reference data
 

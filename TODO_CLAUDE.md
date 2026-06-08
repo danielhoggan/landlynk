@@ -39,12 +39,13 @@ the App Registration and the variables.
       tenure donut).
 - [x] Expanded Battlecard content (pricing, addressable segments, catchment
       context, data confidence).
-- [ ] Scoring config panel: expose weights, price band, bed range and overlap
+- [x] Scoring config panel: expose weights, price band, bed range and overlap
       threshold in the UI, persisted with the catchment.
-- [ ] History page: list past catchments from the database, reopen one without
-      recompute. (Nav link exists but is currently a dead route.)
-- [ ] Battlecards and Settings pages behind the existing nav links.
-- [ ] Loading, empty and error states across the map and drawer.
+- [x] History page: list past catchments from the database, reopen one without
+      recompute via /?catchment=<id>.
+- [x] Settings page (account, default scoring weights, sign out) and tidied nav
+      (Battlecards open from inside a catchment, so the dead link was removed).
+- [x] Loading and empty states across the ranking list and Battlecard drawer.
 
 ## Building next (Phase 2 scope, after MVP proven)
 
