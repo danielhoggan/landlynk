@@ -2,7 +2,7 @@
 // behind the Azure AD SSO gate.
 
 import type { Battlecard } from "./types/battlecard";
-import type { Catchment } from "./types/catchment";
+import type { Catchment, CatchmentSummary } from "./types/catchment";
 
 export interface SubmitPayload {
   kind: "postcode" | "gridref";
@@ -33,6 +33,12 @@ export async function submitCatchment(payload: SubmitPayload): Promise<{ id: str
 export async function getCatchment(id: string): Promise<Catchment> {
   const res = await fetch(`/api/catchments/${id}`);
   if (!res.ok) throw new Error(`Could not load catchment (${res.status})`);
+  return res.json();
+}
+
+export async function listCatchments(): Promise<CatchmentSummary[]> {
+  const res = await fetch("/api/catchments");
+  if (!res.ok) throw new Error(`Could not load history (${res.status})`);
   return res.json();
 }
 

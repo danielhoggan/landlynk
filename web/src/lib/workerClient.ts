@@ -1,4 +1,4 @@
-import type { Catchment } from "./types/catchment";
+import type { Catchment, CatchmentSummary } from "./types/catchment";
 import type { Battlecard } from "./types/battlecard";
 
 // Thin client for the Python worker service. The API route handlers stay thin
@@ -34,6 +34,11 @@ export function submitCatchmentJob(
 /** Read a catchment and its scored, ranked areas. */
 export function getCatchment(id: string): Promise<Catchment> {
   return workerFetch(`/catchments/${id}`);
+}
+
+/** List recent catchments for the history view. */
+export function listCatchments(): Promise<CatchmentSummary[]> {
+  return workerFetch("/catchments");
 }
 
 /** Read one area's stored Battlecard payload. No recompute needed. */

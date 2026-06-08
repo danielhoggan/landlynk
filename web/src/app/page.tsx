@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
 import { CatchmentMap } from "@/components/map/CatchmentMap";
 import { RankingList } from "@/components/map/RankingList";
@@ -8,6 +8,16 @@ import { BattlecardDrawer } from "@/components/battlecard/BattlecardDrawer";
 import type { Catchment, CatchmentArea, InputKind } from "@/lib/types/catchment";
 import type { Battlecard } from "@/lib/types/battlecard";
 import { getBattlecard, pollCatchment, submitCatchment } from "@/lib/client";
+
+// Scoring signal weights exposed in the config panel. Keys are snake_case to
+// match the scoring engine (SCOPING.md Section 8).
+const WEIGHT_LABELS: [string, string][] = [
+  ["income_fit", "Income fit"],
+  ["tenure_signal", "Tenure signal"],
+  ["age_skew", "Age skew"],
+  ["addressable_scale", "Addressable scale"],
+  ["household_type", "Household type"],
+];
 
 // MVP entry surface: paste a postcode or grid ref, the worker builds the
 // catchment, and the interactive map with ranked clickable areas renders here
@@ -31,6 +41,20 @@ export default function HomePage() {
   const [driveTime, setDriveTime] = useState("30");
   const [showBrief, setShowBrief] = useState(false);
 
+  // Scoring config. Weight keys are snake_case to match the scoring engine.
+  // Weights are normalised server-side, so they need not sum to 1.
+  const [showScoring, setShowScoring] = useState(false);
+  const [overlap, setOverlap] = useState("0.10");
+  const [weights, setWeights] = useState<Record<string, string>>({
+    income_fit: "0.30",
+    tenure_signal: "0.20",
+    age_skew: "0.20",
+    addressable_scale: "0.20",
+    household_type: "0.10",
+  });
+  const setWeight = (k: string, v: string) =>
+    setWeights((w) => ({ ...w, [k]: v }));
+
   const splitList = (s: string) =>
     s.split(",").map((x) => x.trim()).filter(Boolean);
 
@@ -40,6 +64,23 @@ export default function HomePage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
+
+  // Reopen a saved catchment when arriving from the history view
+  // (/?catchment=<id>). Served from stored data, no recompute.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("catchment");
+    if (!id) return;
+    setStatus("Loading saved catchment...");
+    pollCatchment(id, setCatchment)
+      .then((c) =>
+        setStatus(
+          c.status === "complete"
+            ? `Ranked ${c.areas.length} areas.`
+            : `Status: ${c.status}`,
+        ),
+      )
+      .catch((e) => setStatus(e instanceof Error ? e.message : "Failed to load"));
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,6 +94,12 @@ export default function HomePage() {
       }
       if (bedRange) config.bedRange = bedRange;
       if (driveTime) config.driveTimeMinutes = Number(driveTime);
+      if (showScoring) {
+        config.overlapThreshold = Number(overlap);
+        config.weights = Object.fromEntries(
+          Object.entries(weights).map(([k, v]) => [k, Number(v)]),
+        );
+      }
 
       const { id } = await submitCatchment({
         kind,
@@ -164,6 +211,41 @@ export default function HomePage() {
               <Field label="Price from (£)" value={priceFrom} onChange={setPriceFrom} placeholder="280000" type="number" />
               <Field label="Price to (£)" value={priceTo} onChange={setPriceTo} placeholder="450000" type="number" />
               <Field label="Drive time (min)" value={driveTime} onChange={setDriveTime} placeholder="30" type="number" />
+            </div>
+
+            <div className="border-t border-neutral-200 pt-3 dark:border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setShowScoring((s) => !s)}
+                className="text-xs font-medium text-light-accent dark:text-dark-accent"
+              >
+                {showScoring ? "Hide" : "Tune"} scoring weights
+              </button>
+              {showScoring && (
+                <div className="mt-3 space-y-3">
+                  <p className="text-xs text-neutral-500">
+                    Weights are relative and normalised, so they need not sum to 1.
+                    Stored with the catchment, so the ranking stays reproducible.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {WEIGHT_LABELS.map(([key, label]) => (
+                      <Field
+                        key={key}
+                        label={label}
+                        value={weights[key]}
+                        onChange={(v) => setWeight(key, v)}
+                        type="number"
+                      />
+                    ))}
+                    <Field
+                      label="Overlap threshold (0 to 1)"
+                      value={overlap}
+                      onChange={setOverlap}
+                      type="number"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

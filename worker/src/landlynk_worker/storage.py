@@ -13,7 +13,8 @@ The read serialisers shape stored data into the web Catchment contract
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol
 
 from .pipeline.orchestrate import CatchmentResult
@@ -74,6 +75,7 @@ class Storage(Protocol):
     ) -> None: ...
     def get_catchment(self, catchment_id: str) -> dict | None: ...
     def get_battlecard(self, catchment_id: str, area_code: str) -> dict | None: ...
+    def list_catchments(self, limit: int = 100) -> list[dict]: ...
 
 
 @dataclass
@@ -82,6 +84,7 @@ class _MemRecord:
     status: str = "queued"
     error: str | None = None
     result: CatchmentResult | None = None
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class InMemoryStore:
@@ -138,6 +141,21 @@ class InMemoryStore:
             return None
         card = record.result.battlecards.get(area_code)
         return None if card is None else card.model_dump(by_alias=True)
+
+    def list_catchments(self, limit: int = 100) -> list[dict]:
+        items = [
+            {
+                "id": cid,
+                "developmentName": r.job.development_name,
+                "inputValue": r.job.value,
+                "status": r.status,
+                "areaCount": len(r.result.areas) if r.result else 0,
+                "createdAt": r.created_at,
+            }
+            for cid, r in self._records.items()
+        ]
+        items.sort(key=lambda i: i["createdAt"], reverse=True)
+        return items[:limit]
 
 
 class PostgresStore:
@@ -281,3 +299,25 @@ class PostgresStore:
                 [catchment_id, area_code],
             ).fetchone()
         return row[0] if row else None
+
+    def list_catchments(self, limit: int = 100) -> list[dict]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT c.id, c.development_name, c.input_value, c.status, "
+                "c.created_at, count(ca.area_code) AS area_count "
+                "FROM catchment c "
+                "LEFT JOIN catchment_area ca ON ca.catchment_id = c.id "
+                "GROUP BY c.id ORDER BY c.created_at DESC LIMIT %s",
+                [limit],
+            ).fetchall()
+        return [
+            {
+                "id": str(cid),
+                "developmentName": dev_name,
+                "inputValue": value,
+                "status": status,
+                "areaCount": area_count,
+                "createdAt": created_at.isoformat() if created_at else None,
+            }
+            for (cid, dev_name, value, status, created_at, area_count) in rows
+        ]

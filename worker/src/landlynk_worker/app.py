@@ -130,6 +130,11 @@ def submit_catchment_job(
     return {"id": job_id}
 
 
+@app.get("/catchments")
+def list_catchments(limit: int = 100) -> list[dict]:
+    return get_store().list_catchments(limit)
+
+
 @app.get("/catchments/{catchment_id}")
 def get_catchment(catchment_id: str) -> dict:
     data = get_store().get_catchment(catchment_id)

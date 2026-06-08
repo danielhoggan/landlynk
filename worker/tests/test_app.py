@@ -104,6 +104,12 @@ def test_job_lifecycle(client, monkeypatch):
     assert card["areaCode"] == "E02000001"
     assert card["schemaVersion"]
 
+    listing = client.get("/catchments").json()
+    assert any(item["id"] == job_id for item in listing)
+    entry = next(item for item in listing if item["id"] == job_id)
+    assert entry["developmentName"] == "Abbots Vale"
+    assert entry["areaCount"] == 1
+
 
 def test_unknown_catchment_404(client):
     assert client.get("/catchments/does-not-exist").status_code == 404

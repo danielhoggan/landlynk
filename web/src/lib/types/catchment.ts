@@ -66,6 +66,16 @@ export interface CatchmentArea {
   geometry: GeoJsonGeometry;
 }
 
+/** Summary row for the history list. */
+export interface CatchmentSummary {
+  id: string;
+  developmentName: string;
+  inputValue: string;
+  status: JobStatus;
+  areaCount: number;
+  createdAt: string | null;
+}
+
 export interface Catchment {
   id: string;
   input: CatchmentInput;

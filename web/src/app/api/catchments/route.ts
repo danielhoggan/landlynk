@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/requireSession";
-import { submitCatchmentJob } from "@/lib/workerClient";
+import { listCatchments, submitCatchmentJob } from "@/lib/workerClient";
+
+// GET /api/catchments. List recent catchments for the history view.
+export async function GET() {
+  const session = await requireSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return NextResponse.json(await listCatchments());
+}
 
 // POST /api/catchments. Submit a catchment job. Thin handler: auth, then hand
 // off to the worker. No geospatial work here.
