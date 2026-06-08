@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from shapely.geometry import shape
+from shapely.geometry import mapping, shape
 
 from ..battlecard import DevelopmentInfo, IncomeContext, assemble_battlecard
 from ..battlecard.schema import Battlecard
@@ -33,6 +33,8 @@ class ScoredArea:
     proportion_inside: float
     score: ScoreBreakdown
     rank: int
+    # GeoJSON geometry for the map. Optional so test fixtures can omit it.
+    geometry: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,7 @@ def run_catchment(
     # 3. Intersect candidate boundaries against the isochrone.
     candidates = deps.reference.candidate_area_geometries(isochrone, area_type)
     matches = intersect_catchment(candidates, isochrone_shape, config.overlap_threshold)
+    geometry_by_code = {c.area_code: mapping(c.geometry) for c in candidates}
 
     # 4 and 5. Join reference data and score each retained area.
     references = {
@@ -133,6 +136,7 @@ def run_catchment(
                 proportion_inside=match.proportion_inside,
                 score=score,
                 rank=rank,
+                geometry=geometry_by_code.get(match.area_code),
             )
         )
         battlecards[match.area_code] = assemble_battlecard(

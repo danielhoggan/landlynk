@@ -130,6 +130,7 @@ def serialise_catchment(catchment_id: str, job: JobRecord) -> dict:
                     "score": round(area.score.total, 4),
                     "band": area.score.band,
                     "rank": area.rank,
+                    "geometry": area.geometry,
                 }
             )
     return {
