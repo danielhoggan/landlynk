@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, Download } from "lucide-react";
+import { MapPin, Download, ChevronDown } from "lucide-react";
 import { CatchmentMap } from "@/components/map/CatchmentMap";
 import { RankingList } from "@/components/map/RankingList";
 import { BattlecardDrawer } from "@/components/battlecard/BattlecardDrawer";
@@ -172,177 +172,191 @@ export default function HomePage() {
 
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-card border border-neutral-200 bg-white/60 p-5"
+        className="space-y-5 rounded-card border border-neutral-200 bg-white p-5 sm:p-6"
       >
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <MapPin size={18} /> New catchment
-        </h2>
+        <div className="flex items-center gap-2">
+          <MapPin size={18} className="text-light-accent" />
+          <h2 className="text-sm font-semibold">New catchment</h2>
+        </div>
 
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex gap-2">
-            {(["postcode", "gridref"] as InputKind[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setKind(k)}
-                className={`rounded-card px-3 py-1.5 text-sm font-medium ${
-                  kind === k
-                    ? "bg-light-accent text-white"
-                    : "border border-neutral-300"
-                }`}
-              >
-                {k === "postcode" ? "Postcode" : "OS grid ref"}
-              </button>
-            ))}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+              Input type
+            </span>
+            <Segmented
+              options={[
+                { value: "postcode", label: "Postcode" },
+                { value: "gridref", label: "OS grid ref" },
+              ]}
+              value={kind}
+              onChange={(v) => setKind(v as InputKind)}
+            />
           </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-500">Area level</span>
-            {(["MSOA", "LA"] as const).map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => setAreaType(a)}
-                className={`rounded-card px-3 py-1.5 text-sm font-medium ${
-                  areaType === a
-                    ? "bg-light-accent text-white"
-                    : "border border-neutral-300"
-                }`}
-              >
-                {a}
-              </button>
-            ))}
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+              Area level
+            </span>
+            <Segmented
+              options={[
+                { value: "MSOA", label: "MSOA" },
+                { value: "LA", label: "LA" },
+              ]}
+              value={areaType}
+              onChange={(v) => setAreaType(v as "MSOA" | "LA")}
+            />
           </div>
         </div>
 
-        <input
-          value={developmentName}
-          onChange={(e) => setDevelopmentName(e.target.value)}
-          placeholder="Development name"
-          className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm"
-        />
-        <input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={
-            kind === "postcode" ? "e.g. IP14 1AA" : "e.g. TM 06457 58755"
-          }
-          className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm"
-        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Development name"
+            value={developmentName}
+            onChange={setDevelopmentName}
+            placeholder="e.g. Abbots Vale"
+          />
+          <Field
+            label={kind === "postcode" ? "Postcode" : "OS grid reference"}
+            value={value}
+            onChange={setValue}
+            placeholder={
+              kind === "postcode" ? "e.g. IP14 1AA" : "e.g. TM 06457 58755"
+            }
+          />
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setShowBrief((s) => !s)}
-          className="text-xs font-medium text-light-accent"
-        >
-          {showBrief ? "Hide" : "Add"} development brief and scoring
-        </button>
+        <div className="border-t border-neutral-200 pt-4">
+          <button
+            type="button"
+            onClick={() => setShowBrief((s) => !s)}
+            className="flex w-full items-center justify-between text-sm font-medium"
+          >
+            <span>
+              Development brief and scoring{" "}
+              <span className="font-normal text-neutral-400">optional</span>
+            </span>
+            <ChevronDown
+              size={16}
+              className={`text-neutral-400 transition-transform ${showBrief ? "rotate-180" : ""}`}
+            />
+          </button>
 
-        {showBrief && (
-          <div className="space-y-3 rounded-card border border-neutral-200 p-4">
-            <div className="grid grid-cols-2 gap-3">
+          {showBrief && (
+            <div className="mt-4 space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Town"
+                  value={town}
+                  onChange={setTown}
+                  placeholder="Stowmarket"
+                />
+                <Field
+                  label="Bed range"
+                  value={bedRange}
+                  onChange={setBedRange}
+                  placeholder="2 to 5"
+                />
+              </div>
               <Field
-                label="Town"
-                value={town}
-                onChange={setTown}
-                placeholder="Stowmarket"
+                label="Strapline"
+                value={strapline}
+                onChange={setStrapline}
+                placeholder="Room to grow"
               />
               <Field
-                label="Bed range"
-                value={bedRange}
-                onChange={setBedRange}
-                placeholder="2 to 5"
-              />
-            </div>
-            <Field
-              label="Strapline"
-              value={strapline}
-              onChange={setStrapline}
-              placeholder="Room to grow"
-            />
-            <Field
-              label="Lifestyle pillars (comma separated)"
-              value={pillars}
-              onChange={setPillars}
-              placeholder="Connected, Green, Family"
-            />
-            <Field
-              label="Feature bullets (comma separated)"
-              value={features}
-              onChange={setFeatures}
-              placeholder="Open green space, Primary school nearby"
-            />
-            <div className="grid grid-cols-3 gap-3">
-              <Field
-                label="Price from (£)"
-                value={priceFrom}
-                onChange={setPriceFrom}
-                placeholder="280000"
-                type="number"
+                label="Lifestyle pillars"
+                hint="comma separated"
+                value={pillars}
+                onChange={setPillars}
+                placeholder="Connected, Green, Family"
               />
               <Field
-                label="Price to (£)"
-                value={priceTo}
-                onChange={setPriceTo}
-                placeholder="450000"
-                type="number"
+                label="Feature bullets"
+                hint="comma separated"
+                value={features}
+                onChange={setFeatures}
+                placeholder="Open green space, Primary school nearby"
               />
-              <Field
-                label="Drive time (min)"
-                value={driveTime}
-                onChange={setDriveTime}
-                placeholder="30"
-                type="number"
-              />
-            </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field
+                  label="Price from"
+                  prefix="£"
+                  value={priceFrom}
+                  onChange={setPriceFrom}
+                  placeholder="280000"
+                  type="number"
+                />
+                <Field
+                  label="Price to"
+                  prefix="£"
+                  value={priceTo}
+                  onChange={setPriceTo}
+                  placeholder="450000"
+                  type="number"
+                />
+                <Field
+                  label="Drive time"
+                  suffix="min"
+                  value={driveTime}
+                  onChange={setDriveTime}
+                  placeholder="30"
+                  type="number"
+                />
+              </div>
 
-            <div className="border-t border-neutral-200 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowScoring((s) => !s)}
-                className="text-xs font-medium text-light-accent"
-              >
-                {showScoring ? "Hide" : "Tune"} scoring weights
-              </button>
-              {showScoring && (
-                <div className="mt-3 space-y-3">
-                  <p className="text-xs text-neutral-500">
-                    Weights are relative and normalised, so they need not sum to
-                    1. Stored with the catchment, so the ranking stays
-                    reproducible.
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {WEIGHT_LABELS.map(([key, label]) => (
+              <div className="rounded-card bg-neutral-50 p-4">
+                <button
+                  type="button"
+                  onClick={() => setShowScoring((s) => !s)}
+                  className="flex w-full items-center justify-between text-sm font-medium"
+                >
+                  <span>Scoring weights</span>
+                  <ChevronDown
+                    size={16}
+                    className={`text-neutral-400 transition-transform ${showScoring ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {showScoring && (
+                  <div className="mt-4 space-y-4">
+                    <p className="text-xs text-neutral-500">
+                      Relative and normalised, so they need not sum to 1. Stored
+                      with the catchment so the ranking stays reproducible.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {WEIGHT_LABELS.map(([key, label]) => (
+                        <Field
+                          key={key}
+                          label={label}
+                          value={weights[key]}
+                          onChange={(v) => setWeight(key, v)}
+                          type="number"
+                        />
+                      ))}
                       <Field
-                        key={key}
-                        label={label}
-                        value={weights[key]}
-                        onChange={(v) => setWeight(key, v)}
+                        label="Overlap threshold"
+                        hint="0 to 1"
+                        value={overlap}
+                        onChange={setOverlap}
                         type="number"
                       />
-                    ))}
-                    <Field
-                      label="Overlap threshold (0 to 1)"
-                      value={overlap}
-                      onChange={setOverlap}
-                      type="number"
-                    />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        <button
-          type="submit"
-          disabled={busy || !value || !developmentName}
-          className="rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {busy ? "Building..." : "Build catchment"}
-        </button>
-
-        {status && <p className="text-xs text-neutral-500">{status}</p>}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={busy || !value || !developmentName}
+            className="w-full rounded-card bg-light-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50 sm:w-auto"
+          >
+            {busy ? "Building..." : "Build catchment"}
+          </button>
+          {status && <p className="text-xs text-neutral-500">{status}</p>}
+        </div>
       </form>
 
       {catchment?.status === "complete" && areas.length === 0 && (
@@ -418,29 +432,83 @@ export default function HomePage() {
   );
 }
 
+function Segmented({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex w-full rounded-card bg-neutral-100 p-1">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={`flex-1 rounded-[10px] px-3 py-1.5 text-sm font-medium transition ${
+            value === o.value
+              ? "bg-white text-light-accent shadow-sm"
+              : "text-neutral-600 hover:text-neutral-900"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Field({
   label,
   value,
   onChange,
   placeholder,
   type = "text",
+  hint,
+  prefix,
+  suffix,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
+  hint?: string;
+  prefix?: string;
+  suffix?: string;
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-neutral-500">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm"
-      />
+      <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+        {label}
+        {hint && (
+          <span className="ml-1 font-normal text-neutral-400">{hint}</span>
+        )}
+      </span>
+      <div className="relative">
+        {prefix && (
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400">
+            {prefix}
+          </span>
+        )}
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`w-full rounded-card border border-neutral-300 bg-white py-2.5 text-sm outline-none transition focus:border-light-accent focus:ring-2 focus:ring-light-accent/20 ${
+            prefix ? "pl-7 pr-3" : "px-3"
+          } ${suffix ? "pr-12" : ""}`}
+        />
+        {suffix && (
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-neutral-400">
+            {suffix}
+          </span>
+        )}
+      </div>
     </label>
   );
 }
