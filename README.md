@@ -38,9 +38,9 @@ The code runs end to end; a live run needs three things the build cannot supply
 itself:
 
 1. An OpenRouteService API key (free tier). Set `WORKER_ISOCHRONE_API_KEY`.
-2. A Postgres with PostGIS database. Apply `infra/migrations/` then load the
-   reference data with the loaders in `data/` (see `data/README.md`). Set
-   `DATABASE_URL` / `WORKER_DATABASE_URL`.
+2. A PostGIS database (a PostGIS image, not plain Postgres). Set
+   `WORKER_DATABASE_URL`. The worker auto-applies `worker/migrations/` on deploy;
+   then load the reference data with the loaders in `data/` (see `data/README.md`).
 3. Azure AD SSO credentials for the web app (see `web/.env.example`).
 
 With those set, run the worker (`uvicorn landlynk_worker.app:app`) and the web

@@ -18,12 +18,22 @@ The web app never talks to the database directly. It proxies to the worker via
 
 ## 1. Database
 
-1. Add a Postgres plugin to the Railway project.
-2. Enable PostGIS: the first migration runs `CREATE EXTENSION postgis`. Railway
-   Postgres supports it.
-3. Apply migrations: with `DATABASE_URL` set to the database, run
-   `python infra/migrate.py` (needs `pip install "psycopg[binary]"`). It applies
-   `infra/migrations/*.sql` in order and is safe to re-run.
+PostGIS is required. Railway's plain managed Postgres does NOT ship the PostGIS
+extension (`CREATE EXTENSION postgis` fails with "not available"), so use a
+PostGIS image, not the vanilla Postgres plugin.
+
+1. Deploy a PostGIS database. Easiest is a Railway PostGIS template, or deploy
+   the `postgis/postgis` Docker image as a service with a volume mounted at
+   `/var/lib/postgresql/data` and `PGDATA=/var/lib/postgresql/data/pgdata`.
+2. Point the worker's `WORKER_DATABASE_URL` at it (use the private
+   `*.railway.internal` host for the worker).
+3. Migrations run automatically. The worker's Railway pre-deploy command
+   (`python -m landlynk_worker.migrate`, set in `worker/railway.json`) applies
+   `worker/migrations/*.sql` in order on every deploy, idempotently, and the
+   first migration enables PostGIS. No manual step is needed.
+
+To run migrations by hand against a database (optional), from `worker/` with
+`WORKER_DATABASE_URL` set: `python -m landlynk_worker.migrate`.
 
 ## 2. Reference data
 

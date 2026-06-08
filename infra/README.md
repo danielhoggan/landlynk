@@ -5,11 +5,13 @@ Railway and deploy configuration plus database migrations for landlynk.
 ## Services
 
 The web app and the Python worker run as separate Railway services
-(house-standards.md). A Postgres with PostGIS instance backs both.
+(house-standards.md). A PostGIS database backs both.
 
 - `web` - Next.js app. Build and start from `/web`.
 - `worker` - Python FastAPI worker. Build and start from `/worker`.
-- Postgres with PostGIS - managed database. Apply `migrations/` in order.
+- PostGIS database - use a PostGIS image (e.g. a Railway PostGIS template or the
+  `postgis/postgis` Docker image). Railway's plain managed Postgres does not have
+  the PostGIS extension and will fail the first migration.
 
 ### Critical: per-service Root Directory and config
 
@@ -35,14 +37,18 @@ database URL.
 
 ## Migrations
 
-See `migrations/README.md`. PostGIS is required; the first migration enables it.
+The schema lives in `worker/migrations/` and is bundled into the worker image.
+The worker applies it automatically on every deploy via its Railway pre-deploy
+command (`python -m landlynk_worker.migrate`, set in `worker/railway.json`),
+idempotently. The first migration enables PostGIS. No manual step is required;
+to run by hand, from `worker/` with `WORKER_DATABASE_URL` set run
+`python -m landlynk_worker.migrate`.
 
 ## Layout
 
 ```
-worker/railway.json   worker service build (Dockerfile) and health check
-web/railway.json      web service build (Dockerfile) and health check
-infra/
-  migrate.py          migration runner
-  migrations/         versioned SQL migrations
+worker/railway.json     worker build (Dockerfile), pre-deploy migrate, health check
+web/railway.json        web build (Dockerfile) and health check
+worker/migrations/      versioned SQL migrations (bundled into the worker image)
+infra/                  this readme
 ```

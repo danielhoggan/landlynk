@@ -80,7 +80,13 @@ DEPLOYMENT.md. Rough order below.
 
 ## Database and reference data
 
-- [ ] Run migrations: `DATABASE_URL=... python infra/migrate.py`.
+- [ ] Use a PostGIS database, NOT Railway's plain Postgres plugin (it lacks the
+      PostGIS extension). A Railway PostGIS template or the `postgis/postgis`
+      image both work. Point `WORKER_DATABASE_URL` at it.
+- [ ] Migrations run automatically on each worker deploy (worker pre-deploy
+      command `python -m landlynk_worker.migrate`). No manual step. Just confirm
+      the worker's latest deploy log shows "Applied N migration(s)" or
+      "Database is up to date".
 - [ ] Download the open reference datasets (links and licences in
       `data/sources.yaml`):
   - [ ] ONS MSOA 2021 boundaries (GeoJSON), Open Geography Portal.
