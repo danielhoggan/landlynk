@@ -74,8 +74,8 @@ the App Registration and the variables.
 
 ## Engineering hardening (will pick up as we stabilise)
 
-- [ ] Integration test of PostgresStore and the loaders against a real PostGIS
-      (testcontainers or a CI database), to complement the offline unit tests.
+- [x] Integration test of PostgresStore against a real PostGIS, gated on
+      WORKER_TEST_DATABASE_URL (skips without a database), for CI.
 - [x] Open vector basemap (OpenFreeMap, no key) replacing OSM raster; override
       with NEXT_PUBLIC_MAP_STYLE.
 - [x] Structured logging in the worker pipeline and job runner.
