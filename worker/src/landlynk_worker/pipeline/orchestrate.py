@@ -24,7 +24,7 @@ from ..battlecard import (
 )
 from ..battlecard.schema import Battlecard
 from ..scoring.profile import ScoringConfig
-from ..scoring.score import ScoreBreakdown, compute_score
+from ..scoring.score import ScoreBreakdown, compute_score, relative_band
 from .intersect import intersect_catchment
 from .isochrone import IsochroneCache, IsochroneParams, IsochroneProvider, get_isochrone
 from .reference import ReferenceData
@@ -171,6 +171,9 @@ def run_catchment(
     catchment_stats = _catchment_stats(ordered_for_context, references)
 
     # 6. Assemble one Battlecard per area from the single payload contract.
+    # Bands are relative to the catchment (thirds by rank) so the map always
+    # shows a usable spread of colours, not one flat colour.
+    total = len(scored)
     battlecards: dict[str, Battlecard] = {}
     for rank, (match, score) in enumerate(scored, start=1):
         ref = references[match.area_code]
@@ -185,7 +188,7 @@ def run_catchment(
                 geometry=geometry_by_code.get(match.area_code),
             )
         )
-        battlecards[match.area_code] = assemble_battlecard(
+        card = assemble_battlecard(
             profile=ref.profile,
             config=config,
             score=score,
@@ -194,6 +197,8 @@ def run_catchment(
             income_context=income_context,
             catchment_stats=catchment_stats,
         )
+        card.score.band = relative_band(rank, total)
+        battlecards[match.area_code] = card
 
     _log.info("Catchment run complete: %s ranked areas", len(areas))
     return CatchmentResult(

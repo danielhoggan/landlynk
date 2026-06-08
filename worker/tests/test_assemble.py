@@ -204,7 +204,9 @@ def test_data_confidence_high_when_complete():
 
 
 def test_data_confidence_drops_with_suppression():
-    profile = make_profile(median_income=None, mean_income=None, population=None)
+    profile = make_profile(
+        median_income=None, mean_income=None, population=None, households=None
+    )
     config = ScoringConfig()
     score = compute_score(profile, config)
     card = assemble_battlecard(
@@ -216,7 +218,7 @@ def test_data_confidence_drops_with_suppression():
         income_context=_income_context(),
     )
     assert card.data_confidence.level == "low"
-    assert "median income" in card.data_confidence.suppressed_fields
+    assert "income" in card.data_confidence.suppressed_fields
 
 
 def test_catchment_context_income_index():

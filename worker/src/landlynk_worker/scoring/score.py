@@ -206,6 +206,25 @@ def band_for_score(total: float) -> str:
     return "low"
 
 
+def relative_band(rank: int, total: int) -> str:
+    """Band an area by its rank within the catchment, in thirds.
+
+    Priority is inherently relative: the job is to show where to focus first.
+    Absolute score thresholds leave every area the same colour when scores
+    cluster, so we split the ranked areas into a high, mid and low third. This
+    guarantees a usable spread of colours on the map.
+    """
+    import math
+
+    if total <= 0:
+        return "low"
+    if rank <= math.ceil(total / 3):
+        return "high"
+    if rank <= math.ceil(2 * total / 3):
+        return "mid"
+    return "low"
+
+
 SCORERS = (
     ("income_fit", score_income_fit),
     ("tenure_signal", score_tenure_signal),

@@ -6,30 +6,31 @@ import { fmtValue, fmtCurrency, fmtPercent } from "@/lib/format";
 
 interface OnLocationSummaryProps {
   battlecard: Battlecard;
-  onOpenFull: () => void;
+  /** The area's name (e.g. the MSOA name); leads the header. */
+  areaName?: string;
 }
 
 // The compact breakdown shown before the full deep-dive (design-framework.md,
-// on-location summary). Area name and code, priority rank and score,
-// addressable population, and the key signals as short labelled values.
+// on-location summary). Leads with the area, then the key signals.
 export function OnLocationSummary({
   battlecard,
-  onOpenFull,
+  areaName,
 }: OnLocationSummaryProps) {
   const { visualSummary: vs, score, areaCode, rank } = battlecard;
   const stats = vs.keyStatistics;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">{vs.header.developmentName}</h2>
+          <h2 className="text-lg font-semibold">{areaName ?? areaCode}</h2>
           <p className="text-xs text-neutral-500">
-            {areaCode} - {vs.header.town}
+            {areaCode}
+            {vs.header.developmentName ? ` · ${vs.header.developmentName}` : ""}
           </p>
         </div>
         <span
-          className="flex items-center gap-1.5 rounded-card px-2.5 py-1 text-xs font-semibold text-white"
+          className="flex shrink-0 items-center gap-1.5 rounded-card px-2.5 py-1 text-xs font-semibold text-white"
           style={{ backgroundColor: PRIORITY_COLORS[score.band] }}
         >
           #{rank} {PRIORITY_LABELS[score.band]}
@@ -53,14 +54,6 @@ export function OnLocationSummary({
         <Stat label="Median age" value={fmtValue(stats.medianAge)} />
         <Stat label="Bed range" value={stats.bedRange} />
       </dl>
-
-      <button
-        type="button"
-        onClick={onOpenFull}
-        className="w-full rounded-card bg-light-accent py-2.5 text-sm font-semibold text-white"
-      >
-        Open full Battlecard
-      </button>
     </div>
   );
 }

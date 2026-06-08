@@ -10,6 +10,7 @@ import { BattlecardInsights } from "./BattlecardInsights";
 
 interface BattlecardDrawerProps {
   battlecard: Battlecard | null;
+  areaName?: string;
   open: boolean;
   onClose: () => void;
   /** Download URL for the PDF export, when a catchment is loaded. */
@@ -23,6 +24,7 @@ interface BattlecardDrawerProps {
 // drawer is focus-managed. Battlecard prose uses the web output font.
 export function BattlecardDrawer({
   battlecard,
+  areaName,
   open,
   onClose,
   pdfUrl,
@@ -59,7 +61,7 @@ export function BattlecardDrawer({
 
       {battlecard ? (
         <div className="space-y-6">
-          <OnLocationSummary battlecard={battlecard} onOpenFull={() => {}} />
+          <OnLocationSummary battlecard={battlecard} areaName={areaName} />
 
           {(pdfUrl || pptxUrl) && (
             <div className="grid grid-cols-2 gap-2">

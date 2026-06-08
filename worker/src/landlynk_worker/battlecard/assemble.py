@@ -294,11 +294,19 @@ def _cohort_commentary(profile: AreaProfile) -> list[CohortCommentary]:
 
 
 def _pricing_rationale(profile: AreaProfile, config: ScoringConfig) -> PricingRationale:
-    """Implied affordable price from local income against the scheme price."""
-    median = profile.median_income
+    """Implied affordable price from local income against the scheme price.
+
+    Prefers median income, falling back to mean (ONS small-area income is mean
+    only at MSOA level), so a present mean does not read as "incomplete".
+    """
+    income = profile.median_income
+    income_label = "median income"
+    if income is None:
+        income = profile.mean_income
+        income_label = "average income"
     mult = config.affordability_multiple
     price_from = config.price_band.frm
-    implied = None if median is None else round(median * mult)
+    implied = None if income is None else round(income * mult)
 
     if implied is None:
         positioning = (
@@ -307,19 +315,19 @@ def _pricing_rationale(profile: AreaProfile, config: ScoringConfig) -> PricingRa
         )
     elif price_from <= implied:
         positioning = (
-            f"A median income of {median:,.0f} supports about {implied:,.0f} at "
+            f"An {income_label} of {income:,.0f} supports about {implied:,.0f} at "
             f"{mult:g}x income. With homes from {price_from:,.0f} the entry price is "
             "within local reach, so lead on attainability and first-time buyer support."
         )
     elif price_from <= implied * 1.2:
         positioning = (
-            f"A median income of {median:,.0f} supports about {implied:,.0f} at "
+            f"An {income_label} of {income:,.0f} supports about {implied:,.0f} at "
             f"{mult:g}x income. Homes from {price_from:,.0f} are a modest stretch, so "
             "emphasise value, specification and purchase incentives."
         )
     else:
         positioning = (
-            f"A median income of {median:,.0f} supports about {implied:,.0f} at "
+            f"An {income_label} of {income:,.0f} supports about {implied:,.0f} at "
             f"{mult:g}x income. Homes from {price_from:,.0f} sit above local means, so "
             "target equity-rich movers and in-migration rather than local first buyers."
         )
@@ -367,10 +375,13 @@ def _catchment_context(
     )
 
 
-# Human labels for the inputs whose suppression we report.
+# Human labels for the inputs whose suppression we report. Income counts as
+# present if either median or mean is available (ONS small-area income is mean
+# only at MSOA level, so requiring median would flag every area).
 _CONFIDENCE_FIELDS = {
-    "median income": lambda p: p.median_income,
-    "mean income": lambda p: p.mean_income,
+    "income": lambda p: (
+        p.median_income if p.median_income is not None else p.mean_income
+    ),
     "population": lambda p: p.population,
     "households": lambda p: p.households,
     "tenure": lambda p: p.tenure.private_rented,

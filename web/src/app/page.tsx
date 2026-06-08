@@ -69,6 +69,7 @@ export default function HomePage() {
   const [catchment, setCatchment] = useState<Catchment | null>(null);
   const [selected, setSelected] = useState<Battlecard | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
+  const [selectedName, setSelectedName] = useState<string | undefined>();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
@@ -142,6 +143,7 @@ export default function HomePage() {
   async function onSelectArea(area: CatchmentArea) {
     if (!catchment) return;
     setSelectedCode(area.areaCode);
+    setSelectedName(area.name);
     setDrawerOpen(true);
     setSelected(null);
     try {
@@ -398,6 +400,7 @@ export default function HomePage() {
 
       <BattlecardDrawer
         battlecard={selected}
+        areaName={selectedName}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         pdfUrl={

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from .pipeline.orchestrate import CatchmentResult
 from .scoring.profile import ScoringConfig
-from .scoring.score import band_for_score
+from .scoring.score import relative_band
 
 if TYPE_CHECKING:
     from psycopg_pool import ConnectionPool
@@ -48,6 +48,7 @@ def scoring_config_to_dict(config: ScoringConfig) -> dict:
 
 
 def _serialise_areas_from_result(result: CatchmentResult) -> list[dict]:
+    total = len(result.areas)
     return [
         {
             "areaCode": a.area_code,
@@ -55,7 +56,7 @@ def _serialise_areas_from_result(result: CatchmentResult) -> list[dict]:
             "name": a.name,
             "proportionInside": round(a.proportion_inside, 4),
             "score": round(a.score.total, 4),
-            "band": a.score.band,
+            "band": relative_band(a.rank, total),
             "rank": a.rank,
             "geometry": a.geometry,
         }
@@ -269,6 +270,7 @@ class PostgresStore:
                 [catchment_id],
             ).fetchall()
 
+        total = len(area_rows)
         areas = [
             {
                 "areaCode": code,
@@ -276,7 +278,7 @@ class PostgresStore:
                 "name": name or code,
                 "proportionInside": float(prop),
                 "score": float(score),
-                "band": band_for_score(float(score)),
+                "band": relative_band(rank, total),
                 "rank": rank,
                 "geometry": json.loads(geom) if geom else None,
             }
