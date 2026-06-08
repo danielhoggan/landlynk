@@ -30,6 +30,11 @@ const config: Config = {
           mid: "#FF9500", // orange
           low: "#FF3B30", // red
         },
+        // LandLynk brand wordmark colours: green "Land", charcoal "Lynk".
+        brand: {
+          green: "#2F6B3A",
+          ink: "#1E2A32",
+        },
       },
       fontFamily: {
         // App UI font: Inter. Web output font: Tenor Sans.

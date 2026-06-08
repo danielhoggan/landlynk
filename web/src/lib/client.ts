@@ -48,6 +48,37 @@ export async function listCatchments(): Promise<CatchmentSummary[]> {
   return res.json();
 }
 
+export interface ReferenceStatus {
+  status: string;
+  rows: number | null;
+  error: string | null;
+  updatedAt: string;
+}
+
+export async function getReferenceStatus(): Promise<Record<string, ReferenceStatus>> {
+  const res = await fetch("/api/admin/reference");
+  if (!res.ok) throw new Error(`Could not load status (${res.status})`);
+  return res.json();
+}
+
+export async function loadReference(
+  dataset: string,
+  params: Record<string, string>,
+): Promise<void> {
+  const res = await fetch(`/api/admin/reference/${dataset}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const detail = await res
+      .json()
+      .then((b) => b?.detail ?? b?.error)
+      .catch(() => null);
+    throw new Error(detail ?? `Load failed (${res.status})`);
+  }
+}
+
 export async function getBattlecard(
   id: string,
   areaCode: string,

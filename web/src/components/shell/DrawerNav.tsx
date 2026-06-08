@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { Map, Settings, X, History, type LucideIcon } from "lucide-react";
+import {
+  Map,
+  Compass,
+  Database,
+  Settings,
+  X,
+  History,
+  type LucideIcon,
+} from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Logo } from "./Logo";
 
 interface NavItem {
   label: string;
@@ -9,11 +19,13 @@ interface NavItem {
   href: string;
 }
 
-// Battlecards are reached by clicking an area inside a catchment, so they are
-// not a top-level destination.
+// The standard nav. Battlecards are reached by clicking an area inside a
+// catchment, so they are not a top-level destination.
 const NAV_ITEMS: NavItem[] = [
   { label: "Catchment map", icon: Map, href: "/" },
+  { label: "How it works", icon: Compass, href: "/how-it-works" },
   { label: "History", icon: History, href: "/history" },
+  { label: "Reference data", icon: Database, href: "/data" },
   { label: "Settings", icon: Settings, href: "/settings" },
 ];
 
@@ -25,8 +37,9 @@ interface DrawerNavProps {
 // Slide-out drawer navigation with a blurred scrim and scroll lock when open
 // (design-framework.md, layout shell).
 export function DrawerNav({ open, onClose }: DrawerNavProps) {
+  const pathname = usePathname();
+
   useEffect(() => {
-    // Scroll lock while the drawer is open.
     document.body.style.overflow = open ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
@@ -35,7 +48,6 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
 
   return (
     <>
-      {/* Blurred scrim */}
       <div
         aria-hidden={!open}
         onClick={onClose}
@@ -50,7 +62,7 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
         }`}
       >
         <div className="mb-8 flex items-center justify-between">
-          <span className="text-lg font-semibold">LandLynk</span>
+          <Logo className="text-lg" />
           <button
             type="button"
             onClick={onClose}
@@ -63,11 +75,21 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
+            const active =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href);
             return (
               <li key={item.href}>
                 <a
                   href={item.href}
-                  className="flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-light-accent dark:text-neutral-200 dark:hover:bg-neutral-900 dark:hover:text-dark-accent"
+                  onClick={onClose}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-light-accent/10 text-light-accent dark:bg-dark-accent/15 dark:text-dark-accent"
+                      : "text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-900"
+                  }`}
                 >
                   <Icon size={18} />
                   {item.label}
@@ -76,6 +98,10 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
             );
           })}
         </ul>
+
+        <p className="absolute bottom-5 left-5 right-5 text-xs text-neutral-400">
+          The Geographic Intelligence Engine. Open data, explainable rankings.
+        </p>
       </nav>
     </>
   );

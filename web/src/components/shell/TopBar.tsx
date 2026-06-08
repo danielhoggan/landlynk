@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, X } from "lucide-react";
+import { Logo } from "./Logo";
 
 interface TopBarProps {
   drawerOpen: boolean;
@@ -21,7 +22,7 @@ export function TopBar({ drawerOpen, onToggleDrawer }: TopBarProps) {
       >
         {drawerOpen ? <X size={22} /> : <Menu size={22} />}
       </button>
-      <span className="text-base font-semibold tracking-tight">LandLynk</span>
+      <Logo className="text-base" />
     </header>
   );
 }

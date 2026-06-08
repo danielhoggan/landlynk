@@ -26,8 +26,8 @@ export interface BrandTheme {
  * to Royal Blue per the output conventions (house-standards.md).
  */
 export const DEFAULT_THEME: BrandTheme = {
-  id: "mediaworks-default",
-  name: "Mediaworks Default",
+  id: "landlynk-default",
+  name: "LandLynk Default",
   colors: {
     primary: "#4169E1", // Royal Blue, default document heading colour
     secondary: "#0D0D0D",
