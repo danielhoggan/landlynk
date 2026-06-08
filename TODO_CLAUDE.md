@@ -49,8 +49,9 @@ the App Registration and the variables.
 
 ## Building next (Phase 2 scope, after MVP proven)
 
-- [ ] KML export: full catchment polygon plus foldered, colour-coded area pins
-      with Battlecard info balloons (the colour helper exists; the writer does not).
+- [x] KML export: catchment polygon plus foldered, colour-coded area pins with
+      Battlecard info balloons, emitted as XML (no native build dependency).
+      Worker endpoint and web download wired.
 - [ ] PPTX export to the client brand template.
 - [ ] LA-level support for the leisure use case (PfP pattern).
 - [ ] GWI persona channel enrichment in audience messaging (pending your licence
