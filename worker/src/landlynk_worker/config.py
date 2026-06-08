@@ -24,5 +24,10 @@ class Settings(BaseSettings):
     # store (single process only). Production keeps this true.
     persist_results: bool = True
 
+    # Optional shared secret for the admin reference-load endpoints. When set,
+    # callers must send it as X-Admin-Token. The worker is private (internal
+    # networking) and the web caller is SSO-gated, so this is defence in depth.
+    admin_token: str = ""
+
 
 settings = Settings()

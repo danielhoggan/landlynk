@@ -17,8 +17,9 @@ import uuid
 from typing import TYPE_CHECKING
 
 import httpx
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Response
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Response
 
+from . import refdata
 from .api_models import CatchmentJobRequest, to_development_info, to_scoring_config
 from .battlecard import Battlecard, render_battlecard_pdf
 from .config import settings
@@ -109,6 +110,32 @@ def _run_job(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _check_admin(token: str | None) -> None:
+    if settings.admin_token and token != settings.admin_token:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+
+@app.get("/admin/reference/status")
+def reference_status(x_admin_token: str | None = Header(default=None)) -> dict:
+    _check_admin(x_admin_token)
+    return refdata.get_status()
+
+
+@app.post("/admin/reference/{dataset}", status_code=202)
+def load_reference(
+    dataset: str,
+    params: dict,
+    background: BackgroundTasks,
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, str]:
+    """Download and load one reference dataset into PostGIS, in the background."""
+    _check_admin(x_admin_token)
+    if dataset not in refdata.DATASETS:
+        raise HTTPException(status_code=404, detail=f"Unknown dataset: {dataset}")
+    background.add_task(refdata.run_load, get_pool(), dataset, params or {})
+    return {"status": "started", "dataset": dataset}
 
 
 @app.post("/jobs/catchment", status_code=202)

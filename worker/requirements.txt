@@ -23,8 +23,11 @@ geoalchemy2==0.15.2
 pydantic==2.8.2
 pydantic-settings==2.3.4
 
-# HTTP for geocode and isochrone providers (postcodes.io, OpenRouteService)
+# HTTP for geocode and isochrone providers (postcodes.io, OpenRouteService) and
+# for server-side reference data downloads.
 httpx==0.27.0
+# Reading ONS income estimates spreadsheets during server-side reference loads.
+openpyxl==3.1.5
 
 # Output generation. KML is emitted directly as XML (no native build
 # dependency); PDF Battlecards via reportlab.

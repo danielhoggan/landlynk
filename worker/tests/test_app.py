@@ -113,3 +113,29 @@ def test_job_lifecycle(client, monkeypatch):
 
 def test_unknown_catchment_404(client):
     assert client.get("/catchments/does-not-exist").status_code == 404
+
+
+def test_reference_load_dispatch(client, monkeypatch):
+    # Avoid building a real pool or running a real load.
+    monkeypatch.setattr(app_module, "get_pool", lambda: object())
+    calls = {}
+    monkeypatch.setattr(
+        app_module.refdata,
+        "run_load",
+        lambda pool, dataset, params: calls.update(dataset=dataset, params=params),
+    )
+    res = client.post(
+        "/admin/reference/geo_boundaries",
+        json={"url": "https://x/FeatureServer/0/query", "areaType": "MSOA"},
+    )
+    assert res.status_code == 202
+    assert calls["dataset"] == "geo_boundaries"
+    assert calls["params"]["url"].endswith("/query")
+
+
+def test_reference_load_unknown_dataset(client):
+    assert client.post("/admin/reference/nope", json={}).status_code == 404
+
+
+def test_reference_status_ok(client):
+    assert client.get("/admin/reference/status").status_code == 200
