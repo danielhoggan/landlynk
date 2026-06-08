@@ -62,8 +62,11 @@ def fetch_arcgis_geojson(
     client = client or httpx.Client(timeout=_TIMEOUT, follow_redirects=True)
     features: list[dict] = []
     offset = 0
+    # Advance by the number actually returned, not the requested page size:
+    # ArcGIS servers commonly cap a page below the requested count, which would
+    # otherwise skip records. Stop when a page comes back empty.
     try:
-        while True:
+        for _ in range(10_000):  # safety bound against a server ignoring offset
             params = {
                 **base_params,
                 "where": base_params.get("where", "1=1"),
@@ -77,10 +80,10 @@ def fetch_arcgis_geojson(
             resp = client.get(url)
             resp.raise_for_status()
             batch = resp.json().get("features") or []
-            features.extend(batch)
-            if len(batch) < page_size:
+            if not batch:
                 break
-            offset += page_size
+            features.extend(batch)
+            offset += len(batch)
     finally:
         if owned:
             client.close()
@@ -88,7 +91,16 @@ def fetch_arcgis_geojson(
 
 
 def _read_csv(text: str) -> tuple[list[dict], str]:
-    reader = csv.DictReader(io.StringIO(text))
+    # Strip a UTF-8 BOM so the first header is not "﻿geography code".
+    if text.startswith("﻿"):
+        text = text[1:]
+    # Sniff the delimiter (NOMIS uses commas, some ONS exports use semicolons or
+    # tabs); fall back to comma.
+    try:
+        delimiter = csv.Sniffer().sniff(text[:4096], delimiters=",;\t").delimiter
+    except csv.Error:
+        delimiter = ","
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     rows = list(reader)
     code_field = t.find_area_code_field(reader.fieldnames or [])
     return rows, code_field

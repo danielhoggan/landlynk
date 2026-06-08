@@ -73,21 +73,27 @@ def test_median_age_and_bands():
 # --- ArcGIS pagination -------------------------------------------------------
 
 
-def test_fetch_arcgis_geojson_pages_until_short_batch():
-    pages = [
-        {"features": [{"id": 1}, {"id": 2}]},
-        {"features": [{"id": 3}]},  # short page ends paging
-    ]
-    calls = {"n": 0}
+def test_fetch_arcgis_geojson_pages_by_returned_count():
+    # The server caps each page at 2 even though we ask for more, and advances
+    # by the offset we send. Paging must follow the actual returned count.
+    rows = [{"id": i} for i in range(5)]
 
     def handler(request: httpx.Request) -> httpx.Response:
-        page = pages[calls["n"]]
-        calls["n"] += 1
-        return httpx.Response(200, json=page)
+        from urllib.parse import parse_qs, urlparse
+
+        q = parse_qs(urlparse(str(request.url)).query)
+        offset = int(q["resultOffset"][0])
+        return httpx.Response(200, json={"features": rows[offset : offset + 2]})
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         fc = loaders.fetch_arcgis_geojson(
-            "https://x/FeatureServer/0/query", page_size=2, client=client
+            "https://x/FeatureServer/0/query", page_size=1000, client=client
         )
-    assert [f["id"] for f in fc["features"]] == [1, 2, 3]
-    assert calls["n"] == 2
+    assert [f["id"] for f in fc["features"]] == [0, 1, 2, 3, 4]
+
+
+def test_read_csv_handles_bom_and_semicolons():
+    text = "﻿geography code;Total: All households;Owns outright\nE1;100;40\n"
+    rows, code_field = loaders._read_csv(text)
+    assert code_field == "geography code"
+    assert rows[0]["geography code"] == "E1"
