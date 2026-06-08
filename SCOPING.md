@@ -211,7 +211,7 @@ Risks:
 Open questions for Dan:
 - Working name and final branding for the engine. Resolved: working name is LandLynk.
 - MSOA only for MVP, or LA from day one given the PfP Leisure use case.
-- Isochrone provider preference (TravelTime vs OpenRouteService) and whether a paid tier is acceptable.
+- Isochrone provider preference (TravelTime vs OpenRouteService) and whether a paid tier is acceptable. Provisional: OpenRouteService hosted free tier for MVP, behind a pluggable provider seam so we can move to self-hosted ORS or Valhalla for scale without changing the pipeline. Revisit if the free-tier quota constrains batch use.
 - Whether PPTX export to client brand templates is MVP or Phase 2.
 - Whether the GWI persona layer is in MVP scoring or added later.
 
