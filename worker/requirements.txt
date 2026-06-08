@@ -4,6 +4,8 @@
 # Geospatial
 geopandas==1.0.1
 shapely==2.0.5
+# Coordinate transforms: OS grid reference (EPSG:27700) to WGS84.
+pyproj==3.6.1
 
 # Web service (worker exposes job submission and read endpoints to the API layer)
 fastapi==0.111.1
