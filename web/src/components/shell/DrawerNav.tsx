@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Map, FileText, Settings, X, History, type LucideIcon } from "lucide-react";
+import { Map, Settings, X, History, type LucideIcon } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -9,9 +9,10 @@ interface NavItem {
   href: string;
 }
 
+// Battlecards are reached by clicking an area inside a catchment, so they are
+// not a top-level destination.
 const NAV_ITEMS: NavItem[] = [
   { label: "Catchment map", icon: Map, href: "/" },
-  { label: "Battlecards", icon: FileText, href: "/battlecards" },
   { label: "History", icon: History, href: "/history" },
   { label: "Settings", icon: Settings, href: "/settings" },
 ];

@@ -271,11 +271,19 @@ export default function HomePage() {
         />
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-neutral-500">Priority ranking</h2>
-          <RankingList
-            areas={areas}
-            onSelectArea={onSelectArea}
-            selectedAreaCode={selectedCode}
-          />
+          {areas.length === 0 ? (
+            <p className="rounded-card border border-dashed border-neutral-300 p-4 text-xs text-neutral-500 dark:border-neutral-700">
+              {busy
+                ? "Scoring areas..."
+                : "Build a catchment to see ranked areas here."}
+            </p>
+          ) : (
+            <RankingList
+              areas={areas}
+              onSelectArea={onSelectArea}
+              selectedAreaCode={selectedCode}
+            />
+          )}
         </div>
       </div>
 

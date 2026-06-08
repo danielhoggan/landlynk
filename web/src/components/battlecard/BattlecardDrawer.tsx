@@ -95,7 +95,7 @@ export function BattlecardDrawer({
           </section>
         </div>
       ) : (
-        <p className="text-sm text-neutral-500">Select an area to see its Battlecard.</p>
+        <p className="text-sm text-neutral-500">Loading Battlecard...</p>
       )}
     </div>
   );
