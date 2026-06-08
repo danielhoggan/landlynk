@@ -14,6 +14,7 @@ module imports without a database for the unit tests.
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -22,9 +23,13 @@ from .api_models import CatchmentJobRequest, to_development_info, to_scoring_con
 from .config import settings
 from .pipeline.isochrone import (
     InMemoryIsochroneCache,
+    IsochroneCache,
     OpenRouteServiceProvider,
     PostgresIsochroneCache,
 )
+
+if TYPE_CHECKING:
+    from psycopg_pool import ConnectionPool
 from .pipeline.orchestrate import PipelineDeps, run_catchment
 from .pipeline.reference import PostgresReferenceData
 from .scoring.profile import ScoringConfig
@@ -38,7 +43,7 @@ _store: Storage | None = None
 _cache = None
 
 
-def get_pool():  # pragma: no cover - needs a database
+def get_pool() -> "ConnectionPool":  # pragma: no cover - needs a database
     global _pool
     if _pool is None:
         from psycopg_pool import ConnectionPool
@@ -56,7 +61,7 @@ def get_store() -> Storage:
     return _store
 
 
-def get_cache():  # pragma: no cover - selects durable cache in production
+def get_cache() -> IsochroneCache:  # pragma: no cover - durable cache in production
     global _cache
     if _cache is None:
         _cache = (

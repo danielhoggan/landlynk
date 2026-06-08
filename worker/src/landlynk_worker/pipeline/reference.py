@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from ..scoring.profile import AreaProfile
 from .intersect import AreaGeometry, area_geometry_from_geojson
@@ -93,7 +93,7 @@ class PostgresReferenceData:
         return AreaReference(profile=profile, name=name or area_code)
 
 
-def _one(conn, table: str, area_code: str) -> dict:  # pragma: no cover - needs DB
+def _one(conn: Any, table: str, area_code: str) -> dict:  # pragma: no cover - needs DB
     from psycopg.rows import dict_row
 
     with conn.cursor(row_factory=dict_row) as cur:
@@ -101,7 +101,7 @@ def _one(conn, table: str, area_code: str) -> dict:  # pragma: no cover - needs 
         return cur.fetchone() or {}
 
 
-def _area_name(conn, area_code: str) -> str | None:  # pragma: no cover - needs DB
+def _area_name(conn: Any, area_code: str) -> str | None:  # pragma: no cover - needs DB
     row = conn.execute(
         "SELECT area_name FROM geo_boundaries WHERE area_code = %s", [area_code]
     ).fetchone()
