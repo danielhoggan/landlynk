@@ -1,18 +1,20 @@
 """Stage 2: drive-time isochrone.
 
-Call the chosen isochrone provider (OpenRouteService or TravelTime, both free
-tier) for a drive-time polygon. Results are cached by coordinate and parameters
-so re-runs are free and never re-bill the provider (CLAUDE.md; SCOPING.md 11
-risk mitigation).
+Call the chosen isochrone provider for a drive-time polygon. Results are cached
+by coordinate and parameters so re-runs are free and never re-bill the provider
+(CLAUDE.md; SCOPING.md 11 risk mitigation).
 
-This module defines the cache key contract and a pluggable provider seam. The
-network call itself is wired in implementation.
+The default provider is OpenRouteService (open, OSM-based, free tier), wired
+behind a pluggable seam so a self-hosted ORS or Valhalla, or TravelTime, can be
+dropped in without changing the rest of the pipeline (SCOPING.md Section 11).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
+
+import httpx
 
 
 @dataclass(frozen=True)
@@ -60,3 +62,69 @@ def get_isochrone(
     geojson = provider.fetch(params)
     cache.set(key, geojson)
     return geojson
+
+
+class IsochroneError(Exception):
+    """Raised when a provider cannot return an isochrone."""
+
+
+class InMemoryIsochroneCache:
+    """Process-local cache. Fine for a single worker run or dev.
+
+    Production uses a durable cache (Postgres) so the saving survives restarts;
+    both satisfy the IsochroneCache protocol.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, dict] = {}
+
+    def get(self, key: str) -> dict | None:
+        return self._store.get(key)
+
+    def set(self, key: str, geojson: dict) -> None:
+        self._store[key] = geojson
+
+
+class OpenRouteServiceProvider:
+    """OpenRouteService isochrones. OSM-based, open, free tier, no data licence.
+
+    The httpx client is injected so it is mocked in tests and points at the
+    hosted or a self-hosted ORS in production. Set ``base_url`` to a self-hosted
+    instance to remove the free-tier quota without other changes.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        client: httpx.Client,
+        base_url: str = "https://api.openrouteservice.org",
+    ) -> None:
+        self._api_key = api_key
+        self._client = client
+        self._base_url = base_url.rstrip("/")
+
+    def fetch(self, params: IsochroneParams) -> dict:
+        """Return the isochrone geometry as a GeoJSON geometry dict.
+
+        ORS returns a FeatureCollection; we take the first feature's geometry,
+        which is the drive-time polygon for the requested range.
+        """
+        url = f"{self._base_url}/v2/isochrones/{params.profile}"
+        body = {
+            "locations": [[params.lng, params.lat]],
+            "range": [params.drive_time_minutes * 60],  # seconds
+            "range_type": "time",
+        }
+        headers = {
+            "Authorization": self._api_key,
+            "Content-Type": "application/json",
+        }
+        resp = self._client.post(url, json=body, headers=headers)
+        resp.raise_for_status()
+        features = resp.json().get("features") or []
+        if not features:
+            raise IsochroneError("OpenRouteService returned no isochrone feature")
+        geometry = features[0].get("geometry")
+        if not geometry:
+            raise IsochroneError("OpenRouteService feature had no geometry")
+        return geometry

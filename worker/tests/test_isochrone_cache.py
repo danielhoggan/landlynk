@@ -1,8 +1,21 @@
-"""Isochrone results are cached by coordinate and parameters so re-runs are free."""
+"""Isochrone results are cached by coordinate and parameters so re-runs are free.
+
+The OpenRouteService provider is exercised with a mocked httpx transport so the
+request shape and response mapping are tested without touching the network.
+"""
 
 from __future__ import annotations
 
-from landlynk_worker.pipeline.isochrone import IsochroneParams, get_isochrone
+import httpx
+import pytest
+
+from landlynk_worker.pipeline.isochrone import (
+    InMemoryIsochroneCache,
+    IsochroneError,
+    IsochroneParams,
+    OpenRouteServiceProvider,
+    get_isochrone,
+)
 
 
 class DictCache:
@@ -47,3 +60,79 @@ def test_provider_called_once_then_served_from_cache():
 
     assert first == second
     assert provider.calls == 1  # second call served from cache, no re-bill
+
+
+# --- OpenRouteService provider (mocked) --------------------------------------
+
+_ORS_SAMPLE = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[[1.0, 52.0], [1.1, 52.0], [1.1, 52.1], [1.0, 52.0]]],
+            },
+        }
+    ],
+}
+
+
+def test_ors_provider_builds_request_and_extracts_geometry():
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["auth"] = request.headers.get("Authorization")
+        import json
+
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_ORS_SAMPLE)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenRouteServiceProvider(api_key="test-key", client=client)
+        params = IsochroneParams(lat=52.0, lng=1.0, drive_time_minutes=30)
+        geometry = provider.fetch(params)
+
+    assert geometry["type"] == "Polygon"
+    assert captured["url"].endswith("/v2/isochrones/driving-car")
+    assert captured["auth"] == "test-key"
+    # ORS wants [lng, lat] and a range in seconds.
+    assert captured["body"]["locations"] == [[1.0, 52.0]]
+    assert captured["body"]["range"] == [1800]
+    assert captured["body"]["range_type"] == "time"
+
+
+def test_ors_provider_raises_on_empty_features():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"type": "FeatureCollection", "features": []})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenRouteServiceProvider(api_key="k", client=client)
+        with pytest.raises(IsochroneError):
+            provider.fetch(IsochroneParams(lat=52.0, lng=1.0, drive_time_minutes=30))
+
+
+def test_ors_provider_self_hosted_base_url():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url).startswith("http://ors.internal:8080/")
+        return httpx.Response(200, json=_ORS_SAMPLE)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        provider = OpenRouteServiceProvider(
+            api_key="k", client=client, base_url="http://ors.internal:8080"
+        )
+        geometry = provider.fetch(
+            IsochroneParams(lat=52.0, lng=1.0, drive_time_minutes=30)
+        )
+    assert geometry["type"] == "Polygon"
+
+
+def test_in_memory_cache_round_trip_with_provider():
+    cache = InMemoryIsochroneCache()
+    provider = CountingProvider()
+    params = IsochroneParams(lat=52.2, lng=1.0, drive_time_minutes=30)
+
+    get_isochrone(params, provider, cache)
+    get_isochrone(params, provider, cache)
+    assert provider.calls == 1
