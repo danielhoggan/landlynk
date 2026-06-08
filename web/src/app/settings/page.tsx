@@ -22,7 +22,7 @@ export default function SettingsPage() {
         <Settings size={20} /> Settings
       </h1>
 
-      <section className="rounded-card border border-neutral-200 p-4 dark:border-neutral-800">
+      <section className="rounded-card border border-neutral-200 p-4">
         <h2 className="mb-2 text-sm font-semibold">Account</h2>
         <p className="text-sm text-neutral-500">
           {session?.user?.name ?? session?.user?.email ?? "Signed in"}
@@ -30,13 +30,13 @@ export default function SettingsPage() {
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: "/signin" })}
-          className="mt-3 flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold dark:border-neutral-700"
+          className="mt-3 flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
         >
           <LogOut size={16} /> Sign out
         </button>
       </section>
 
-      <section className="rounded-card border border-neutral-200 p-4 dark:border-neutral-800">
+      <section className="rounded-card border border-neutral-200 p-4">
         <h2 className="mb-2 text-sm font-semibold">Default scoring weights</h2>
         <p className="mb-3 text-xs text-neutral-500">
           The defaults applied when a catchment does not override them. Tune per
@@ -47,20 +47,13 @@ export default function SettingsPage() {
           {DEFAULT_WEIGHTS.map(([label, value]) => (
             <div
               key={label}
-              className="flex items-center justify-between rounded-card border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-700"
+              className="flex items-center justify-between rounded-card border border-neutral-200 px-3 py-2 text-sm"
             >
               <dt className="text-neutral-500">{label}</dt>
               <dd className="font-semibold tabular-nums">{value}</dd>
             </div>
           ))}
         </dl>
-      </section>
-
-      <section className="rounded-card border border-neutral-200 p-4 dark:border-neutral-800">
-        <h2 className="mb-2 text-sm font-semibold">Theme</h2>
-        <p className="text-sm text-neutral-500">
-          Use the light and dark toggle at the bottom-left of any screen.
-        </p>
       </section>
     </div>
   );

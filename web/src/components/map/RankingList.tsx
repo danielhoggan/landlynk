@@ -19,7 +19,7 @@ export function RankingList({
 }: RankingListProps) {
   if (areas.length === 0) return null;
   return (
-    <ol className="divide-y divide-neutral-200 overflow-hidden rounded-card border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
+    <ol className="divide-y divide-neutral-200 overflow-hidden rounded-card border border-neutral-200">
       {areas.map((area) => {
         const selected = area.areaCode === selectedAreaCode;
         return (
@@ -28,8 +28,8 @@ export function RankingList({
               type="button"
               onClick={() => onSelectArea(area)}
               aria-pressed={selected}
-              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-900 ${
-                selected ? "bg-neutral-50 dark:bg-neutral-900" : ""
+              className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-neutral-50 ${
+                selected ? "bg-neutral-50" : ""
               }`}
             >
               <span className="w-6 text-sm font-semibold tabular-nums text-neutral-500">

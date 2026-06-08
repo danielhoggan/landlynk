@@ -26,7 +26,7 @@ export function Logo({ className = "text-lg", showMark = true }: LogoProps) {
       )}
       <span>
         <span className="text-brand-green">Land</span>
-        <span className="text-brand-ink dark:text-neutral-100">Lynk</span>
+        <span className="text-brand-ink">Lynk</span>
       </span>
     </span>
   );

@@ -2,14 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* App shell base. Light mode is Apple-style, dark mode is the Mediaworks
-   palette. The theme toggle adds or removes the `dark` class on <html>. */
+/* Light, Apple-style app shell. Background #F5F5F7, accent #0071E3. */
 :root {
   color-scheme: light;
-}
-
-html.dark {
-  color-scheme: dark;
 }
 
 body {
@@ -17,17 +12,22 @@ body {
   font-family: var(--font-inter), Inter, system-ui, sans-serif;
 }
 
-html.dark body {
-  @apply bg-dark-bg text-neutral-100;
-}
-
-/* Frosted glass used by the sticky top bar and the drawer scrim. */
+/* Frosted glass used by the sticky mobile top bar and the drawer scrim. */
 .frosted {
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 
-/* Web output font for any client-facing prose rendered in the app. */
+/* Web output font for client-facing prose rendered in the app. */
 .output-prose {
   font-family: var(--font-tenor-sans), "Tenor Sans", Georgia, serif;
+}
+
+/* Hide horizontal scrollbars on the tab strip and overflow rows. */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

@@ -20,7 +20,9 @@ export interface SubmitPayload {
   };
 }
 
-export async function submitCatchment(payload: SubmitPayload): Promise<{ id: string }> {
+export async function submitCatchment(
+  payload: SubmitPayload,
+): Promise<{ id: string }> {
   const res = await fetch("/api/catchments", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -55,7 +57,9 @@ export interface ReferenceStatus {
   updatedAt: string;
 }
 
-export async function getReferenceStatus(): Promise<Record<string, ReferenceStatus>> {
+export async function getReferenceStatus(): Promise<
+  Record<string, ReferenceStatus>
+> {
   const res = await fetch("/api/admin/reference");
   if (!res.ok) throw new Error(`Could not load status (${res.status})`);
   return res.json();
@@ -95,7 +99,10 @@ export async function getBattlecard(
 export async function pollCatchment(
   id: string,
   onUpdate: (c: Catchment) => void,
-  { intervalMs = 1500, timeoutMs = 120_000 }: { intervalMs?: number; timeoutMs?: number } = {},
+  {
+    intervalMs = 1500,
+    timeoutMs = 120_000,
+  }: { intervalMs?: number; timeoutMs?: number } = {},
 ): Promise<Catchment> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {

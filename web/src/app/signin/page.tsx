@@ -9,7 +9,7 @@ import { Logo } from "@/components/shell/Logo";
 export default function SignInPage() {
   return (
     <div className="flex min-h-[70vh] items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-card border border-neutral-200 p-8 text-center dark:border-neutral-800">
+      <div className="w-full max-w-sm rounded-card border border-neutral-200 p-8 text-center">
         <Logo className="justify-center text-2xl" />
         <p className="mt-2 text-sm text-neutral-500">
           Sign in with your work account to continue.
@@ -17,7 +17,7 @@ export default function SignInPage() {
         <button
           type="button"
           onClick={() => signIn("azure-ad", { callbackUrl: "/" })}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-card bg-light-accent py-2.5 text-sm font-semibold text-white dark:bg-dark-accent"
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-card bg-light-accent py-2.5 text-sm font-semibold text-white"
         >
           <LogIn size={16} /> Sign in with Microsoft
         </button>

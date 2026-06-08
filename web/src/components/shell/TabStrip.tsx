@@ -13,7 +13,7 @@ export function TabStrip({ tabs, onChange }: TabStripProps) {
   const [active, setActive] = useState(tabs[0]);
 
   return (
-    <div className="no-scrollbar flex gap-2 overflow-x-auto border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
+    <div className="no-scrollbar flex gap-2 overflow-x-auto border-b border-neutral-200 px-4 py-2">
       {tabs.map((tab) => {
         const isActive = tab === active;
         return (
@@ -26,8 +26,8 @@ export function TabStrip({ tabs, onChange }: TabStripProps) {
             }}
             className={`whitespace-nowrap rounded-card px-3 py-1.5 text-sm font-medium transition-colors ${
               isActive
-                ? "bg-light-accent text-white dark:bg-dark-accent"
-                : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-900"
+                ? "bg-light-accent text-white"
+                : "text-neutral-600 hover:bg-neutral-100"
             }`}
           >
             {tab}

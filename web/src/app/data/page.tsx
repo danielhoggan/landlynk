@@ -37,7 +37,13 @@ const DATASETS: DatasetDef[] = [
     essential: true,
     blurb:
       "Required for areas to appear. From the ONS Open Geography Portal ArcGIS service (the layer's /query URL). The default is MSOA December 2021 (BGC); replace if a newer vintage exists.",
-    fields: [{ key: "url", label: "ArcGIS query URL", placeholder: DEFAULT_BOUNDARIES }],
+    fields: [
+      {
+        key: "url",
+        label: "ArcGIS query URL",
+        placeholder: DEFAULT_BOUNDARIES,
+      },
+    ],
   },
   {
     id: "census_demographics",
@@ -45,7 +51,11 @@ const DATASETS: DatasetDef[] = [
     blurb:
       "Population, age bands, median age and family household share. Two NOMIS bulk CSVs: age by single year (TS007) and household composition (TS003).",
     fields: [
-      { key: "ageUrl", label: "Age CSV URL (TS007)", placeholder: "https://www.nomisweb.co.uk/..." },
+      {
+        key: "ageUrl",
+        label: "Age CSV URL (TS007)",
+        placeholder: "https://www.nomisweb.co.uk/...",
+      },
       {
         key: "householdsUrl",
         label: "Household composition CSV URL (TS003)",
@@ -56,14 +66,28 @@ const DATASETS: DatasetDef[] = [
   {
     id: "census_tenure",
     title: "Census tenure",
-    blurb: "Owns outright, owns with mortgage, social and private rented. NOMIS bulk CSV (TS054).",
-    fields: [{ key: "url", label: "Tenure CSV URL (TS054)", placeholder: "https://www.nomisweb.co.uk/..." }],
+    blurb:
+      "Owns outright, owns with mortgage, social and private rented. NOMIS bulk CSV (TS054).",
+    fields: [
+      {
+        key: "url",
+        label: "Tenure CSV URL (TS054)",
+        placeholder: "https://www.nomisweb.co.uk/...",
+      },
+    ],
   },
   {
     id: "income_estimates",
     title: "Income estimates",
-    blurb: "Mean and median net annual household income by MSOA. ONS small-area income spreadsheet (XLSX) or a CSV.",
-    fields: [{ key: "url", label: "Income XLSX or CSV URL", placeholder: "https://www.ons.gov.uk/...xlsx" }],
+    blurb:
+      "Mean and median net annual household income by MSOA. ONS small-area income spreadsheet (XLSX) or a CSV.",
+    fields: [
+      {
+        key: "url",
+        label: "Income XLSX or CSV URL",
+        placeholder: "https://www.ons.gov.uk/...xlsx",
+      },
+    ],
   },
 ];
 
@@ -75,7 +99,9 @@ export default function DataPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const refresh = useCallback(() => {
-    getReferenceStatus().then(setStatus).catch(() => {});
+    getReferenceStatus()
+      .then(setStatus)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -106,7 +132,7 @@ export default function DataPage() {
         <h1 className="flex items-center gap-2 text-lg font-semibold">
           <Database size={20} /> Reference data
         </h1>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
+        <p className="mt-1 text-sm text-neutral-600">
           Load the open ONS data the engine scores against. The worker downloads
           and loads it for you. Start with MSOA boundaries so areas appear, then
           add census and income for the full Battlecard numbers.
@@ -118,14 +144,14 @@ export default function DataPage() {
         return (
           <section
             key={d.id}
-            className="space-y-3 rounded-card border border-neutral-200 p-5 dark:border-neutral-800"
+            className="space-y-3 rounded-card border border-neutral-200 p-5"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
                   {d.title}
                   {d.essential && (
-                    <span className="rounded-full bg-light-accent/10 px-2 py-0.5 text-[11px] font-semibold text-light-accent dark:bg-dark-accent/15 dark:text-dark-accent">
+                    <span className="rounded-full bg-light-accent/10 px-2 py-0.5 text-[11px] font-semibold text-light-accent">
                       essential
                     </span>
                   )}
@@ -137,12 +163,14 @@ export default function DataPage() {
 
             {d.fields.map((f) => (
               <label key={f.key} className="block">
-                <span className="mb-1 block text-xs text-neutral-500">{f.label}</span>
+                <span className="mb-1 block text-xs text-neutral-500">
+                  {f.label}
+                </span>
                 <input
                   value={values[d.id]?.[f.key] ?? ""}
                   onChange={(e) => setField(d.id, f.key, e.target.value)}
                   placeholder={f.placeholder}
-                  className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-xs dark:border-neutral-700"
+                  className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-xs"
                 />
               </label>
             ))}
@@ -152,12 +180,14 @@ export default function DataPage() {
                 type="button"
                 onClick={() => onLoad(d)}
                 disabled={s?.status === "running"}
-                className="rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-dark-accent"
+                className="rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {s?.status === "running" ? "Loading..." : "Load"}
               </button>
               {errors[d.id] && (
-                <span className="text-xs text-priority-low">{errors[d.id]}</span>
+                <span className="text-xs text-priority-low">
+                  {errors[d.id]}
+                </span>
               )}
             </div>
           </section>
@@ -187,7 +217,10 @@ function StatusBadge({ status }: { status?: ReferenceStatus }) {
   }
   if (status.status === "failed") {
     return (
-      <span className="flex items-center gap-1 text-xs text-priority-low" title={status.error ?? ""}>
+      <span
+        className="flex items-center gap-1 text-xs text-priority-low"
+        title={status.error ?? ""}
+      >
         <AlertCircle size={14} /> Failed
       </span>
     );

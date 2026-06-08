@@ -26,9 +26,15 @@ export function BattlecardCharts({ charts }: { charts: Charts }) {
   );
 }
 
-function ChartFrame({ title, children }: { title: string; children: React.ReactNode }) {
+function ChartFrame({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="rounded-card border border-neutral-200 p-4 dark:border-neutral-700">
+    <section className="rounded-card border border-neutral-200 p-4">
       <h3 className="mb-3 text-sm font-semibold">{title}</h3>
       {children}
     </section>
@@ -41,11 +47,14 @@ function AgeBarChart({ bands }: { bands: AgeBand[] }) {
     <ChartFrame title="Age demographics">
       <ul className="space-y-2">
         {bands.map((band) => (
-          <li key={band.label} className="grid grid-cols-[5rem_1fr_3rem] items-center gap-2">
+          <li
+            key={band.label}
+            className="grid grid-cols-[5rem_1fr_3rem] items-center gap-2"
+          >
             <span className="text-xs text-neutral-500">{band.label}</span>
-            <span className="h-3 rounded-full bg-neutral-100 dark:bg-neutral-800">
+            <span className="h-3 rounded-full bg-neutral-100">
               <span
-                className="block h-3 rounded-full bg-light-accent dark:bg-dark-accent"
+                className="block h-3 rounded-full bg-light-accent"
                 style={{ width: `${(num(band.percentage) / max) * 100}%` }}
               />
             </span>
@@ -72,32 +81,48 @@ function IncomeBarChart({ income }: { income: IncomeChart }) {
         <IncomeBar label="Mean" dv={income.mean} max={max} />
         <IncomeBar label="Median" dv={income.median} max={max} />
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-700">
-        <Callout label={`Lowest LA: ${income.lowestLa.name}`} dv={income.lowestLa.value} />
-        <Callout label={`Highest LA: ${income.highestLa.name}`} dv={income.highestLa.value} />
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-neutral-200 pt-3">
+        <Callout
+          label={`Lowest LA: ${income.lowestLa.name}`}
+          dv={income.lowestLa.value}
+        />
+        <Callout
+          label={`Highest LA: ${income.highestLa.name}`}
+          dv={income.highestLa.value}
+        />
       </div>
     </ChartFrame>
   );
 }
 
-function IncomeBar({ label, dv, max }: { label: string; dv: DataValue; max: number }) {
+function IncomeBar({
+  label,
+  dv,
+  max,
+}: {
+  label: string;
+  dv: DataValue;
+  max: number;
+}) {
   return (
     <div className="grid grid-cols-[4rem_1fr_5rem] items-center gap-2">
       <span className="text-xs text-neutral-500">{label}</span>
-      <span className="h-3 rounded-full bg-neutral-100 dark:bg-neutral-800">
+      <span className="h-3 rounded-full bg-neutral-100">
         <span
-          className="block h-3 rounded-full bg-light-accent dark:bg-dark-accent"
+          className="block h-3 rounded-full bg-light-accent"
           style={{ width: `${(num(dv) / max) * 100}%` }}
         />
       </span>
-      <span className="text-right text-xs font-semibold tabular-nums">{fmtCurrency(dv)}</span>
+      <span className="text-right text-xs font-semibold tabular-nums">
+        {fmtCurrency(dv)}
+      </span>
     </div>
   );
 }
 
 function Callout({ label, dv }: { label: string; dv: DataValue }) {
   return (
-    <div className="rounded-card bg-neutral-50 p-2 dark:bg-neutral-900">
+    <div className="rounded-card bg-neutral-50 p-2">
       <p className="text-[11px] text-neutral-500">{label}</p>
       <p className="text-sm font-semibold">{fmtCurrency(dv)}</p>
     </div>
@@ -137,7 +162,7 @@ function TenureDonut({ tenure }: { tenure: TenureChart }) {
           role="img"
           aria-label="Housing tenure breakdown"
         >
-          <div className="absolute inset-[18%] rounded-full bg-white dark:bg-neutral-950" />
+          <div className="absolute inset-[18%] rounded-full bg-white" />
         </div>
         <ul className="flex-1 space-y-1">
           {segments.map((s, i) => (
@@ -148,7 +173,9 @@ function TenureDonut({ tenure }: { tenure: TenureChart }) {
                 style={{ backgroundColor: TENURE_COLORS[i] }}
               />
               <span className="flex-1">{s.label}</span>
-              <span className="font-semibold tabular-nums">{fmtPercent(s.dv)}</span>
+              <span className="font-semibold tabular-nums">
+                {fmtPercent(s.dv)}
+              </span>
             </li>
           ))}
         </ul>

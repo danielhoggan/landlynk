@@ -32,10 +32,10 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-card border border-neutral-200 p-5 dark:border-neutral-800">
-      <Icon size={22} className="text-light-accent dark:text-dark-accent" />
+    <div className="rounded-card border border-neutral-200 p-5">
+      <Icon size={22} className="text-light-accent" />
       <h3 className="mt-3 text-sm font-semibold">{title}</h3>
-      <p className="mt-1 text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
+      <p className="mt-1 text-sm leading-relaxed text-neutral-600">
         {children}
       </p>
     </div>
@@ -47,17 +47,17 @@ export default function HowItWorksPage() {
     <div className="mx-auto max-w-5xl space-y-12 p-4 py-8">
       {/* Hero */}
       <header className="max-w-3xl">
-        <p className="text-sm font-semibold uppercase tracking-wide text-light-accent dark:text-dark-accent">
+        <p className="text-sm font-semibold uppercase tracking-wide text-light-accent">
           The Geographic Intelligence Engine
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">
           Turn a location into a targeting strategy
         </h1>
-        <p className="mt-3 text-base leading-relaxed text-neutral-600 dark:text-neutral-300">
-          Paste a development postcode or an OS grid reference. LandLynk builds a
-          realistic drive-time catchment, scores and ranks every area inside it
-          on how worth targeting it is, and generates a Battlecard for each one
-          that tells you who to target, how to price, and what to say. It is
+        <p className="mt-3 text-base leading-relaxed text-neutral-600">
+          Paste a development postcode or an OS grid reference. LandLynk builds
+          a realistic drive-time catchment, scores and ranks every area inside
+          it on how worth targeting it is, and generates a Battlecard for each
+          one that tells you who to target, how to price, and what to say. It is
           built entirely on open public data, so every ranking is reproducible
           and explainable.
         </p>
@@ -68,8 +68,9 @@ export default function HowItWorksPage() {
         <h2 className="text-lg font-semibold">Why it exists</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card icon={Target} title="Evidence, not assumption">
-            Marketing strategy for a place is too often built on a hunch. LandLynk
-            grounds it in ONS Census and income data for the actual catchment.
+            Marketing strategy for a place is too often built on a hunch.
+            LandLynk grounds it in ONS Census and income data for the actual
+            catchment.
           </Card>
           <Card icon={Gauge} title="Seconds, not hours">
             Defining a catchment by eye used to take 15 to 30 minutes per site.
@@ -84,8 +85,8 @@ export default function HowItWorksPage() {
             the data and the config that produced it.
           </Card>
           <Card icon={Layers} title="No data licences">
-            Open public sources only, so there is no per-client data cost and the
-            method is fully auditable and refreshable.
+            Open public sources only, so there is no per-client data cost and
+            the method is fully auditable and refreshable.
           </Card>
           <Card icon={FileDown} title="Ready to present">
             Each area exports to a PDF Battlecard and the catchment to a Google
@@ -128,16 +129,16 @@ export default function HowItWorksPage() {
             return (
               <li
                 key={s.step}
-                className="rounded-card border border-neutral-200 p-5 dark:border-neutral-800"
+                className="rounded-card border border-neutral-200 p-5"
               >
                 <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-light-accent text-xs font-semibold text-white dark:bg-dark-accent">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-light-accent text-xs font-semibold text-white">
                     {s.step}
                   </span>
                   <Icon size={18} className="text-neutral-400" />
                 </div>
                 <h3 className="mt-3 text-sm font-semibold">{s.title}</h3>
-                <p className="mt-1 text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
+                <p className="mt-1 text-sm leading-relaxed text-neutral-600">
                   {s.body}
                 </p>
               </li>
@@ -151,35 +152,37 @@ export default function HowItWorksPage() {
         <h2 className="text-lg font-semibold">Real-world use cases</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <Card icon={Building2} title="Residential new-build">
-            For a new housing development, find the areas whose income, tenure and
-            age profile fit the price band and bed mix, and tailor the message to
-            first-time buyers, second steppers or downsizers by area.
+            For a new housing development, find the areas whose income, tenure
+            and age profile fit the price band and bed mix, and tailor the
+            message to first-time buyers, second steppers or downsizers by area.
           </Card>
           <Card icon={Dumbbell} title="Leisure centre catchment">
-            For a gym or leisure centre, size the addressable population within a
-            realistic drive time and prioritise the neighbourhoods most likely to
-            convert to memberships.
+            For a gym or leisure centre, size the addressable population within
+            a realistic drive time and prioritise the neighbourhoods most likely
+            to convert to memberships.
           </Card>
           <Card icon={Store} title="Retail site selection">
-            Compare candidate sites by the quality and scale of the catchment each
-            one commands, with the demographics that match the retail format.
+            Compare candidate sites by the quality and scale of the catchment
+            each one commands, with the demographics that match the retail
+            format.
           </Card>
           <Card icon={Landmark} title="Local authority communications">
             Plan public consultation or service communications around the real
-            population an area reaches, with confidence flags where data is thin.
+            population an area reaches, with confidence flags where data is
+            thin.
           </Card>
         </div>
       </section>
 
-      <section className="rounded-card border border-neutral-200 p-6 text-center dark:border-neutral-800">
+      <section className="rounded-card border border-neutral-200 p-6 text-center">
         <h2 className="text-lg font-semibold">Ready to try it</h2>
-        <p className="mx-auto mt-1 max-w-xl text-sm text-neutral-600 dark:text-neutral-300">
+        <p className="mx-auto mt-1 max-w-xl text-sm text-neutral-600">
           Head to the catchment map, paste a postcode and build your first
           ranked catchment.
         </p>
         <a
           href="/"
-          className="mt-4 inline-flex items-center gap-2 rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white dark:bg-dark-accent"
+          className="mt-4 inline-flex items-center gap-2 rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white"
         >
           <MapPin size={16} /> Open the catchment map
         </a>

@@ -57,7 +57,7 @@ export function OnLocationSummary({
       <button
         type="button"
         onClick={onOpenFull}
-        className="w-full rounded-card bg-light-accent py-2.5 text-sm font-semibold text-white dark:bg-dark-accent"
+        className="w-full rounded-card bg-light-accent py-2.5 text-sm font-semibold text-white"
       >
         Open full Battlecard
       </button>
@@ -67,7 +67,7 @@ export function OnLocationSummary({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-card border border-neutral-200 p-3 dark:border-neutral-700">
+    <div className="rounded-card border border-neutral-200 p-3">
       <dt className="text-xs text-neutral-500">{label}</dt>
       <dd className="mt-0.5 text-sm font-semibold">{value}</dd>
     </div>

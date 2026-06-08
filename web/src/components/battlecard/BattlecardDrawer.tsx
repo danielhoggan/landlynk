@@ -39,7 +39,7 @@ export function BattlecardDrawer({
       aria-modal="true"
       aria-label="Area Battlecard"
       aria-hidden={!open}
-      className={`fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-neutral-200 bg-white p-5 shadow-none transition-transform duration-[280ms] ease-drawer dark:border-neutral-800 dark:bg-neutral-950 ${
+      className={`fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-neutral-200 bg-white p-5 shadow-none transition-transform duration-[280ms] ease-drawer ${
         open ? "translate-x-0" : "translate-x-full"
       }`}
     >
@@ -48,7 +48,7 @@ export function BattlecardDrawer({
           type="button"
           onClick={onClose}
           aria-label="Close Battlecard"
-          className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+          className="text-neutral-500 hover:text-neutral-900"
         >
           <X size={22} />
         </button>
@@ -61,7 +61,7 @@ export function BattlecardDrawer({
           {pdfUrl && (
             <a
               href={pdfUrl}
-              className="flex items-center justify-center gap-2 rounded-card border border-neutral-300 py-2 text-sm font-semibold dark:border-neutral-700"
+              className="flex items-center justify-center gap-2 rounded-card border border-neutral-300 py-2 text-sm font-semibold"
             >
               <Download size={16} /> Export PDF Battlecard
             </a>

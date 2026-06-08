@@ -3,7 +3,11 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { CatchmentArea, Coordinate, GeoJsonGeometry } from "@/lib/types/catchment";
+import type {
+  CatchmentArea,
+  Coordinate,
+  GeoJsonGeometry,
+} from "@/lib/types/catchment";
 import { PRIORITY_COLORS } from "@/lib/priority";
 
 interface CatchmentMapProps {
@@ -77,7 +81,10 @@ export function CatchmentMap({
       center: [-1.5, 52.8],
       zoom: 5,
     });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      "top-right",
+    );
 
     map.on("load", () => {
       map.addSource("isochrone", { type: "geojson", data: emptyFc() });
@@ -103,9 +110,12 @@ export function CatchmentMap({
           "fill-color": [
             "match",
             ["get", "band"],
-            "high", PRIORITY_COLORS.high,
-            "mid", PRIORITY_COLORS.mid,
-            "low", PRIORITY_COLORS.low,
+            "high",
+            PRIORITY_COLORS.high,
+            "mid",
+            PRIORITY_COLORS.mid,
+            "low",
+            PRIORITY_COLORS.low,
             "#999999",
           ],
           "fill-opacity": 0.55,
@@ -119,7 +129,9 @@ export function CatchmentMap({
       });
 
       map.on("click", "areas-fill", (e) => {
-        const code = e.features?.[0]?.properties?.areaCode as string | undefined;
+        const code = e.features?.[0]?.properties?.areaCode as
+          | string
+          | undefined;
         if (!code) return;
         const area = areasRef.current.find((a) => a.areaCode === code);
         if (area) onSelectRef.current(area);
@@ -148,10 +160,14 @@ export function CatchmentMap({
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const areaSource = map.getSource("areas") as maplibregl.GeoJSONSource | undefined;
+    const areaSource = map.getSource("areas") as
+      | maplibregl.GeoJSONSource
+      | undefined;
     areaSource?.setData(areasToFeatures(areas));
 
-    const isoSource = map.getSource("isochrone") as maplibregl.GeoJSONSource | undefined;
+    const isoSource = map.getSource("isochrone") as
+      | maplibregl.GeoJSONSource
+      | undefined;
     if (isochrone) {
       isoSource?.setData({
         type: "Feature",
@@ -192,7 +208,7 @@ export function CatchmentMap({
   return (
     <div
       ref={containerRef}
-      className="h-[60vh] min-h-[360px] w-full overflow-hidden rounded-card border border-neutral-200 dark:border-neutral-800"
+      className="h-[60vh] min-h-[360px] w-full overflow-hidden rounded-card border border-neutral-200"
       role="application"
       aria-label="Catchment map"
     />
@@ -204,7 +220,9 @@ function emptyFc(): GeoJSON.FeatureCollection {
 }
 
 // Compute a bounding box from a polygon or multipolygon geometry.
-function bounds(geometry: GeoJSON.Geometry): maplibregl.LngLatBoundsLike | null {
+function bounds(
+  geometry: GeoJSON.Geometry,
+): maplibregl.LngLatBoundsLike | null {
   const b = new maplibregl.LngLatBounds();
   const extend = (coords: number[]) => b.extend([coords[0], coords[1]]);
   const walk = (arr: unknown): void => {
@@ -214,6 +232,7 @@ function bounds(geometry: GeoJSON.Geometry): maplibregl.LngLatBoundsLike | null 
       arr.forEach(walk);
     }
   };
-  if ("coordinates" in geometry) walk((geometry as { coordinates: unknown }).coordinates);
+  if ("coordinates" in geometry)
+    walk((geometry as { coordinates: unknown }).coordinates);
   return b.isEmpty() ? null : b;
 }

@@ -15,7 +15,9 @@ export default function HistoryPage() {
   useEffect(() => {
     listCatchments()
       .then(setItems)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "Failed to load"),
+      );
   }, []);
 
   return (
@@ -35,12 +37,12 @@ export default function HistoryPage() {
       )}
 
       {items && items.length > 0 && (
-        <ol className="divide-y divide-neutral-200 overflow-hidden rounded-card border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
+        <ol className="divide-y divide-neutral-200 overflow-hidden rounded-card border border-neutral-200">
           {items.map((item) => (
             <li key={item.id}>
               <Link
                 href={`/?catchment=${item.id}`}
-                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-neutral-50"
               >
                 <span className="flex-1">
                   <span className="block text-sm font-semibold">

@@ -5,7 +5,11 @@ import { MapPin, Download } from "lucide-react";
 import { CatchmentMap } from "@/components/map/CatchmentMap";
 import { RankingList } from "@/components/map/RankingList";
 import { BattlecardDrawer } from "@/components/battlecard/BattlecardDrawer";
-import type { Catchment, CatchmentArea, InputKind } from "@/lib/types/catchment";
+import type {
+  Catchment,
+  CatchmentArea,
+  InputKind,
+} from "@/lib/types/catchment";
 import type { Battlecard } from "@/lib/types/battlecard";
 import { getBattlecard, pollCatchment, submitCatchment } from "@/lib/client";
 
@@ -56,7 +60,10 @@ export default function HomePage() {
     setWeights((w) => ({ ...w, [k]: v }));
 
   const splitList = (s: string) =>
-    s.split(",").map((x) => x.trim()).filter(Boolean);
+    s
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
 
   const [catchment, setCatchment] = useState<Catchment | null>(null);
   const [selected, setSelected] = useState<Battlecard | null>(null);
@@ -79,7 +86,9 @@ export default function HomePage() {
             : `Status: ${c.status}`,
         ),
       )
-      .catch((e) => setStatus(e instanceof Error ? e.message : "Failed to load"));
+      .catch((e) =>
+        setStatus(e instanceof Error ? e.message : "Failed to load"),
+      );
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -144,14 +153,13 @@ export default function HomePage() {
     <div className="mx-auto max-w-6xl space-y-6 p-4 py-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Catchment map</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Catchment map
+          </h1>
           <p className="mt-1 text-sm text-neutral-500">
             Paste a postcode or grid reference to build a ranked, clickable
             catchment.{" "}
-            <a
-              href="/how-it-works"
-              className="font-medium text-light-accent dark:text-dark-accent"
-            >
+            <a href="/how-it-works" className="font-medium text-light-accent">
               How it works
             </a>
           </p>
@@ -160,7 +168,7 @@ export default function HomePage() {
 
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-card border border-neutral-200 bg-white/60 p-5 dark:border-neutral-800 dark:bg-white/5"
+        className="space-y-4 rounded-card border border-neutral-200 bg-white/60 p-5"
       >
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <MapPin size={18} /> New catchment
@@ -174,8 +182,8 @@ export default function HomePage() {
               onClick={() => setKind(k)}
               className={`rounded-card px-3 py-1.5 text-sm font-medium ${
                 kind === k
-                  ? "bg-light-accent text-white dark:bg-dark-accent"
-                  : "border border-neutral-300 dark:border-neutral-700"
+                  ? "bg-light-accent text-white"
+                  : "border border-neutral-300"
               }`}
             >
               {k === "postcode" ? "Postcode" : "OS grid ref"}
@@ -187,30 +195,47 @@ export default function HomePage() {
           value={developmentName}
           onChange={(e) => setDevelopmentName(e.target.value)}
           placeholder="Development name"
-          className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+          className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm"
         />
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={kind === "postcode" ? "e.g. IP14 1AA" : "e.g. TM 06457 58755"}
-          className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+          placeholder={
+            kind === "postcode" ? "e.g. IP14 1AA" : "e.g. TM 06457 58755"
+          }
+          className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm"
         />
 
         <button
           type="button"
           onClick={() => setShowBrief((s) => !s)}
-          className="text-xs font-medium text-light-accent dark:text-dark-accent"
+          className="text-xs font-medium text-light-accent"
         >
           {showBrief ? "Hide" : "Add"} development brief and scoring
         </button>
 
         {showBrief && (
-          <div className="space-y-3 rounded-card border border-neutral-200 p-4 dark:border-neutral-800">
+          <div className="space-y-3 rounded-card border border-neutral-200 p-4">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Town" value={town} onChange={setTown} placeholder="Stowmarket" />
-              <Field label="Bed range" value={bedRange} onChange={setBedRange} placeholder="2 to 5" />
+              <Field
+                label="Town"
+                value={town}
+                onChange={setTown}
+                placeholder="Stowmarket"
+              />
+              <Field
+                label="Bed range"
+                value={bedRange}
+                onChange={setBedRange}
+                placeholder="2 to 5"
+              />
             </div>
-            <Field label="Strapline" value={strapline} onChange={setStrapline} placeholder="Room to grow" />
+            <Field
+              label="Strapline"
+              value={strapline}
+              onChange={setStrapline}
+              placeholder="Room to grow"
+            />
             <Field
               label="Lifestyle pillars (comma separated)"
               value={pillars}
@@ -224,24 +249,43 @@ export default function HomePage() {
               placeholder="Open green space, Primary school nearby"
             />
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Price from (£)" value={priceFrom} onChange={setPriceFrom} placeholder="280000" type="number" />
-              <Field label="Price to (£)" value={priceTo} onChange={setPriceTo} placeholder="450000" type="number" />
-              <Field label="Drive time (min)" value={driveTime} onChange={setDriveTime} placeholder="30" type="number" />
+              <Field
+                label="Price from (£)"
+                value={priceFrom}
+                onChange={setPriceFrom}
+                placeholder="280000"
+                type="number"
+              />
+              <Field
+                label="Price to (£)"
+                value={priceTo}
+                onChange={setPriceTo}
+                placeholder="450000"
+                type="number"
+              />
+              <Field
+                label="Drive time (min)"
+                value={driveTime}
+                onChange={setDriveTime}
+                placeholder="30"
+                type="number"
+              />
             </div>
 
-            <div className="border-t border-neutral-200 pt-3 dark:border-neutral-800">
+            <div className="border-t border-neutral-200 pt-3">
               <button
                 type="button"
                 onClick={() => setShowScoring((s) => !s)}
-                className="text-xs font-medium text-light-accent dark:text-dark-accent"
+                className="text-xs font-medium text-light-accent"
               >
                 {showScoring ? "Hide" : "Tune"} scoring weights
               </button>
               {showScoring && (
                 <div className="mt-3 space-y-3">
                   <p className="text-xs text-neutral-500">
-                    Weights are relative and normalised, so they need not sum to 1.
-                    Stored with the catchment, so the ranking stays reproducible.
+                    Weights are relative and normalised, so they need not sum to
+                    1. Stored with the catchment, so the ranking stays
+                    reproducible.
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     {WEIGHT_LABELS.map(([key, label]) => (
@@ -269,7 +313,7 @@ export default function HomePage() {
         <button
           type="submit"
           disabled={busy || !value || !developmentName}
-          className="rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-dark-accent"
+          className="rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           {busy ? "Building..." : "Build catchment"}
         </button>
@@ -281,7 +325,7 @@ export default function HomePage() {
         <div className="flex items-center gap-3">
           <a
             href={`/api/catchments/${catchment.id}/kml`}
-            className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold dark:border-neutral-700"
+            className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
           >
             <Download size={16} /> Download KML for Google Earth
           </a>
@@ -297,9 +341,11 @@ export default function HomePage() {
           selectedAreaCode={selectedCode}
         />
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-neutral-500">Priority ranking</h2>
+          <h2 className="text-sm font-semibold text-neutral-500">
+            Priority ranking
+          </h2>
           {areas.length === 0 ? (
-            <p className="rounded-card border border-dashed border-neutral-300 p-4 text-xs text-neutral-500 dark:border-neutral-700">
+            <p className="rounded-card border border-dashed border-neutral-300 p-4 text-xs text-neutral-500">
               {busy
                 ? "Scoring areas..."
                 : "Build a catchment to see ranked areas here."}
@@ -349,7 +395,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+        className="w-full rounded-card border border-neutral-300 bg-transparent px-3 py-2 text-sm"
       />
     </label>
   );

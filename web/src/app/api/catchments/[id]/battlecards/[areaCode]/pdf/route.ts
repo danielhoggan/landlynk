@@ -19,7 +19,10 @@ export async function GET(
     { cache: "no-store" },
   );
   if (!res.ok) {
-    return NextResponse.json({ error: "Battlecard not found" }, { status: res.status });
+    return NextResponse.json(
+      { error: "Battlecard not found" },
+      { status: res.status },
+    );
   }
 
   const body = await res.arrayBuffer();
