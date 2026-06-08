@@ -1,0 +1,67 @@
+# Reference data source manifest.
+#
+# Every reference dataset is open or free tier. No third-party data licences
+# (house-standards.md, data handling). The loader records source, version and
+# date on each load so refreshes are auditable. Never hand-edit reference tables.
+#
+# Pin a concrete version and url before running a load. Versions left as TBC are
+# resolved at load time against the source portal and recorded in reference_load.
+
+sources:
+  geo_lookup:
+    target_table: geo_lookup
+    description: Output Area to MSOA to LA hierarchical lookup.
+    provider: ONS Open Geography Portal
+    licence: Open Government Licence v3.0
+    version: TBC
+    url: TBC
+
+  geo_boundaries:
+    target_table: geo_boundaries
+    description: MSOA and LA boundary geometries as GeoJSON.
+    provider: ONS Open Geography Portal
+    licence: Open Government Licence v3.0
+    version: TBC
+    url: TBC
+
+  census_demographics:
+    target_table: census_demographics
+    description: Population, age bands and household type by area.
+    provider: ONS Census 2021
+    licence: Open Government Licence v3.0
+    version: "2021"
+    url: TBC
+
+  census_tenure:
+    target_table: census_tenure
+    description: Tenure split (owns outright, owns with mortgage, social, private).
+    provider: ONS Census 2021
+    licence: Open Government Licence v3.0
+    version: "2021"
+    url: TBC
+
+  income_estimates:
+    target_table: income_estimates
+    description: Median and mean household income by MSOA and LA.
+    provider: ONS small area income estimates
+    licence: Open Government Licence v3.0
+    version: TBC
+    url: TBC
+
+  postcode_lookup:
+    target_table: postcode_lookup
+    description: Postcode to coordinate.
+    provider: OS CodePoint Open
+    licence: Open Government Licence v3.0
+    version: TBC
+    url: TBC
+
+  gwi_personas:
+    target_table: gwi_personas
+    description: Persona definitions with channel preferences.
+    provider: GWI
+    # Confirm licence terms for embedding persona-driven channel guidance in
+    # client outputs (SCOPING.md Section 11, dependencies).
+    licence: CONFIRM
+    version: TBC
+    url: TBC
