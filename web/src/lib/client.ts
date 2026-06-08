@@ -26,7 +26,13 @@ export async function submitCatchment(payload: SubmitPayload): Promise<{ id: str
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Submission failed (${res.status})`);
+  if (!res.ok) {
+    const detail = await res
+      .json()
+      .then((b) => b?.error ?? b?.detail)
+      .catch(() => null);
+    throw new Error(detail ?? `Submission failed (${res.status})`);
+  }
   return res.json();
 }
 

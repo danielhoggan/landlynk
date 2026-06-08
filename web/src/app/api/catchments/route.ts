@@ -33,6 +33,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const job = await submitCatchmentJob(input);
-  return NextResponse.json(job, { status: 202 });
+  try {
+    const job = await submitCatchmentJob(input);
+    return NextResponse.json(job, { status: 202 });
+  } catch (err) {
+    // The worker (or the call to it) failed. Pass the detail through so the UI
+    // shows the real cause instead of a generic 500.
+    const message = err instanceof Error ? err.message : "Worker unavailable";
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
 }

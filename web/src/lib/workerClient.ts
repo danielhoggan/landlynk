@@ -14,7 +14,16 @@ async function workerFetch<T>(path: string, init?: RequestInit): Promise<T> {
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error(`Worker request failed: ${res.status} ${res.statusText}`);
+    // Surface the worker's error detail (e.g. a database or geocode failure)
+    // rather than a bare status, so the UI can show what actually went wrong.
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body?.detail ?? body?.error ?? detail;
+    } catch {
+      /* non-JSON body, keep statusText */
+    }
+    throw new Error(`Worker ${res.status}: ${detail}`);
   }
   return res.json() as Promise<T>;
 }
