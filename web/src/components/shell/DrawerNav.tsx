@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { Map, FileText, Settings, X, History } from "lucide-react";
+import { Map, FileText, Settings, X, History, type LucideIcon } from "lucide-react";
 
 interface NavItem {
   label: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: LucideIcon;
   href: string;
 }
 
