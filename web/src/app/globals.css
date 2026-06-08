@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* App shell base. Light mode is Apple-style, dark mode is the Mediaworks
+   palette. The theme toggle adds or removes the `dark` class on <html>. */
+:root {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-light-bg text-neutral-900 antialiased;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+}
+
+html.dark body {
+  @apply bg-dark-bg text-neutral-100;
+}
+
+/* Frosted glass used by the sticky top bar and the drawer scrim. */
+.frosted {
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* Web output font for any client-facing prose rendered in the app. */
+.output-prose {
+  font-family: var(--font-tenor-sans), "Tenor Sans", Georgia, serif;
+}

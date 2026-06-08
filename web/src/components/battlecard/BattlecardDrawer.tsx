@@ -1,0 +1,78 @@
+"use client";
+
+import { useEffect } from "react";
+import { X } from "lucide-react";
+import type { Battlecard } from "@/lib/types/battlecard";
+import { OnLocationSummary } from "./OnLocationSummary";
+import { ScoreExplainer } from "./ScoreExplainer";
+
+interface BattlecardDrawerProps {
+  battlecard: Battlecard | null;
+  open: boolean;
+  onClose: () => void;
+}
+
+// Clicking a region opens its deep-dive in the slide-out drawer, never a full
+// page navigation, so the map stays in view (design-framework.md, the map). The
+// drawer is focus-managed. Battlecard prose uses the web output font.
+export function BattlecardDrawer({
+  battlecard,
+  open,
+  onClose,
+}: BattlecardDrawerProps) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Area Battlecard"
+      aria-hidden={!open}
+      className={`fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-neutral-200 bg-white p-5 shadow-none transition-transform duration-[280ms] ease-drawer dark:border-neutral-800 dark:bg-neutral-950 ${
+        open ? "translate-x-0" : "translate-x-full"
+      }`}
+    >
+      <div className="mb-4 flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close Battlecard"
+          className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+        >
+          <X size={22} />
+        </button>
+      </div>
+
+      {battlecard ? (
+        <div className="space-y-6">
+          <OnLocationSummary battlecard={battlecard} onOpenFull={() => {}} />
+          <ScoreExplainer score={battlecard.score} />
+
+          {/* Page 2 and 3 commentary. Output font, signal-driven prose. */}
+          <section className="output-prose space-y-4 text-sm leading-relaxed">
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                Household income
+              </p>
+              <p>{battlecard.incomeAndTenure.incomeCommentary}</p>
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                Housing tenure
+              </p>
+              <p>{battlecard.incomeAndTenure.tenureCommentary}</p>
+            </div>
+          </section>
+        </div>
+      ) : (
+        <p className="text-sm text-neutral-500">Select an area to see its Battlecard.</p>
+      )}
+    </div>
+  );
+}
