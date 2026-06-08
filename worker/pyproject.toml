@@ -27,6 +27,8 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN"]
+# psycopg cursor and connection objects are dynamically typed at the DB boundary.
+"src/landlynk_worker/pipeline/reference.py" = ["ANN401"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
