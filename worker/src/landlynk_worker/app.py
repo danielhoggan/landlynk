@@ -835,6 +835,21 @@ def _heading(catchment_id: str) -> str | None:
     return config.get("brandHeading")
 
 
+def _area_geometry(catchment_id: str, area_code: str) -> dict | None:
+    """The GeoJSON for one area, for the export map thumbnail."""
+    catchment = get_store().get_catchment(catchment_id)
+    for area in (catchment or {}).get("areas", []):
+        if area.get("areaCode") == area_code:
+            return area.get("geometry")
+    return None
+
+
+def _catchment_geometry(catchment_id: str) -> dict | None:
+    """The whole-catchment polygon (isochrone or radius) for the map thumbnail."""
+    catchment = get_store().get_catchment(catchment_id)
+    return (catchment or {}).get("isochrone")
+
+
 @app.post("/catchments/{catchment_id}/shortlist/pdf")
 def shortlist_pdf(
     catchment_id: str, request: ShortlistRequest, user: dict = Depends(current_user)
@@ -918,7 +933,9 @@ def combined_pdf(
     _require_access(catchment_id, user)
     card = _combined_card(catchment_id, request)
     return Response(
-        content=render_battlecard_pdf(card, _heading(catchment_id)),
+        content=render_battlecard_pdf(
+            card, _heading(catchment_id), _catchment_geometry(catchment_id)
+        ),
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="landlynk-combined.pdf"'},
     )
@@ -931,7 +948,9 @@ def combined_pptx(
     _require_access(catchment_id, user)
     card = _combined_card(catchment_id, request)
     return Response(
-        content=render_battlecard_pptx(card, _heading(catchment_id)),
+        content=render_battlecard_pptx(
+            card, _heading(catchment_id), _catchment_geometry(catchment_id)
+        ),
         media_type=(
             "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         ),
@@ -949,7 +968,11 @@ def get_battlecard_pdf(
     data = get_store().get_battlecard(catchment_id, area_code)
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
-    pdf = render_battlecard_pdf(Battlecard.model_validate(data), _heading(catchment_id))
+    pdf = render_battlecard_pdf(
+        Battlecard.model_validate(data),
+        _heading(catchment_id),
+        _area_geometry(catchment_id, area_code),
+    )
     return Response(
         content=pdf,
         media_type="application/pdf",
@@ -968,7 +991,9 @@ def get_battlecard_pptx(
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
     pptx = render_battlecard_pptx(
-        Battlecard.model_validate(data), _heading(catchment_id)
+        Battlecard.model_validate(data),
+        _heading(catchment_id),
+        _area_geometry(catchment_id, area_code),
     )
     return Response(
         content=pptx,

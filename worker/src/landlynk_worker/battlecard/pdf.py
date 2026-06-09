@@ -189,13 +189,19 @@ def _styles(heading_hex: str) -> dict:
     }
 
 
-def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) -> bytes:
+def render_battlecard_pdf(
+    card: Battlecard,
+    heading_color: str | None = None,
+    map_geometry: dict | None = None,
+) -> bytes:
     """Render a single Battlecard payload to PDF bytes (one landscape page)."""
-    return render_battlecards_pdf([card], heading_color)
+    return render_battlecards_pdf([card], heading_color, [map_geometry])
 
 
 def render_battlecards_pdf(
-    cards: list[Battlecard], heading_color: str | None = None
+    cards: list[Battlecard],
+    heading_color: str | None = None,
+    geometries: list[dict | None] | None = None,
 ) -> bytes:
     """Render one or more Battlecards into a single PDF, one page per area.
 
@@ -223,7 +229,8 @@ def render_battlecards_pdf(
     for i, card in enumerate(cards):
         if i > 0:
             story.append(PageBreak())
-        story.extend(_card_flowables(card, styles))
+        geom = geometries[i] if geometries and i < len(geometries) else None
+        story.extend(_card_flowables(card, styles, geom))
     doc.build(story)
     return buffer.getvalue()
 
@@ -297,7 +304,33 @@ def _pie_drawing(
     return d
 
 
-def _card_flowables(card: Battlecard, st: dict) -> list:
+def _map_drawing(geometry: dict | None, width: float, height: float) -> Drawing | None:
+    """A gold catchment silhouette for the sidebar, or None if no geometry."""
+    from reportlab.graphics.shapes import Polygon
+
+    from .mapshape import fit_ring
+
+    pts = fit_ring(geometry, width, height, pad=3, y_down=False)
+    if len(pts) < 3:
+        return None
+    flat: list[float] = []
+    for x, y in pts:
+        flat.extend([x, y])
+    d = Drawing(width, height)
+    d.add(
+        Polygon(
+            points=flat,
+            fillColor=_GOLD,
+            strokeColor=colors.white,
+            strokeWidth=0.75,
+        )
+    )
+    return d
+
+
+def _card_flowables(
+    card: Battlecard, st: dict, map_geometry: dict | None = None
+) -> list:
     vs = card.visual_summary
     h = vs.header
     stats = vs.key_statistics
@@ -339,8 +372,12 @@ def _card_flowables(card: Battlecard, st: dict) -> list:
         )
     )
     side.append(stat_table)
+    map_drawing = _map_drawing(map_geometry, 54 * mm, 34 * mm)
+    if map_drawing is not None:
+        side.append(Spacer(1, 3 * mm))
+        side.append(map_drawing)
     if h.strapline:
-        side.append(Spacer(1, 4 * mm))
+        side.append(Spacer(1, 3 * mm))
         side.append(Paragraph(h.strapline, st["strap"]))
 
     # --- main cell ----------------------------------------------------------

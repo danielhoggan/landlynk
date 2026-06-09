@@ -67,9 +67,19 @@ def _short_money(value: float) -> str:
     return f"£{value:,.0f}"
 
 
-def render_battlecard_pptx(card: Battlecard, heading_color: str | None = None) -> bytes:
+def render_battlecard_pptx(
+    card: Battlecard,
+    heading_color: str | None = None,
+    map_geometry: dict | None = None,
+) -> bytes:
     """Render a single Battlecard payload to PPTX bytes (one slide)."""
-    return render_battlecards_pptx([card], heading_color)
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    _add_card_slide(prs, prs.slide_layouts[6], card, _hex(heading_color), map_geometry)
+    buffer = io.BytesIO()
+    prs.save(buffer)
+    return buffer.getvalue()
 
 
 def render_battlecards_pptx(
@@ -89,11 +99,15 @@ def render_battlecards_pptx(
 
 
 def _add_card_slide(
-    prs: Presentation, blank: SlideLayout, card: Battlecard, navy: RGBColor
+    prs: Presentation,
+    blank: SlideLayout,
+    card: Battlecard,
+    navy: RGBColor,
+    map_geometry: dict | None = None,
 ) -> None:
     slide = prs.slides.add_slide(blank)
     vs = card.visual_summary
-    _sidebar(slide, card, navy)
+    _sidebar(slide, card, navy, map_geometry)
     _pillars(slide, vs.header.lifestyle_pillars)
     _messaging_columns(slide, card, navy)
     _charts_row(slide, card, navy)
@@ -172,11 +186,40 @@ def _header_bar(
 # --- regions ----------------------------------------------------------------
 
 
-def _sidebar(slide: Slide, card: Battlecard, navy: RGBColor) -> None:
+def _map(slide: Slide, geometry: dict | None) -> None:
+    """Draw the catchment outline as a gold silhouette in the sidebar."""
+    from .mapshape import fit_ring
+
+    left, top = Inches(0.35), Inches(4.7)
+    width, height = Inches(2.7), Inches(1.95)
+    pts = fit_ring(
+        geometry, int(width), int(height), pad=int(Inches(0.05)), y_down=True
+    )
+    if len(pts) < 3:
+        return
+    abs_pts = [(int(left) + int(px), int(top) + int(py)) for px, py in pts]
+    try:
+        builder = slide.shapes.build_freeform(abs_pts[0][0], abs_pts[0][1], scale=1.0)
+        builder.add_line_segments(abs_pts[1:], close=True)
+        shape = builder.convert_to_shape()
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = _GOLD
+        shape.line.color.rgb = _WHITE
+        shape.line.width = Pt(0.75)
+        shape.shadow.inherit = False
+    except Exception:  # the map is decorative; never fail the export on it
+        pass
+
+
+def _sidebar(
+    slide: Slide, card: Battlecard, navy: RGBColor, map_geometry: dict | None = None
+) -> None:
     vs = card.visual_summary
     h = vs.header
     stats = vs.key_statistics
     _rect(slide, 0, 0, Inches(3.4), Inches(7.5), navy)
+    if map_geometry:
+        _map(slide, map_geometry)
 
     tf = _box(slide, Inches(0.3), Inches(0.4), Inches(2.8), Inches(1.0))
     _line(tf, h.development_name.upper(), size=24, color=_WHITE, bold=True, first=True)
