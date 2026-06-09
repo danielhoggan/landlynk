@@ -18,19 +18,29 @@ class ModelInfo:
     id: str
     label: str
     provider: str  # "anthropic" | "openai" | "google"
+    # Indicative cost in GBP for one Local Area Profile generation. A profile is
+    # a short prompt and a ~1.5k token JSON reply, so these are rough per-call
+    # estimates from published per-token pricing, for budgeting not billing.
+    est_cost_gbp: float = 0.01
 
 
 # Order is the preference order for the default when none is set.
 MODELS: tuple[ModelInfo, ...] = (
-    ModelInfo("claude-sonnet-4-5", "Claude Sonnet 4.5", "anthropic"),
-    ModelInfo("claude-haiku-4-5", "Claude Haiku 4.5", "anthropic"),
-    ModelInfo("gpt-4o", "GPT-4o", "openai"),
-    ModelInfo("gpt-4o-mini", "GPT-4o mini", "openai"),
-    ModelInfo("gemini-1.5-pro", "Gemini 1.5 Pro", "google"),
-    ModelInfo("gemini-1.5-flash", "Gemini 1.5 Flash", "google"),
+    ModelInfo("claude-sonnet-4-5", "Claude Sonnet 4.5", "anthropic", 0.02),
+    ModelInfo("claude-haiku-4-5", "Claude Haiku 4.5", "anthropic", 0.005),
+    ModelInfo("gpt-4o", "GPT-4o", "openai", 0.02),
+    ModelInfo("gpt-4o-mini", "GPT-4o mini", "openai", 0.002),
+    ModelInfo("gemini-1.5-pro", "Gemini 1.5 Pro", "google", 0.012),
+    ModelInfo("gemini-1.5-flash", "Gemini 1.5 Flash", "google", 0.001),
 )
 
 _BY_ID = {m.id: m for m in MODELS}
+
+
+def model_cost(model_id: str) -> float:
+    """Indicative GBP cost for one generation with the model."""
+    info = _BY_ID.get(model_id)
+    return info.est_cost_gbp if info else 0.0
 
 
 def _provider_keys() -> dict[str, bool]:

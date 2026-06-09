@@ -394,3 +394,29 @@ def test_audit_log_records_and_filters(client, monkeypatch):
     assert (
         client.get("/admin/audit", headers=_user_headers("u@x.com")).status_code == 403
     )
+
+
+def test_costs_report_aggregates_ai_spend(client, monkeypatch):
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    monkeypatch.setattr(app_module.settings, "openai_api_key", "sk-test")
+    client.put("/admin/models/default", json={"model": "gpt-4o"})
+    monkeypatch.setattr(
+        "landlynk_worker.enrichment.generate_area_profile",
+        lambda names, model, transport=None: {"description": "x", "amenities": []},
+    )
+    job = _submit(client)
+    client.post(f"/catchments/{job}/area-profile", json={"scope": "whole"})
+
+    report = client.get("/admin/costs").json()
+    assert report["generations"] == 1
+    assert report["total"] > 0
+    assert any(r["model"] == "gpt-4o" for r in report["byModel"])
+    assert report["items"][0]["catchmentId"] == job
+
+    # The internal cost confirmation surfaces an estimate.
+    usage = client.get("/builders/usage").json()
+    assert usage["estCost"] > 0 and usage["model"] == "gpt-4o"
+
+    assert (
+        client.get("/admin/costs", headers=_user_headers("u@x.com")).status_code == 403
+    )

@@ -149,7 +149,12 @@ export function AreaProfilePanel({
       {pending && (
         <div className="mt-2 rounded-card border border-priority-mid/40 bg-priority-mid/10 p-2.5 text-xs">
           <p className="text-neutral-700">
-            This runs an AI model and incurs a cost to your account. Continue?
+            This runs an AI model{usage?.model ? ` (${usage.model})` : ""} and
+            incurs a cost to your account
+            {usage?.estCost
+              ? `, estimated about £${usage.estCost.toFixed(3)} per lookup`
+              : ""}
+            . Continue?
           </p>
           <div className="mt-2 flex gap-2">
             <button

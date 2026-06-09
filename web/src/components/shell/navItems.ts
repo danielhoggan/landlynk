@@ -9,6 +9,7 @@ import {
   Sparkles,
   Building2,
   ScrollText,
+  PoundSterling,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Builders", icon: Building2, href: "/builders", adminOnly: true },
   { label: "AI models", icon: Sparkles, href: "/models", adminOnly: true },
   { label: "Audits", icon: ScrollText, href: "/audit", adminOnly: true },
+  { label: "Costs", icon: PoundSterling, href: "/costs", adminOnly: true },
   { label: "Settings", icon: Settings, href: "/settings" },
 ];
 

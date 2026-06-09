@@ -196,6 +196,25 @@ def _audit(
         _log.exception("audit write failed for %s", action)
 
 
+@app.get("/admin/costs")
+def admin_costs(
+    date_from: str | None = None,
+    date_to: str | None = None,
+    user: dict = Depends(current_user),
+) -> dict:
+    """AI cost report: totals and breakdowns by user, model and brand group."""
+    _require_admin(user)
+    store = get_store()
+    report = store.cost_report(date_from, date_to)
+    # Resolve group ids to names for the brand breakdown and line items.
+    names = {g["id"]: g["name"] for g in store.list_builder_groups()}
+    for row in report.get("byGroup", []):
+        row["groupName"] = names.get(row.get("groupId"), "Internal / none")
+    for item in report.get("items", []):
+        item["groupName"] = names.get(item.get("groupId"), "Internal / none")
+    return report
+
+
 @app.get("/admin/audit")
 def admin_audit(
     actor: str | None = None,
@@ -435,11 +454,26 @@ def _group_cap(group_id: str) -> int | None:
 
 
 def _llm_usage_summary(user: dict) -> dict:
-    """Remaining AI allowance for the caller. Internal users are unlimited."""
-    group_id = user.get("builderGroupId")
+    """Remaining AI allowance for the caller. Internal users are unlimited.
+
+    estCost is the indicative GBP cost of one generation with the default model,
+    so the UI can flag the cost before a user runs a lookup.
+    """
+    from .enrichment import model_cost
+
     period = _usage_period()
+    model = _default_model()
+    est_cost = model_cost(model) if model else 0.0
+    group_id = user.get("builderGroupId")
     if user.get("role") == "admin" or not group_id:
-        return {"period": period, "metered": False, "cap": None, "used": 0}
+        return {
+            "period": period,
+            "metered": False,
+            "cap": None,
+            "used": 0,
+            "model": model,
+            "estCost": est_cost,
+        }
     cap = _group_cap(group_id)
     used = get_store().llm_usage_count(group_id, period)
     remaining = None if cap is None else max(cap - used, 0)
@@ -449,6 +483,8 @@ def _llm_usage_summary(user: dict) -> dict:
         "cap": cap,
         "used": used,
         "remaining": remaining,
+        "model": model,
+        "estCost": est_cost,
     }
 
 
@@ -801,6 +837,8 @@ def area_profile(
     except Exception as exc:
         _log.exception("Area profile generation failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    from .enrichment import model_cost
+
     store.record_llm_usage(
         user.get("email"), user.get("builderGroupId"), model, _usage_period()
     )
@@ -810,8 +848,12 @@ def area_profile(
         "ai.generate",
         target_type="catchment",
         target_id=catchment_id,
-        detail={"model": model, "areas": len(codes)},
-        cost=1,
+        detail={
+            "model": model,
+            "areas": len(codes),
+            "groupId": user.get("builderGroupId"),
+        },
+        cost=model_cost(model),
     )
     return {"model": model, **payload, "cached": False}
 

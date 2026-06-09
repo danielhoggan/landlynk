@@ -57,6 +57,30 @@ def _profile_row(row: tuple) -> dict:
     }
 
 
+def _build_cost_report(items: list[dict]) -> dict:
+    """Aggregate AI cost line items by user, model and group, with a total."""
+
+    def group_by(key: str) -> list[dict]:
+        agg: dict[str, dict] = {}
+        for it in items:
+            k = it.get(key) or "unknown"
+            bucket = agg.setdefault(k, {key: k, "generations": 0, "cost": 0.0})
+            bucket["generations"] += 1
+            bucket["cost"] = round(bucket["cost"] + float(it["cost"]), 4)
+        return sorted(agg.values(), key=lambda b: b["cost"], reverse=True)
+
+    total = round(sum(float(it["cost"]) for it in items), 4)
+    recent = sorted(items, key=lambda it: it.get("createdAt") or "", reverse=True)
+    return {
+        "total": total,
+        "generations": len(items),
+        "byUser": group_by("actorEmail"),
+        "byModel": group_by("model"),
+        "byGroup": group_by("groupId"),
+        "items": recent[:200],
+    }
+
+
 def scoring_config_to_dict(config: ScoringConfig) -> dict:
     """Serialise the scoring config stored with a catchment for reproducibility."""
     return {
@@ -180,6 +204,7 @@ class Storage(Protocol):
     def llm_usage_count(self, group_id: str | None, period: str) -> int: ...
     def record_audit(self, entry: dict) -> None: ...
     def list_audit(self, filters: dict, limit: int = 500) -> list[dict]: ...
+    def cost_report(self, date_from: str | None, date_to: str | None) -> dict: ...
     def create_builder(self, builder: dict) -> None: ...
     def list_builders(self, group_id: str | None = None) -> list[dict]: ...
     def set_builder_logo(self, builder_id: str, path: str) -> bool: ...
@@ -430,6 +455,29 @@ class InMemoryStore:
             "createdAt": datetime.now(UTC).isoformat(),
         }
         self._audit.append(row)
+
+    def cost_report(self, date_from: str | None, date_to: str | None) -> dict:
+        rows = [
+            r
+            for r in self._audit
+            if r.get("action") == "ai.generate"
+            and float(r.get("cost") or 0) > 0
+            and (not date_from or (r.get("createdAt") or "") >= date_from)
+            and (not date_to or (r.get("createdAt") or "") <= date_to)
+        ]
+        return _build_cost_report(
+            [
+                {
+                    "createdAt": r.get("createdAt"),
+                    "actorEmail": r.get("actorEmail"),
+                    "catchmentId": r.get("targetId"),
+                    "model": (r.get("detail") or {}).get("model"),
+                    "groupId": (r.get("detail") or {}).get("groupId"),
+                    "cost": float(r.get("cost") or 0),
+                }
+                for r in rows
+            ]
+        )
 
     def list_audit(self, filters: dict, limit: int = 500) -> list[dict]:
         rows = list(reversed(self._audit))
@@ -973,6 +1021,35 @@ class PostgresStore:
             }
             for r in rows
         ]
+
+    def cost_report(self, date_from: str | None, date_to: str | None) -> dict:
+        clauses = ["action = 'ai.generate'", "cost > 0"]
+        params: list = []
+        if date_from:
+            clauses.append("created_at >= %s")
+            params.append(date_from)
+        if date_to:
+            clauses.append("created_at <= %s")
+            params.append(date_to)
+        where = " WHERE " + " AND ".join(clauses)
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT created_at, actor_email, target_id, detail, cost "
+                "FROM audit_log" + where + " ORDER BY created_at DESC LIMIT 5000",
+                params,
+            ).fetchall()
+        items = [
+            {
+                "createdAt": r[0].isoformat() if r[0] else None,
+                "actorEmail": r[1],
+                "catchmentId": r[2],
+                "model": (r[3] or {}).get("model"),
+                "groupId": (r[3] or {}).get("groupId"),
+                "cost": float(r[4]),
+            }
+            for r in rows
+        ]
+        return _build_cost_report(items)
 
     def create_builder(self, builder: dict) -> None:
         with self._pool.connection() as conn:

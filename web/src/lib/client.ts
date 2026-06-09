@@ -204,6 +204,47 @@ export interface LlmUsage {
   cap?: number | null;
   used?: number;
   remaining?: number | null;
+  model?: string | null;
+  estCost?: number;
+}
+
+export interface CostRow {
+  actorEmail?: string;
+  model?: string;
+  groupId?: string | null;
+  groupName?: string;
+  generations: number;
+  cost: number;
+}
+
+export interface CostItem {
+  createdAt: string | null;
+  actorEmail: string | null;
+  catchmentId: string | null;
+  model: string | null;
+  groupName?: string;
+  cost: number;
+}
+
+export interface CostReport {
+  total: number;
+  generations: number;
+  byUser: CostRow[];
+  byModel: CostRow[];
+  byGroup: CostRow[];
+  items: CostItem[];
+}
+
+export async function getCosts(filters: {
+  dateFrom?: string;
+  dateTo?: string;
+}): Promise<CostReport> {
+  const qs = new URLSearchParams();
+  if (filters.dateFrom) qs.set("date_from", filters.dateFrom);
+  if (filters.dateTo) qs.set("date_to", filters.dateTo);
+  const res = await fetch(`/api/admin/costs?${qs.toString()}`);
+  if (!res.ok) throw new Error(`Could not load costs (${res.status})`);
+  return res.json();
 }
 
 export async function getUsage(): Promise<LlmUsage> {
