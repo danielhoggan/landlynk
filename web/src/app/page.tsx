@@ -65,6 +65,11 @@ export default function HomePage() {
   const [profiles, setProfiles] = useState<BuilderProfile[]>([]);
   const [profileId, setProfileId] = useState("");
   const [brandHeading, setBrandHeading] = useState("");
+  const [brandTheme, setBrandTheme] = useState<{
+    secondary?: string;
+    accent?: string;
+    logoPath?: string;
+  }>({});
   const [driveTime, setDriveTime] = useState("30");
   const [catchmentMode, setCatchmentMode] = useState<"driveTime" | "radius">(
     "driveTime",
@@ -119,6 +124,7 @@ export default function HomePage() {
     const p = profiles.find((x) => x.id === id);
     if (!p) {
       setBrandHeading("");
+      setBrandTheme({});
       return;
     }
     if (p.segment) setSegment(p.segment);
@@ -129,6 +135,11 @@ export default function HomePage() {
     if (p.pillars?.length) setPillars(p.pillars.join(", "));
     if (p.features?.length) setFeatures(p.features.join(", "));
     setBrandHeading(p.themeHeading ?? "");
+    setBrandTheme({
+      secondary: p.themeSecondary ?? undefined,
+      accent: p.themeAccent ?? undefined,
+      logoPath: p.logoPath ?? undefined,
+    });
   }
 
   const splitList = (s: string) =>
@@ -298,6 +309,9 @@ export default function HomePage() {
       if (bedRange) config.bedRange = bedRange;
       if (segment) config.segment = segment;
       if (brandHeading) config.brandHeading = brandHeading;
+      if (brandTheme.secondary) config.brandSecondary = brandTheme.secondary;
+      if (brandTheme.accent) config.brandAccent = brandTheme.accent;
+      if (brandTheme.logoPath) config.brandLogoPath = brandTheme.logoPath;
       if (catchmentMode === "radius") {
         config.catchmentMode = "radius";
         if (radiusKm) config.radiusKm = Number(radiusKm);

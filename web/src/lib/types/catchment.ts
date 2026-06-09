@@ -62,6 +62,9 @@ export interface StoredConfig {
   radiusKm?: number;
   segment?: string;
   brandHeading?: string;
+  brandSecondary?: string;
+  brandAccent?: string;
+  brandLogoPath?: string;
   affordabilityMultiple?: number;
 }
 

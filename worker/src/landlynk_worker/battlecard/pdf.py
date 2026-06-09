@@ -193,15 +193,21 @@ def render_battlecard_pdf(
     card: Battlecard,
     heading_color: str | None = None,
     map_geometry: dict | None = None,
+    logo: bytes | None = None,
+    accent: str | None = None,
 ) -> bytes:
     """Render a single Battlecard payload to PDF bytes (one landscape page)."""
-    return render_battlecards_pdf([card], heading_color, [map_geometry])
+    return render_battlecards_pdf(
+        [card], heading_color, [map_geometry], logo=logo, accent=accent
+    )
 
 
 def render_battlecards_pdf(
     cards: list[Battlecard],
     heading_color: str | None = None,
     geometries: list[dict | None] | None = None,
+    logo: bytes | None = None,
+    accent: str | None = None,
 ) -> bytes:
     """Render one or more Battlecards into a single PDF, one page per area.
 
@@ -225,12 +231,13 @@ def render_battlecards_pdf(
         ),
     )
     styles = _styles(heading_hex)
+    accent_color = colors.HexColor(accent) if accent else _GOLD
     story: list = []
     for i, card in enumerate(cards):
         if i > 0:
             story.append(PageBreak())
         geom = geometries[i] if geometries and i < len(geometries) else None
-        story.extend(_card_flowables(card, styles, geom))
+        story.extend(_card_flowables(card, styles, geom, logo, accent_color))
     doc.build(story)
     return buffer.getvalue()
 
@@ -304,8 +311,13 @@ def _pie_drawing(
     return d
 
 
-def _map_drawing(geometry: dict | None, width: float, height: float) -> Drawing | None:
-    """A gold catchment silhouette for the sidebar, or None if no geometry."""
+def _map_drawing(
+    geometry: dict | None,
+    width: float,
+    height: float,
+    fill: colors.Color = _GOLD,
+) -> Drawing | None:
+    """An accent catchment silhouette for the sidebar, or None if no geometry."""
     from reportlab.graphics.shapes import Polygon
 
     from .mapshape import fit_ring
@@ -320,7 +332,7 @@ def _map_drawing(geometry: dict | None, width: float, height: float) -> Drawing 
     d.add(
         Polygon(
             points=flat,
-            fillColor=_GOLD,
+            fillColor=fill,
             strokeColor=colors.white,
             strokeWidth=0.75,
         )
@@ -329,7 +341,11 @@ def _map_drawing(geometry: dict | None, width: float, height: float) -> Drawing 
 
 
 def _card_flowables(
-    card: Battlecard, st: dict, map_geometry: dict | None = None
+    card: Battlecard,
+    st: dict,
+    map_geometry: dict | None = None,
+    logo: bytes | None = None,
+    accent: colors.Color = _GOLD,
 ) -> list:
     vs = card.visual_summary
     h = vs.header
@@ -372,11 +388,21 @@ def _card_flowables(
         )
     )
     side.append(stat_table)
-    map_drawing = _map_drawing(map_geometry, 54 * mm, 34 * mm)
+    map_drawing = _map_drawing(map_geometry, 54 * mm, 34 * mm, fill=accent)
     if map_drawing is not None:
         side.append(Spacer(1, 3 * mm))
         side.append(map_drawing)
-    if h.strapline:
+    if logo:
+        from reportlab.platypus import Image
+
+        try:
+            img = Image(io.BytesIO(logo), height=14 * mm, kind="proportional")
+            img.drawWidth = min(img.drawWidth, 54 * mm)
+            side.append(Spacer(1, 3 * mm))
+            side.append(img)
+        except Exception:  # decorative; never fail the export on a bad image
+            pass
+    elif h.strapline:
         side.append(Spacer(1, 3 * mm))
         side.append(Paragraph(h.strapline, st["strap"]))
 

@@ -919,6 +919,22 @@ def _catchment_geometry(catchment_id: str) -> dict | None:
     return (catchment or {}).get("isochrone")
 
 
+def _brand_accent(catchment_id: str) -> str | None:
+    catchment = get_store().get_catchment(catchment_id)
+    return ((catchment or {}).get("input", {}).get("config") or {}).get("brandAccent")
+
+
+def _brand_logo(catchment_id: str) -> bytes | None:
+    """The brand logo bytes for the run, fetched from storage for embedding."""
+    catchment = get_store().get_catchment(catchment_id)
+    path = ((catchment or {}).get("input", {}).get("config") or {}).get("brandLogoPath")
+    if not path:
+        return None
+    from . import assets
+
+    return assets.fetch_logo(path)
+
+
 @app.post("/catchments/{catchment_id}/shortlist/pdf")
 def shortlist_pdf(
     catchment_id: str, request: ShortlistRequest, user: dict = Depends(current_user)
@@ -927,7 +943,12 @@ def shortlist_pdf(
     cards = _shortlist_cards(catchment_id, request.area_codes)
     if not cards:
         raise HTTPException(status_code=404, detail="No battlecards for shortlist")
-    pdf = render_battlecards_pdf(cards, _heading(catchment_id))
+    pdf = render_battlecards_pdf(
+        cards,
+        _heading(catchment_id),
+        logo=_brand_logo(catchment_id),
+        accent=_brand_accent(catchment_id),
+    )
     return Response(
         content=pdf,
         media_type="application/pdf",
@@ -945,7 +966,12 @@ def shortlist_pptx(
     cards = _shortlist_cards(catchment_id, request.area_codes)
     if not cards:
         raise HTTPException(status_code=404, detail="No battlecards for shortlist")
-    pptx = render_battlecards_pptx(cards, _heading(catchment_id))
+    pptx = render_battlecards_pptx(
+        cards,
+        _heading(catchment_id),
+        logo=_brand_logo(catchment_id),
+        accent=_brand_accent(catchment_id),
+    )
     return Response(
         content=pptx,
         media_type=(
@@ -1003,7 +1029,11 @@ def combined_pdf(
     card = _combined_card(catchment_id, request)
     return Response(
         content=render_battlecard_pdf(
-            card, _heading(catchment_id), _catchment_geometry(catchment_id)
+            card,
+            _heading(catchment_id),
+            _catchment_geometry(catchment_id),
+            _brand_logo(catchment_id),
+            _brand_accent(catchment_id),
         ),
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="landlynk-combined.pdf"'},
@@ -1018,7 +1048,11 @@ def combined_pptx(
     card = _combined_card(catchment_id, request)
     return Response(
         content=render_battlecard_pptx(
-            card, _heading(catchment_id), _catchment_geometry(catchment_id)
+            card,
+            _heading(catchment_id),
+            _catchment_geometry(catchment_id),
+            _brand_logo(catchment_id),
+            _brand_accent(catchment_id),
         ),
         media_type=(
             "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -1041,6 +1075,8 @@ def get_battlecard_pdf(
         Battlecard.model_validate(data),
         _heading(catchment_id),
         _area_geometry(catchment_id, area_code),
+        _brand_logo(catchment_id),
+        _brand_accent(catchment_id),
     )
     return Response(
         content=pdf,
@@ -1063,6 +1099,8 @@ def get_battlecard_pptx(
         Battlecard.model_validate(data),
         _heading(catchment_id),
         _area_geometry(catchment_id, area_code),
+        _brand_logo(catchment_id),
+        _brand_accent(catchment_id),
     )
     return Response(
         content=pptx,

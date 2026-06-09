@@ -22,6 +22,9 @@ export interface SubmitPayload {
     radiusKm?: number;
     segment?: string;
     brandHeading?: string;
+    brandSecondary?: string;
+    brandAccent?: string;
+    brandLogoPath?: string;
     affordabilityMultiple?: number;
   };
 }
@@ -181,6 +184,10 @@ export interface BuilderProfile {
   features: string[];
   builderName?: string;
   themeHeading?: string;
+  themeSecondary?: string | null;
+  themeAccent?: string | null;
+  logoPath?: string | null;
+  fonts?: string[];
   groupId?: string;
   groupName?: string;
 }
@@ -222,6 +229,26 @@ export interface Builder {
   groupId: string;
   name: string;
   themeHeading: string;
+  themeSecondary?: string | null;
+  themeAccent?: string | null;
+  fonts?: string[];
+  logoPath?: string | null;
+}
+
+export async function uploadBrandLogo(
+  builderId: string,
+  filename: string,
+  base64: string,
+): Promise<void> {
+  const res = await fetch(`/api/admin/builders/${builderId}/logo`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filename, content: base64 }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error ?? `Could not upload logo (${res.status})`);
+  }
 }
 
 async function jsonOrThrow<T>(res: Response, what: string): Promise<T> {
@@ -261,6 +288,9 @@ export async function createBuilder(body: {
   groupId: string;
   name: string;
   themeHeading: string;
+  themeSecondary?: string;
+  themeAccent?: string;
+  fonts?: string[];
 }): Promise<{ id: string }> {
   return jsonOrThrow(
     await fetch("/api/admin/builders", {

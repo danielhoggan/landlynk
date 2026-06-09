@@ -71,19 +71,26 @@ def render_battlecard_pptx(
     card: Battlecard,
     heading_color: str | None = None,
     map_geometry: dict | None = None,
+    logo: bytes | None = None,
+    accent: str | None = None,
 ) -> bytes:
     """Render a single Battlecard payload to PPTX bytes (one slide)."""
     prs = Presentation()
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
-    _add_card_slide(prs, prs.slide_layouts[6], card, _hex(heading_color), map_geometry)
+    _add_card_slide(
+        prs, prs.slide_layouts[6], card, _hex(heading_color), map_geometry, logo, accent
+    )
     buffer = io.BytesIO()
     prs.save(buffer)
     return buffer.getvalue()
 
 
 def render_battlecards_pptx(
-    cards: list[Battlecard], heading_color: str | None = None
+    cards: list[Battlecard],
+    heading_color: str | None = None,
+    logo: bytes | None = None,
+    accent: str | None = None,
 ) -> bytes:
     """Render one or more Battlecards into a single deck, one slide per area."""
     heading = _hex(heading_color)
@@ -92,7 +99,7 @@ def render_battlecards_pptx(
     prs.slide_height = Inches(7.5)
     blank = prs.slide_layouts[6]
     for card in cards:
-        _add_card_slide(prs, blank, card, heading)
+        _add_card_slide(prs, blank, card, heading, None, logo, accent)
     buffer = io.BytesIO()
     prs.save(buffer)
     return buffer.getvalue()
@@ -104,10 +111,13 @@ def _add_card_slide(
     card: Battlecard,
     navy: RGBColor,
     map_geometry: dict | None = None,
+    logo: bytes | None = None,
+    accent: str | None = None,
 ) -> None:
     slide = prs.slides.add_slide(blank)
     vs = card.visual_summary
-    _sidebar(slide, card, navy, map_geometry)
+    accent_rgb = _hex(accent) if accent else _GOLD
+    _sidebar(slide, card, navy, map_geometry, logo, accent_rgb)
     _pillars(slide, vs.header.lifestyle_pillars)
     _messaging_columns(slide, card, navy)
     _charts_row(slide, card, navy)
@@ -186,12 +196,12 @@ def _header_bar(
 # --- regions ----------------------------------------------------------------
 
 
-def _map(slide: Slide, geometry: dict | None) -> None:
-    """Draw the catchment outline as a gold silhouette in the sidebar."""
+def _map(slide: Slide, geometry: dict | None, accent: RGBColor) -> None:
+    """Draw the catchment outline as an accent silhouette in the sidebar."""
     from .mapshape import fit_ring
 
-    left, top = Inches(0.35), Inches(4.7)
-    width, height = Inches(2.7), Inches(1.95)
+    left, top = Inches(0.35), Inches(4.6)
+    width, height = Inches(2.7), Inches(1.8)
     pts = fit_ring(
         geometry, int(width), int(height), pad=int(Inches(0.05)), y_down=True
     )
@@ -203,7 +213,7 @@ def _map(slide: Slide, geometry: dict | None) -> None:
         builder.add_line_segments(abs_pts[1:], close=True)
         shape = builder.convert_to_shape()
         shape.fill.solid()
-        shape.fill.fore_color.rgb = _GOLD
+        shape.fill.fore_color.rgb = accent
         shape.line.color.rgb = _WHITE
         shape.line.width = Pt(0.75)
         shape.shadow.inherit = False
@@ -211,24 +221,39 @@ def _map(slide: Slide, geometry: dict | None) -> None:
         pass
 
 
+def _logo(slide: Slide, logo: bytes) -> None:
+    """Place the brand logo at the foot of the sidebar."""
+    try:
+        slide.shapes.add_picture(
+            io.BytesIO(logo), Inches(0.3), Inches(6.6), height=Inches(0.6)
+        )
+    except Exception:  # decorative; never fail the export
+        pass
+
+
 def _sidebar(
-    slide: Slide, card: Battlecard, navy: RGBColor, map_geometry: dict | None = None
+    slide: Slide,
+    card: Battlecard,
+    navy: RGBColor,
+    map_geometry: dict | None = None,
+    logo: bytes | None = None,
+    accent: RGBColor = _GOLD,
 ) -> None:
     vs = card.visual_summary
     h = vs.header
     stats = vs.key_statistics
     _rect(slide, 0, 0, Inches(3.4), Inches(7.5), navy)
     if map_geometry:
-        _map(slide, map_geometry)
+        _map(slide, map_geometry, accent)
 
     tf = _box(slide, Inches(0.3), Inches(0.4), Inches(2.8), Inches(1.0))
     _line(tf, h.development_name.upper(), size=24, color=_WHITE, bold=True, first=True)
     location = ", ".join(p for p in [h.town, h.postcode] if p)
     if location:
-        _line(tf, location, size=11, color=_GOLD)
+        _line(tf, location, size=11, color=accent)
 
     tf = _box(slide, Inches(0.3), Inches(1.75), Inches(2.8), Inches(0.25))
-    _line(tf, "KEY STATISTICS", size=10, color=_GOLD, bold=True, first=True)
+    _line(tf, "KEY STATISTICS", size=10, color=accent, bold=True, first=True)
 
     tiles = [
         (f"{stats.bed_range} Bed", "HOMES"),
@@ -247,7 +272,9 @@ def _sidebar(
         _line(tf, value, size=15, color=_WHITE, bold=True, first=True, space_after=0)
         _line(tf, label, size=7.5, color=_GREY)
 
-    if h.strapline:
+    if logo:
+        _logo(slide, logo)
+    elif h.strapline:
         tf = _box(slide, Inches(0.3), Inches(6.9), Inches(2.8), Inches(0.5))
         _line(tf, h.strapline, size=10, color=_GREY, italic=True, first=True)
 

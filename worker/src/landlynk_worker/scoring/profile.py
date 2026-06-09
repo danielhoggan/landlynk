@@ -94,9 +94,12 @@ class ScoringConfig:
     radius_km: float = 1.5
     # Targeted audience segment id (see scoring/segments.py), for reproducibility.
     segment: str | None = None
-    # Brand heading colour for themed exports, from a builder profile. Metadata
-    # only, not used in scoring.
+    # Brand theme for themed exports, from a builder profile. Metadata only, not
+    # used in scoring. brand_heading is the primary colour.
     brand_heading: str | None = None
+    brand_secondary: str | None = None
+    brand_accent: str | None = None
+    brand_logo_path: str | None = None
     # Income an affordability multiple maps a price to. price / multiple.
     affordability_multiple: float = 4.5
     # Preferred tenure mix for the product's audiences, weights 0..1.

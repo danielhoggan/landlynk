@@ -13,12 +13,22 @@ import {
   saveProfile,
   deleteProfile,
   updateGroup,
+  uploadBrandLogo,
   type BuilderGroup,
   type Builder,
   type BuilderProfile,
 } from "@/lib/client";
 import { SEGMENTS } from "@/lib/segments";
 import { useUser } from "@/lib/userContext";
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 // Admin-only: manage the builder org model. A group (client) owns brands, each
 // brand owns targeting profiles. External users are then pinned to a group on
@@ -124,6 +134,11 @@ function GroupCard({
 }) {
   const [name, setName] = useState("");
   const [colour, setColour] = useState("#0A1F44");
+  const [secondary, setSecondary] = useState("#1F5A3C");
+  const [accent, setAccent] = useState("#C9A24B");
+  const [fonts, setFonts] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [brandErr, setBrandErr] = useState("");
   const [cap, setCap] = useState(
     group.monthlyCap == null ? "" : String(group.monthlyCap),
   );
@@ -187,36 +202,94 @@ function GroupCard({
             onChange={onChange}
           />
         ))}
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="New brand (e.g. Bellway)"
-            className="flex-1 rounded-card border border-neutral-300 px-3 py-1.5 text-sm"
-          />
-          <input
-            type="color"
-            value={colour}
-            onChange={(e) => setColour(e.target.value)}
-            title="Brand colour for exports"
-            className="h-8 w-10 rounded border border-neutral-300"
-          />
-          <button
-            type="button"
-            onClick={async () => {
-              if (!name.trim()) return;
-              await createBuilder({
-                groupId: group.id,
-                name: name.trim(),
-                themeHeading: colour,
-              });
-              setName("");
-              onChange();
-            }}
-            className="flex items-center gap-1.5 rounded-card border border-neutral-300 px-3 py-1.5 text-sm font-semibold"
-          >
-            <Plus size={14} /> Brand
-          </button>
+        <div className="rounded-card border border-dashed border-neutral-300 p-2.5">
+          <p className="mb-2 text-xs font-semibold text-neutral-500">New brand</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Brand name (e.g. Bellway)"
+              className="flex-1 rounded-card border border-neutral-300 px-3 py-1.5 text-sm"
+            />
+            <label className="flex items-center gap-1 text-xs text-neutral-500">
+              Primary
+              <input
+                type="color"
+                value={colour}
+                onChange={(e) => setColour(e.target.value)}
+                className="h-8 w-9 rounded border border-neutral-300"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-xs text-neutral-500">
+              Secondary
+              <input
+                type="color"
+                value={secondary}
+                onChange={(e) => setSecondary(e.target.value)}
+                className="h-8 w-9 rounded border border-neutral-300"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-xs text-neutral-500">
+              Accent
+              <input
+                type="color"
+                value={accent}
+                onChange={(e) => setAccent(e.target.value)}
+                className="h-8 w-9 rounded border border-neutral-300"
+              />
+            </label>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              value={fonts}
+              onChange={(e) => setFonts(e.target.value)}
+              placeholder="Web fonts (comma separated)"
+              className="flex-1 rounded-card border border-neutral-300 px-3 py-1.5 text-xs"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+              className="text-xs"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                setBrandErr("");
+                if (!name.trim()) return setBrandErr("Name is required.");
+                if (!logoFile) return setBrandErr("A logo is required.");
+                try {
+                  const { id } = await createBuilder({
+                    groupId: group.id,
+                    name: name.trim(),
+                    themeHeading: colour,
+                    themeSecondary: secondary,
+                    themeAccent: accent,
+                    fonts: fonts
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  });
+                  const base64 = await fileToBase64(logoFile);
+                  await uploadBrandLogo(id, logoFile.name, base64);
+                  setName("");
+                  setFonts("");
+                  setLogoFile(null);
+                  onChange();
+                } catch (e) {
+                  setBrandErr(
+                    e instanceof Error ? e.message : "Could not create brand",
+                  );
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-card bg-light-accent px-3 py-1.5 text-sm font-semibold text-white"
+            >
+              <Plus size={14} /> Brand
+            </button>
+          </div>
+          {brandErr && (
+            <p className="mt-1 text-xs text-priority-low">{brandErr}</p>
+          )}
         </div>
       </div>
     </div>
@@ -246,10 +319,28 @@ function BrandCard({
   return (
     <div className="rounded-card border border-neutral-200 p-3">
       <div className="flex items-center gap-2">
-        <span
-          className="inline-block h-3 w-3 rounded-full"
-          style={{ backgroundColor: brand.themeHeading }}
-        />
+        {brand.logoPath ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/builders/${brand.id}/logo`}
+            alt={`${brand.name} logo`}
+            className="h-5 w-auto max-w-[60px] object-contain"
+          />
+        ) : (
+          <span
+            className="inline-block h-3 w-3 rounded-full"
+            style={{ backgroundColor: brand.themeHeading }}
+          />
+        )}
+        {[brand.themeHeading, brand.themeSecondary, brand.themeAccent]
+          .filter(Boolean)
+          .map((c, i) => (
+            <span
+              key={i}
+              className="inline-block h-3 w-3 rounded-full border border-neutral-200"
+              style={{ backgroundColor: c as string }}
+            />
+          ))}
         <span className="text-sm font-semibold">{brand.name}</span>
         <button
           type="button"
