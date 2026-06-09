@@ -35,6 +35,8 @@ def client(monkeypatch):
 
     monkeypatch.setattr(app_module, "_store", InMemoryStore())
     monkeypatch.setattr(app_module, "get_deps", lambda: None)
+    # No database in the unit tests; status falls back to the in-memory mirror.
+    monkeypatch.setattr(app_module, "get_pool", lambda: None)
     return TestClient(app_module.app)
 
 

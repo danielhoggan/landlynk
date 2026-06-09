@@ -136,7 +136,13 @@ def _check_admin(token: str | None) -> None:
 @app.get("/admin/reference/status")
 def reference_status(x_admin_token: str | None = Header(default=None)) -> dict:
     _check_admin(x_admin_token)
-    return refdata.get_status()
+    pool = None
+    if settings.persist_results:
+        try:
+            pool = get_pool()
+        except Exception:  # status falls back to the in-memory mirror
+            pool = None
+    return refdata.get_status(pool)
 
 
 @app.post("/admin/reference/{dataset}", status_code=202)

@@ -17,6 +17,7 @@ def test_migrations_dir_ships_with_the_package():
         "0001_init.sql",
         "0002_isochrone_cache.sql",
         "0003_house_prices.sql",
+        "0004_reference_loads.sql",
     ]
 
 

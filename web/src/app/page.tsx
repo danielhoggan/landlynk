@@ -70,10 +70,16 @@ export default function HomePage() {
   const setWeight = (k: string, v: string) =>
     setWeights((w) => ({ ...w, [k]: v }));
 
+  // LA area level is opt-in (Settings). MSOA is the default and stays forced
+  // off unless enabled, so the form only offers what is supported.
+  const [enableLA, setEnableLA] = useState(false);
+
   // Seed the form from the saved default assumptions (Settings). The values
   // used are still stored per run, so this only changes new submissions.
   useEffect(() => {
     const s = loadSettings();
+    setEnableLA(s.enableLA);
+    if (!s.enableLA) setAreaType("MSOA");
     setAffordability(String(s.affordabilityMultiple));
     setOverlap(String(s.overlapThreshold));
     setWeights(
@@ -307,19 +313,21 @@ export default function HomePage() {
               onChange={(v) => setKind(v as InputKind)}
             />
           </div>
-          <div>
-            <span className="mb-1.5 block text-xs font-medium text-neutral-500">
-              Area level
-            </span>
-            <Segmented
-              options={[
-                { value: "MSOA", label: "MSOA" },
-                { value: "LA", label: "LA" },
-              ]}
-              value={areaType}
-              onChange={(v) => setAreaType(v as "MSOA" | "LA")}
-            />
-          </div>
+          {enableLA && (
+            <div>
+              <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+                Area level
+              </span>
+              <Segmented
+                options={[
+                  { value: "MSOA", label: "MSOA" },
+                  { value: "LA", label: "LA" },
+                ]}
+                value={areaType}
+                onChange={(v) => setAreaType(v as "MSOA" | "LA")}
+              />
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

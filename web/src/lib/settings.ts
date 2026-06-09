@@ -5,6 +5,8 @@
 // worker, which remains the source of truth for reproducibility.
 
 export interface AppSettings {
+  /** Show the LA area-level option in the catchment form. MSOA is the default. */
+  enableLA: boolean;
   /** Gross household income multiple used to imply an affordable price. */
   affordabilityMultiple: number;
   /** Minimum area overlap with the isochrone to retain it, 0 to 1. */
@@ -21,6 +23,7 @@ export interface AppSettings {
 
 // Mirrors the worker ScoringConfig defaults (scoring/profile.py).
 export const DEFAULT_SETTINGS: AppSettings = {
+  enableLA: false,
   affordabilityMultiple: 4.5,
   overlapThreshold: 0.1,
   weights: {
@@ -41,6 +44,7 @@ export function loadSettings(): AppSettings {
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
     return {
+      enableLA: parsed.enableLA ?? DEFAULT_SETTINGS.enableLA,
       affordabilityMultiple:
         parsed.affordabilityMultiple ?? DEFAULT_SETTINGS.affordabilityMultiple,
       overlapThreshold:

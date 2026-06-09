@@ -1,8 +1,11 @@
 """Reference data load jobs: dispatch, run and track status.
 
-Loads run as background tasks in the worker and report status so the app can
-show progress. Status is process-local (single worker replica); a load is a
-rare, manual, idempotent operation so that is sufficient.
+Loads run as background tasks in the worker. Status is persisted in the
+reference_loads table so it survives a worker redeploy: the loaded data lives in
+its own tables on the database volume, and recording the load status alongside
+it means the app shows what is actually loaded rather than resetting to empty on
+every restart. A process-local mirror covers the transient "running" state and
+acts as a fallback when the database cannot be read.
 """
 
 from __future__ import annotations
@@ -23,29 +26,84 @@ DATASETS = (
     "house_prices",
 )
 
-# dataset -> {status, rows, error, updatedAt}
+# dataset -> {status, rows, error, areaType, updatedAt}. Mirror of the table for
+# the live "running" state and a fallback when the database cannot be read.
 _status: dict[str, dict] = {}
 
 
-def get_status() -> dict[str, dict]:
-    return _status
+def get_status(pool: ConnectionPool | None = None) -> dict[str, dict]:
+    """Return load status per dataset, preferring the persisted table.
+
+    Falls back to the process-local mirror when no pool is given or the read
+    fails, so the endpoint never errors just because the database is briefly
+    unavailable.
+    """
+    if pool is None:
+        return _status
+    try:
+        with pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT dataset, status, rows, error, area_type, updated_at "
+                "FROM reference_loads"
+            ).fetchall()
+    except Exception:
+        return _status
+    persisted = {
+        dataset: {
+            "status": status,
+            "rows": n,
+            "error": error,
+            "areaType": area_type,
+            "updatedAt": updated_at.isoformat() if updated_at else None,
+        }
+        for (dataset, status, n, error, area_type, updated_at) in rows
+    }
+    # A load in flight only exists in memory until it finishes; let it show.
+    for dataset, mem in _status.items():
+        if mem.get("status") == "running":
+            persisted[dataset] = mem
+    return persisted
 
 
 def _set(
-    dataset: str, status: str, *, rows: int | None = None, error: str | None = None
+    dataset: str,
+    status: str,
+    *,
+    pool: ConnectionPool | None = None,
+    rows: int | None = None,
+    error: str | None = None,
+    area_type: str | None = None,
 ) -> None:
     _status[dataset] = {
         "status": status,
         "rows": rows,
         "error": error,
+        "areaType": area_type,
         "updatedAt": datetime.now(UTC).isoformat(),
     }
+    if pool is None:
+        return
+    try:
+        with pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO reference_loads "
+                "(dataset, status, rows, error, area_type, updated_at) "
+                "VALUES (%s, %s, %s, %s, %s, now()) "
+                "ON CONFLICT (dataset) DO UPDATE SET "
+                "status = EXCLUDED.status, rows = EXCLUDED.rows, "
+                "error = EXCLUDED.error, area_type = EXCLUDED.area_type, "
+                "updated_at = now()",
+                [dataset, status, rows, error, area_type],
+            )
+    except Exception:
+        # Status persistence is best effort; the load itself is what matters.
+        pass
 
 
 def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
     """Run one dataset load. Records status; never raises (errors are captured)."""
-    _set(dataset, "running")
     area_type = params.get("areaType", "MSOA")
+    _set(dataset, "running", pool=pool, area_type=area_type)
     try:
         if dataset == "geo_boundaries":
             n = loaders.load_boundaries(pool, params["url"], area_type)
@@ -61,8 +119,8 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
             n = loaders.load_house_prices(pool, params["url"], area_type)
         else:
             raise ValueError(f"Unknown dataset: {dataset}")
-        _set(dataset, "loaded", rows=n)
+        _set(dataset, "loaded", pool=pool, rows=n, area_type=area_type)
     except KeyError as exc:
-        _set(dataset, "failed", error=f"Missing source URL: {exc}")
+        _set(dataset, "failed", pool=pool, error=f"Missing source URL: {exc}")
     except Exception as exc:  # capture download/parse/DB errors for the UI
-        _set(dataset, "failed", error=str(exc))
+        _set(dataset, "failed", pool=pool, error=str(exc))

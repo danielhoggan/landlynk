@@ -82,6 +82,25 @@ export default function SettingsPage() {
           </p>
         </div>
 
+        <label className="flex items-start justify-between gap-4 rounded-card border border-neutral-200 px-3 py-3">
+          <span>
+            <span className="block text-sm font-medium">
+              Local Authority (LA) area level
+            </span>
+            <span className="mt-0.5 block text-xs text-neutral-500">
+              MSOA is the default and recommended level. Turn this on to also
+              offer LA-level catchments in the form. Note income data is
+              MSOA-only, so LA income is not yet available.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={settings.enableLA}
+            onChange={(e) => update({ enableLA: e.target.checked })}
+            className="mt-1 h-5 w-5 shrink-0 accent-light-accent"
+          />
+        </label>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <NumberField
             label="Affordability multiple"
