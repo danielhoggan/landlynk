@@ -45,15 +45,103 @@ export async function getCatchment(id: string): Promise<Catchment> {
   return res.json();
 }
 
-export async function listCatchments(): Promise<CatchmentSummary[]> {
-  const res = await fetch("/api/catchments");
+export async function listCatchments(
+  archived = false,
+): Promise<CatchmentSummary[]> {
+  const res = await fetch(`/api/catchments?archived=${archived}`);
   if (!res.ok) throw new Error(`Could not load history (${res.status})`);
   return res.json();
 }
 
 export async function deleteCatchment(id: string): Promise<void> {
   const res = await fetch(`/api/catchments/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(`Could not delete (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 403) throw new Error("Only admins can delete runs");
+    throw new Error(`Could not delete (${res.status})`);
+  }
+}
+
+export async function archiveCatchment(
+  id: string,
+  archived: boolean,
+): Promise<void> {
+  const res = await fetch(`/api/catchments/${id}/archive`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ archived }),
+  });
+  if (!res.ok) throw new Error(`Could not archive (${res.status})`);
+}
+
+export async function getShares(id: string): Promise<string[]> {
+  const res = await fetch(`/api/catchments/${id}/shares`);
+  if (!res.ok) throw new Error(`Could not load shares (${res.status})`);
+  return res.json();
+}
+
+export async function addShares(id: string, emails: string[]): Promise<void> {
+  const res = await fetch(`/api/catchments/${id}/shares`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ emails }),
+  });
+  if (!res.ok) throw new Error(`Could not share (${res.status})`);
+}
+
+export async function removeShare(id: string, email: string): Promise<void> {
+  const res = await fetch(
+    `/api/catchments/${id}/shares/${encodeURIComponent(email)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw new Error(`Could not unshare (${res.status})`);
+}
+
+export interface AppUser {
+  email: string | null;
+  name: string | null;
+  role: string;
+}
+
+export async function getMe(): Promise<AppUser> {
+  const res = await fetch("/api/me");
+  if (!res.ok) throw new Error(`Could not load account (${res.status})`);
+  return res.json();
+}
+
+export async function getAccountSettings(): Promise<Record<
+  string,
+  unknown
+> | null> {
+  const res = await fetch("/api/me/settings");
+  if (!res.ok) throw new Error(`Could not load settings (${res.status})`);
+  const body = await res.json();
+  return body?.settings ?? null;
+}
+
+export async function saveAccountSettings(
+  settings: Record<string, unknown>,
+): Promise<void> {
+  const res = await fetch("/api/me/settings", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ settings }),
+  });
+  if (!res.ok) throw new Error(`Could not save settings (${res.status})`);
+}
+
+export async function listUsers(): Promise<AppUser[]> {
+  const res = await fetch("/api/users");
+  if (!res.ok) throw new Error(`Could not load users (${res.status})`);
+  return res.json();
+}
+
+export async function setUserRole(email: string, role: string): Promise<void> {
+  const res = await fetch(`/api/users/${encodeURIComponent(email)}/role`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ role }),
+  });
+  if (!res.ok) throw new Error(`Could not update role (${res.status})`);
 }
 
 export interface ReferenceStatus {

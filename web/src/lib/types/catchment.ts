@@ -100,6 +100,11 @@ export interface CatchmentSummary {
   status: JobStatus;
   areaCount: number;
   createdAt: string | null;
+  /** Owner email. Null for legacy runs created before ownership existed. */
+  owner?: string | null;
+  /** True when shared with the viewer by someone else (not their own run). */
+  shared?: boolean;
+  archived?: boolean;
 }
 
 export interface Catchment {

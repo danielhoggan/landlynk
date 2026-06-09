@@ -18,7 +18,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 import httpx
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel
 
 from . import refdata
@@ -133,6 +133,44 @@ def _check_admin(token: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
 
+def current_user(
+    x_user_email: str | None = Header(default=None),
+    x_user_name: str | None = Header(default=None),
+) -> dict:
+    """Resolve the caller from the SSO-gated web layer's forwarded headers.
+
+    The web service authenticates via Azure AD and forwards the signed-in
+    identity. The worker is private, so it trusts these headers. Each call
+    upserts the user, applying the admin bootstrap from settings.admin_emails.
+    """
+    if not x_user_email:
+        return {"email": None, "name": None, "role": "internal-user"}
+    email = x_user_email.strip().lower()
+    admin = email in settings.admin_email_set()
+    try:
+        return get_store().upsert_user(email, x_user_name, admin)
+    except Exception:  # never block a request on the user directory
+        _log.exception("upsert_user failed for %s", email)
+        return {
+            "email": email,
+            "name": x_user_name,
+            "role": "admin" if admin else "internal-user",
+        }
+
+
+def _require_admin(user: dict) -> None:
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+
+def _require_owner_or_admin(catchment_id: str, user: dict) -> None:
+    if user.get("role") == "admin":
+        return
+    owner = get_store().get_owner(catchment_id)
+    if owner is None or owner != user.get("email"):
+        raise HTTPException(status_code=403, detail="Not your catchment")
+
+
 @app.get("/admin/reference/status")
 def reference_status(x_admin_token: str | None = Header(default=None)) -> dict:
     _check_admin(x_admin_token)
@@ -162,7 +200,9 @@ def load_reference(
 
 @app.post("/jobs/catchment", status_code=202)
 def submit_catchment_job(
-    request: CatchmentJobRequest, background: BackgroundTasks
+    request: CatchmentJobRequest,
+    background: BackgroundTasks,
+    user: dict = Depends(current_user),
 ) -> dict[str, str]:
     job_id = str(uuid.uuid4())
     config = to_scoring_config(request)
@@ -174,15 +214,19 @@ def submit_catchment_job(
             development_name=request.development_name,
         ),
         config,
-        created_by="system",
+        created_by=user.get("email") or "system",
     )
     background.add_task(_run_job, job_id, request, config)
     return {"id": job_id}
 
 
 @app.get("/catchments")
-def list_catchments(limit: int = 100) -> list[dict]:
-    return get_store().list_catchments(limit)
+def list_catchments(
+    archived: bool = False, limit: int = 100, user: dict = Depends(current_user)
+) -> list[dict]:
+    return get_store().list_catchments(
+        user.get("email"), user.get("role") == "admin", archived=archived, limit=limit
+    )
 
 
 @app.get("/catchments/{catchment_id}")
@@ -194,9 +238,105 @@ def get_catchment(catchment_id: str) -> dict:
 
 
 @app.delete("/catchments/{catchment_id}", status_code=204)
-def delete_catchment(catchment_id: str) -> Response:
+def delete_catchment(catchment_id: str, user: dict = Depends(current_user)) -> Response:
+    # Only admins delete. Everyone else archives (hide, never destroy).
+    _require_admin(user)
     if not get_store().delete_catchment(catchment_id):
         raise HTTPException(status_code=404, detail="Catchment not found")
+    return Response(status_code=204)
+
+
+@app.post("/catchments/{catchment_id}/archive", status_code=204)
+def archive_catchment(
+    catchment_id: str, user: dict = Depends(current_user)
+) -> Response:
+    _require_owner_or_admin(catchment_id, user)
+    if not get_store().set_archived(catchment_id, True):
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    return Response(status_code=204)
+
+
+@app.post("/catchments/{catchment_id}/unarchive", status_code=204)
+def unarchive_catchment(
+    catchment_id: str, user: dict = Depends(current_user)
+) -> Response:
+    _require_owner_or_admin(catchment_id, user)
+    if not get_store().set_archived(catchment_id, False):
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    return Response(status_code=204)
+
+
+class ShareRequest(BaseModel):
+    emails: list[str]
+
+
+@app.get("/catchments/{catchment_id}/shares")
+def list_shares(catchment_id: str, user: dict = Depends(current_user)) -> list[str]:
+    _require_owner_or_admin(catchment_id, user)
+    return get_store().list_shares(catchment_id)
+
+
+@app.post("/catchments/{catchment_id}/shares", status_code=204)
+def add_shares(
+    catchment_id: str, request: ShareRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_owner_or_admin(catchment_id, user)
+    get_store().add_shares(catchment_id, request.emails)
+    return Response(status_code=204)
+
+
+@app.delete("/catchments/{catchment_id}/shares/{email}", status_code=204)
+def remove_share(
+    catchment_id: str, email: str, user: dict = Depends(current_user)
+) -> Response:
+    _require_owner_or_admin(catchment_id, user)
+    get_store().remove_share(catchment_id, email)
+    return Response(status_code=204)
+
+
+@app.get("/me")
+def get_me(user: dict = Depends(current_user)) -> dict:
+    return user
+
+
+@app.get("/me/settings")
+def get_my_settings(user: dict = Depends(current_user)) -> dict:
+    email = user.get("email")
+    settings_doc = get_store().get_settings(email) if email else None
+    return {"settings": settings_doc}
+
+
+@app.put("/me/settings", status_code=204)
+def put_my_settings(payload: dict, user: dict = Depends(current_user)) -> Response:
+    email = user.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="No user identity")
+    get_store().save_settings(email, payload.get("settings") or {})
+    return Response(status_code=204)
+
+
+@app.get("/admin/users")
+def admin_list_users(user: dict = Depends(current_user)) -> list[dict]:
+    _require_admin(user)
+    return get_store().list_users()
+
+
+class RoleRequest(BaseModel):
+    role: str
+
+
+_ROLES = {"admin", "internal-user", "external-user"}
+
+
+@app.put("/admin/users/{email}/role", status_code=204)
+def admin_set_role(
+    email: str, request: RoleRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_admin(user)
+    if request.role not in _ROLES:
+        raise HTTPException(status_code=400, detail=f"Unknown role: {request.role}")
+    if not get_store().set_role(email, request.role):
+        raise HTTPException(status_code=404, detail="User not found")
     return Response(status_code=204)
 
 

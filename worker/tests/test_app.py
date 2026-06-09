@@ -37,7 +37,16 @@ def client(monkeypatch):
     monkeypatch.setattr(app_module, "get_deps", lambda: None)
     # No database in the unit tests; status falls back to the in-memory mirror.
     monkeypatch.setattr(app_module, "get_pool", lambda: None)
-    return TestClient(app_module.app)
+    # The default caller is bootstrapped as admin (sees all, can delete).
+    monkeypatch.setattr(app_module.settings, "admin_emails", "tester@example.com")
+    return TestClient(
+        app_module.app,
+        headers={"X-User-Email": "tester@example.com", "X-User-Name": "Tester"},
+    )
+
+
+def _user_headers(email: str) -> dict[str, str]:
+    return {"X-User-Email": email, "X-User-Name": email.split("@")[0]}
 
 
 def _fake_result() -> CatchmentResult:
@@ -115,6 +124,98 @@ def test_job_lifecycle(client, monkeypatch):
 
 def test_unknown_catchment_404(client):
     assert client.get("/catchments/does-not-exist").status_code == 404
+
+
+def _submit(client, headers=None):
+    return client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "IP14 1AA", "developmentName": "A"},
+        headers=headers,
+    ).json()["id"]
+
+
+def test_history_is_private_then_shareable(client, monkeypatch):
+    # Alice's run is invisible to Bob until she shares it, then it appears in
+    # Bob's history flagged as shared.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    alice, bob = _user_headers("alice@x.com"), _user_headers("bob@x.com")
+
+    job_id = _submit(client, alice)
+    assert any(
+        c["id"] == job_id for c in client.get("/catchments", headers=alice).json()
+    )
+    assert not any(
+        c["id"] == job_id for c in client.get("/catchments", headers=bob).json()
+    )
+
+    # Only the owner (or an admin) can share.
+    assert (
+        client.post(
+            f"/catchments/{job_id}/shares", json={"emails": ["bob@x.com"]}, headers=bob
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/catchments/{job_id}/shares",
+            json={"emails": ["bob@x.com"]},
+            headers=alice,
+        ).status_code
+        == 204
+    )
+    bob_list = client.get("/catchments", headers=bob).json()
+    shared = next(c for c in bob_list if c["id"] == job_id)
+    assert shared["shared"] is True
+
+
+def test_archive_hides_from_default_history(client, monkeypatch):
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    alice = _user_headers("alice@x.com")
+    job_id = _submit(client, alice)
+
+    assert (
+        client.post(f"/catchments/{job_id}/archive", headers=alice).status_code == 204
+    )
+    assert not any(
+        c["id"] == job_id for c in client.get("/catchments", headers=alice).json()
+    )
+    archived = client.get("/catchments?archived=true", headers=alice).json()
+    assert any(c["id"] == job_id for c in archived)
+
+
+def test_only_admin_deletes(client, monkeypatch):
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    alice = _user_headers("alice@x.com")
+    job_id = _submit(client, alice)
+    # The owner is a plain user; delete is admin only.
+    assert client.delete(f"/catchments/{job_id}", headers=alice).status_code == 403
+    # The default fixture caller is an admin.
+    assert client.delete(f"/catchments/{job_id}").status_code == 204
+
+
+def test_roles_and_user_directory(client):
+    alice = _user_headers("alice@x.com")
+    # A normal user cannot list users or change roles.
+    assert client.get("/admin/users", headers=alice).status_code == 403
+    # The admin can, and promoting another user works.
+    client.get("/me", headers=alice)  # ensure alice exists in the directory
+    assert client.get("/admin/users").status_code == 200
+    assert (
+        client.put("/admin/users/alice@x.com/role", json={"role": "admin"}).status_code
+        == 204
+    )
+    assert client.get("/me", headers=alice).json()["role"] == "admin"
+
+
+def test_account_settings_roundtrip(client):
+    alice = _user_headers("alice@x.com")
+    client.get("/me", headers=alice)  # upsert the user first (settings FK)
+    assert client.get("/me/settings", headers=alice).json()["settings"] is None
+    body = {"settings": {"affordabilityMultiple": 5.0, "enableLA": True}}
+    assert client.put("/me/settings", json=body, headers=alice).status_code == 204
+    assert (
+        client.get("/me/settings", headers=alice).json()["settings"] == body["settings"]
+    )
 
 
 def test_shortlist_export(client, monkeypatch):

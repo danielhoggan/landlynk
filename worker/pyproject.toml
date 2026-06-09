@@ -30,6 +30,14 @@ ignore = ["E501"]
 # psycopg cursor and connection objects are dynamically typed at the DB boundary.
 "src/landlynk_worker/pipeline/reference.py" = ["ANN401"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI uses callables in argument defaults by design (dependency injection).
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Query",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

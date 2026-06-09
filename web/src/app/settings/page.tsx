@@ -6,15 +6,17 @@ import { Settings, Check } from "lucide-react";
 import {
   DEFAULT_SETTINGS,
   loadSettings,
-  saveSettings,
+  saveSettingsLocal,
   type AppSettings,
 } from "@/lib/settings";
+import { getAccountSettings, saveAccountSettings } from "@/lib/client";
 
 // Settings: the signed-in account, and the editable default assumptions the
 // catchment form starts from (affordability multiple, overlap threshold and
-// scoring weights). Defaults are stored in the browser; the values actually
-// used are saved with each catchment by the worker, so any ranking stays
-// reproducible regardless of later changes here.
+// scoring weights). Saved to the account so they follow the user across
+// devices, with a local cache so the form seeds without an async round trip.
+// The values actually used are stored with each catchment by the worker, so any
+// ranking stays reproducible regardless of later changes here.
 
 const WEIGHT_LABELS: [keyof AppSettings["weights"], string][] = [
   ["income_fit", "Income fit"],
@@ -28,9 +30,18 @@ export default function SettingsPage() {
   const { data: session } = useSession();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    // Seed from the local cache immediately, then refresh from the account.
     setSettings(loadSettings());
+    getAccountSettings()
+      .then((s) => {
+        if (s) setSettings({ ...DEFAULT_SETTINGS, ...(s as Partial<AppSettings>) });
+      })
+      .catch(() => {
+        /* keep the local cache */
+      });
   }, []);
 
   const update = (patch: Partial<AppSettings>) => {
@@ -42,14 +53,24 @@ export default function SettingsPage() {
     setSaved(false);
   };
 
-  const onSave = () => {
-    saveSettings(settings);
-    setSaved(true);
-  };
+  async function persist(next: AppSettings) {
+    setSaving(true);
+    saveSettingsLocal(next);
+    try {
+      await saveAccountSettings(next as unknown as Record<string, unknown>);
+      setSaved(true);
+    } catch {
+      // Saved locally; the account write failed (offline or worker down).
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const onSave = () => persist(settings);
   const onReset = () => {
     setSettings(DEFAULT_SETTINGS);
-    saveSettings(DEFAULT_SETTINGS);
-    setSaved(true);
+    persist(DEFAULT_SETTINGS);
   };
 
   return (
@@ -138,10 +159,11 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={onSave}
-            className="flex items-center gap-2 rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
+            disabled={saving}
+            className="flex items-center gap-2 rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
           >
-            {saved ? <Check size={16} /> : null}
-            {saved ? "Saved" : "Save defaults"}
+            {saved && !saving ? <Check size={16} /> : null}
+            {saving ? "Saving..." : saved ? "Saved" : "Save defaults"}
           </button>
           <button
             type="button"

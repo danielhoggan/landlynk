@@ -56,7 +56,12 @@ export function loadSettings(): AppSettings {
   }
 }
 
-export function saveSettings(settings: AppSettings): void {
+/** Write the local cache. The account is the source of truth; this cache lets
+ * the catchment form seed synchronously without an async round trip. */
+export function saveSettingsLocal(settings: AppSettings): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY, JSON.stringify(settings));
 }
+
+// Backwards-compatible alias.
+export const saveSettings = saveSettingsLocal;

@@ -5,11 +5,14 @@ import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 import { Logo } from "./Logo";
 import { NAV_ITEMS, isActive } from "./navItems";
+import { useUser } from "@/lib/userContext";
 
 // Persistent, fixed sidebar for desktop. Hidden on mobile, where the burger
 // drawer is used instead.
 export function Sidebar() {
   const pathname = usePathname();
+  const { isAdmin } = useUser();
+  const items = NAV_ITEMS.filter((i) => !i.adminOnly || isAdmin);
   return (
     <aside className="fixed left-0 top-0 z-30 hidden h-full w-60 flex-col border-r border-neutral-200 bg-white px-4 py-5 md:flex">
       <a href="/" className="mb-8 px-2">
@@ -17,7 +20,7 @@ export function Sidebar() {
       </a>
       <nav aria-label="Main navigation">
         <ul className="space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const active = isActive(pathname, item.href);
             return (

@@ -61,6 +61,10 @@ DEPLOYMENT.md. Rough order below.
       this is the default; set it only to point at a self-hosted ORS or Valhalla.
 - [ ] `WORKER_PERSIST_RESULTS` = `true`. Optional, default is true.
 - [ ] `WORKER_DEFAULT_DRIVE_TIME_MINUTES` = `30`. Optional, default is 30.
+- [ ] `WORKER_ADMIN_EMAILS` = comma-separated emails always granted the admin
+      role on sign in, e.g. `danielhoggan@gmail.com`. Bootstraps the first
+      admin, who can then set other users' roles from the Users page. Required
+      to have at least one admin (only admins can delete runs and manage roles).
 
 ### Web service variables (set these exact names on the `web` service)
 

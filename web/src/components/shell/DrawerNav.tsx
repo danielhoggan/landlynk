@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Logo } from "./Logo";
 import { NAV_ITEMS, isActive } from "./navItems";
+import { useUser } from "@/lib/userContext";
 
 interface DrawerNavProps {
   open: boolean;
@@ -16,6 +17,8 @@ interface DrawerNavProps {
 // Desktop uses the persistent Sidebar instead.
 export function DrawerNav({ open, onClose }: DrawerNavProps) {
   const pathname = usePathname();
+  const { isAdmin } = useUser();
+  const items = NAV_ITEMS.filter((i) => !i.adminOnly || isAdmin);
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -51,7 +54,7 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
           </button>
         </div>
         <ul className="space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             const active = isActive(pathname, item.href);
             return (

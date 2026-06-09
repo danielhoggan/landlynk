@@ -29,5 +29,12 @@ class Settings(BaseSettings):
     # networking) and the web caller is SSO-gated, so this is defence in depth.
     admin_token: str = ""
 
+    # Comma-separated emails always granted the admin role on sign in. Bootstraps
+    # the first admin, who can then promote others from the Users page.
+    admin_emails: str = ""
+
+    def admin_email_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
+
 
 settings = Settings()

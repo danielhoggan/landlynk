@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
-import { requireSession } from "@/lib/requireSession";
+import { requireSession, sessionUser } from "@/lib/requireSession";
 import { listCatchments, submitCatchmentJob } from "@/lib/workerClient";
 
-// GET /api/catchments. List recent catchments for the history view.
-export async function GET() {
+// GET /api/catchments. List the caller's catchments (own plus shared) for the
+// history view. Pass ?archived=true for the archived area.
+export async function GET(request: Request) {
   const session = await requireSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  return NextResponse.json(await listCatchments());
+  const archived =
+    new URL(request.url).searchParams.get("archived") === "true";
+  return NextResponse.json(
+    await listCatchments(sessionUser(session), archived),
+  );
 }
 
 // POST /api/catchments. Submit a catchment job. Thin handler: auth, then hand
@@ -34,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const job = await submitCatchmentJob(input);
+    const job = await submitCatchmentJob(input, sessionUser(session));
     return NextResponse.json(job, { status: 202 });
   } catch (err) {
     // The worker (or the call to it) failed. Pass the detail through so the UI
