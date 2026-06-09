@@ -182,6 +182,40 @@ def _read_xlsx(content: bytes) -> list[dict]:
     return [dict(zip(header, v, strict=False)) for v in it]
 
 
+def _read_xls(content: bytes) -> list[dict]:
+    """Read a legacy .xls workbook (e.g. ONS HPSSA) into records.
+
+    Mirrors _read_xlsx: find the header row by its shape, then map rows to dicts.
+    """
+    import xlrd
+
+    wb = xlrd.open_workbook(file_contents=content)
+    for sheet in wb.sheets():
+        rows = [
+            [sheet.cell_value(r, c) for c in range(sheet.ncols)]
+            for r in range(sheet.nrows)
+        ]
+        for i, row in enumerate(rows[:40]):
+            cells = [str(c).strip() if c is not None else "" for c in row]
+            if _looks_like_header(cells):
+                records = [dict(zip(cells, r, strict=False)) for r in rows[i + 1 :]]
+                records = [r for r in records if any(v != "" for v in r.values())]
+                if records:
+                    return records
+    sheet = wb.sheet_by_index(0)
+    header = [str(sheet.cell_value(0, c)) for c in range(sheet.ncols)]
+    return [
+        dict(
+            zip(
+                header,
+                [sheet.cell_value(r, c) for c in range(sheet.ncols)],
+                strict=False,
+            )
+        )
+        for r in range(1, sheet.nrows)
+    ]
+
+
 # --- Transforms to rows ------------------------------------------------------
 
 _BOUNDARY_KEYS = {
@@ -472,11 +506,8 @@ def load_income(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
 def load_house_prices(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
     low = url.lower()
     if low.endswith(".xls"):
-        raise ValueError(
-            "ONS publishes HPSSA as a legacy .xls which is not supported. "
-            "Download it, save as .xlsx or CSV, and host that URL."
-        )
-    if low.endswith((".xlsx", ".xlsm")):
+        records = _read_xls(_get_bytes(url))
+    elif low.endswith((".xlsx", ".xlsm")):
         records = _read_xlsx(_get_bytes(url))
     else:
         records, _ = _read_csv(_get_text(url))
