@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import zipfile
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -360,10 +361,12 @@ def _income_rows(records: list[dict], area_type: str) -> list[dict]:
 
 
 def _house_price_rows(records: list[dict], area_type: str) -> list[dict]:
-    """ONS HPSSA median price paid by area. The price is the last year column.
+    """ONS HPSSA median price paid by area, taking the most recent period.
 
-    HPSSA sheets carry a column per period; we take the rightmost numeric value
-    column (the most recent) after detecting the area code column.
+    HPSSA sheets carry one column per rolling year, running chronologically from
+    1995 (e.g. "Year ending Dec 1995" ... "Year ending Sep 2023"). We must take
+    the most recent (rightmost dated) column, not the first match, or prices read
+    decades out of date.
     """
     if not records:
         return []
@@ -373,11 +376,13 @@ def _house_price_rows(records: list[dict], area_type: str) -> list[dict]:
     )
     if code_col is None:
         raise ValueError(f"No area code column found in {fieldnames}")
-    # Prefer an explicit median price column; else the last column with a year.
-    price_col = t.find_column(fieldnames, ("year ending", "median price", "price"))
+    # A single explicit median price column (some CSV variants), else the latest
+    # dated period column. Dated columns are ordered oldest to newest left to
+    # right, so the last one holding a 19xx/20xx year is the most recent price.
+    price_col = t.find_column(fieldnames, ("median price", "median_price"))
     if price_col is None:
-        year_cols = [f for f in fieldnames if any(c.isdigit() for c in str(f))]
-        price_col = year_cols[-1] if year_cols else None
+        dated = [f for f in fieldnames if re.search(r"(?:19|20)\d{2}", str(f))]
+        price_col = dated[-1] if dated else t.find_column(fieldnames, ("price",))
     rows: list[dict] = []
     for record in records:
         code = str(record.get(code_col) or "").strip()

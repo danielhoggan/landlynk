@@ -120,3 +120,24 @@ def test_read_csv_handles_bom_and_semicolons():
     rows, code_field = loaders._read_csv(text)
     assert code_field == "geography code"
     assert rows[0]["geography code"] == "E1"
+
+
+def test_house_price_rows_takes_most_recent_year():
+    # HPSSA sheets run oldest to newest left to right; we must take the latest,
+    # not the first match, or prices read decades out of date (the £46k bug).
+    record = {
+        "MSOA code": "E02005592",
+        "MSOA name": "Norwich 009",
+        "Year ending Dec 1995": "46000",
+        "Year ending Dec 2010": "175000",
+        "Year ending Sep 2023": "265000",
+    }
+    rows = loaders._house_price_rows([record], "MSOA")
+    assert rows[0]["area_code"] == "E02005592"
+    assert rows[0]["median_price"] == 265000.0
+
+
+def test_house_price_rows_uses_explicit_median_column():
+    record = {"MSOA code": "E1", "Median price": "300000"}
+    rows = loaders._house_price_rows([record], "MSOA")
+    assert rows[0]["median_price"] == 300000.0
