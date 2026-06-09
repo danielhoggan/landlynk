@@ -99,6 +99,21 @@ export async function removeShare(id: string, email: string): Promise<void> {
   if (!res.ok) throw new Error(`Could not unshare (${res.status})`);
 }
 
+/** Download a combined Battlecard (selection or whole catchment) as a blob. */
+export async function combinedExport(
+  id: string,
+  format: "pdf" | "pptx",
+  body: { areaCodes?: string[]; scope: "selection" | "whole" },
+): Promise<Blob> {
+  const res = await fetch(`/api/catchments/${id}/combined/${format}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Could not build combined Battlecard (${res.status})`);
+  return res.blob();
+}
+
 export interface AppUser {
   email: string | null;
   name: string | null;

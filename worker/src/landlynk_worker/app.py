@@ -443,6 +443,65 @@ def shortlist_pptx(
     )
 
 
+class CombineRequest(BaseModel):
+    """Areas to merge into one aggregate Battlecard. Empty means the whole catchment."""
+
+    area_codes: list[str] = []
+    scope: str = "selection"  # "selection" or "whole"
+
+
+def _combined_card(catchment_id: str, request: CombineRequest) -> Battlecard:
+    from .battlecard.combine import build_combined_battlecard
+
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    areas = catchment.get("areas", [])
+    names = {a["areaCode"]: a.get("name", a["areaCode"]) for a in areas}
+    if request.scope == "whole" or not request.area_codes:
+        codes = [a["areaCode"] for a in areas]
+    else:
+        codes = request.area_codes
+    payloads = [
+        p for c in codes if (p := store.get_battlecard(catchment_id, c)) is not None
+    ]
+    if not payloads:
+        raise HTTPException(status_code=404, detail="No areas to combine")
+    config = (catchment.get("input") or {}).get("config")
+    return build_combined_battlecard(payloads, names, config)
+
+
+@app.post("/catchments/{catchment_id}/combined/pdf")
+def combined_pdf(
+    catchment_id: str, request: CombineRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_access(catchment_id, user)
+    card = _combined_card(catchment_id, request)
+    return Response(
+        content=render_battlecard_pdf(card),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="landlynk-combined.pdf"'},
+    )
+
+
+@app.post("/catchments/{catchment_id}/combined/pptx")
+def combined_pptx(
+    catchment_id: str, request: CombineRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_access(catchment_id, user)
+    card = _combined_card(catchment_id, request)
+    return Response(
+        content=render_battlecard_pptx(card),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
+        headers={
+            "Content-Disposition": 'attachment; filename="landlynk-combined.pptx"'
+        },
+    )
+
+
 @app.get("/catchments/{catchment_id}/battlecards/{area_code}/pdf")
 def get_battlecard_pdf(
     catchment_id: str, area_code: str, user: dict = Depends(current_user)

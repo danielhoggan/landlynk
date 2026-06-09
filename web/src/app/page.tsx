@@ -11,7 +11,12 @@ import type {
   InputKind,
 } from "@/lib/types/catchment";
 import type { Battlecard } from "@/lib/types/battlecard";
-import { getBattlecard, pollCatchment, submitCatchment } from "@/lib/client";
+import {
+  combinedExport,
+  getBattlecard,
+  pollCatchment,
+  submitCatchment,
+} from "@/lib/client";
 import {
   SIGNAL_TAGS,
   METRIC_FILTERS,
@@ -196,6 +201,35 @@ export default function HomePage() {
       setStatus("Could not build the shortlist export.");
     } finally {
       setExporting(null);
+    }
+  }
+
+  // Combine areas into one aggregate Battlecard: the starred selection, or the
+  // whole catchment. Distinct from the shortlist deck (one slide per area).
+  const [combining, setCombining] = useState<string | null>(null);
+  async function exportCombined(
+    format: "pdf" | "pptx",
+    scope: "selection" | "whole",
+  ) {
+    if (!catchment) return;
+    setCombining(`${scope}-${format}`);
+    try {
+      const blob = await combinedExport(catchment.id, format, {
+        scope,
+        areaCodes: scope === "selection" ? Array.from(starred) : undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `landlynk-combined.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setStatus("Could not build the combined Battlecard.");
+    } finally {
+      setCombining(null);
     }
   }
 
@@ -604,19 +638,41 @@ export default function HomePage() {
                     type="button"
                     onClick={() => exportShortlist("pdf")}
                     disabled={exporting !== null}
+                    title="One slide per starred area"
                     className="flex items-center gap-2 rounded-card bg-light-accent px-3 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
                   >
                     <Download size={16} />
-                    {exporting === "pdf" ? "Building..." : "Shortlist PDF"}
+                    {exporting === "pdf" ? "..." : "Deck PDF"}
                   </button>
                   <button
                     type="button"
                     onClick={() => exportShortlist("pptx")}
                     disabled={exporting !== null}
+                    title="One slide per starred area"
                     className="flex items-center gap-2 rounded-card border border-light-accent px-3 py-2 text-sm font-semibold text-light-accent transition hover:bg-light-accent/5 disabled:opacity-50"
                   >
                     <Download size={16} />
-                    {exporting === "pptx" ? "Building..." : "Shortlist PPTX"}
+                    {exporting === "pptx" ? "..." : "Deck PPTX"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => exportCombined("pdf", "selection")}
+                    disabled={combining !== null}
+                    title="Merge starred areas into one Battlecard"
+                    className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    <Download size={16} />
+                    {combining === "selection-pdf" ? "..." : "Combine PDF"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => exportCombined("pptx", "selection")}
+                    disabled={combining !== null}
+                    title="Merge starred areas into one Battlecard"
+                    className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    <Download size={16} />
+                    {combining === "selection-pptx" ? "..." : "Combine PPTX"}
                   </button>
                   <button
                     type="button"
@@ -630,11 +686,21 @@ export default function HomePage() {
                   </button>
                 </>
               )}
+              <button
+                type="button"
+                onClick={() => exportCombined("pptx", "whole")}
+                disabled={combining !== null}
+                title="One Battlecard aggregating the whole catchment"
+                className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+              >
+                <Download size={16} />
+                {combining === "whole-pptx" ? "..." : "Whole catchment"}
+              </button>
               <a
                 href={`/api/catchments/${catchment.id}/kml`}
                 className="flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
               >
-                <Download size={16} /> Download KML
+                <Download size={16} /> KML
               </a>
             </div>
           </div>

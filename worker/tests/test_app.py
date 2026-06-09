@@ -264,6 +264,21 @@ def test_shortlist_export(client, monkeypatch):
     assert pptx.content[:2] == b"PK"
 
 
+def test_combined_battlecard_export(client, monkeypatch):
+    # Merge the catchment's areas into one aggregate Battlecard (PDF and PPTX).
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job_id = _submit(client)
+    whole = client.post(f"/catchments/{job_id}/combined/pdf", json={"scope": "whole"})
+    assert whole.status_code == 200
+    assert whole.content[:5] == b"%PDF-"
+    selection = client.post(
+        f"/catchments/{job_id}/combined/pptx",
+        json={"areaCodes": ["E02000001"], "scope": "selection"},
+    )
+    assert selection.status_code == 200
+    assert selection.content[:2] == b"PK"
+
+
 def test_shortlist_export_empty_selection_404(client, monkeypatch):
     monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
     job_id = client.post(
