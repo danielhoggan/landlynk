@@ -52,7 +52,8 @@ export function Sidebar() {
             Product of Mediaworks
           </p>
           <p className="mt-1 text-xs text-neutral-400">
-            The Geographic Intelligence Engine. Open data, explainable rankings.
+            LandLynk. The Geographic Intelligence Engine. Open data, explainable
+            rankings.
           </p>
         </div>
       </div>

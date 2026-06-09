@@ -85,6 +85,10 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
             <p className="text-xs font-medium text-neutral-500">
               Product of Mediaworks
             </p>
+            <p className="mt-1 text-xs text-neutral-400">
+              LandLynk. The Geographic Intelligence Engine. Open data,
+              explainable rankings.
+            </p>
           </div>
         </div>
       </nav>
