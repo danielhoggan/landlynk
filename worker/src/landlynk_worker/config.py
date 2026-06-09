@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,10 +36,23 @@ class Settings(BaseSettings):
 
     # AI provider keys for the Local Area Profile enrichment. Set the providers
     # you use in Railway; the available models in the app reflect which keys are
-    # present. An admin picks the default model from those.
-    anthropic_api_key: str = ""
-    openai_api_key: str = ""
-    google_api_key: str = ""
+    # present. An admin picks the default model from those. Each accepts either
+    # the WORKER_ prefixed name or the provider's conventional name (e.g.
+    # OPENAI_API_KEY), so the keys most SDKs expect work without renaming.
+    anthropic_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WORKER_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"),
+    )
+    openai_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WORKER_OPENAI_API_KEY", "OPENAI_API_KEY"),
+    )
+    google_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "WORKER_GOOGLE_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"
+        ),
+    )
 
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}

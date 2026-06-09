@@ -62,11 +62,13 @@ DEPLOYMENT.md. Rough order below.
 - [ ] `WORKER_PERSIST_RESULTS` = `true`. Optional, default is true.
 - [ ] `WORKER_DEFAULT_DRIVE_TIME_MINUTES` = `30`. Optional, default is 30.
 - [ ] AI Local Area Profile keys (optional, enables the amenities lookup). Add
-      any you use; the AI models admin page only offers providers with a key set:
-  - `WORKER_ANTHROPIC_API_KEY` = your Anthropic key.
-  - `WORKER_OPENAI_API_KEY` = your OpenAI key.
-  - `WORKER_GOOGLE_API_KEY` = your Google (Gemini) key.
-      Then pick the default model on the in-app AI models page (admin only).
+      any you use; the AI models admin page only offers providers with a key set.
+      Either the WORKER_ prefixed name or the provider's conventional name works:
+  - Anthropic: `WORKER_ANTHROPIC_API_KEY` or `ANTHROPIC_API_KEY`.
+  - OpenAI: `WORKER_OPENAI_API_KEY` or `OPENAI_API_KEY`.
+  - Google (Gemini): `WORKER_GOOGLE_API_KEY`, `GOOGLE_API_KEY` or `GEMINI_API_KEY`.
+      Set these on the worker service, then redeploy/restart it so the new values
+      load. Then pick the default model on the in-app AI models page (admin only).
 - [ ] `WORKER_ADMIN_EMAILS` = comma-separated emails always granted the admin
       role on sign in, e.g. `danielhoggan@gmail.com`. Bootstraps the first
       admin, who can then set other users' roles from the Users page. Required
