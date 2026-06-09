@@ -30,6 +30,7 @@ import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
 import { AreaProfilePanel } from "@/components/AreaProfilePanel";
 import { SEGMENTS } from "@/lib/segments";
+import { useUser } from "@/lib/userContext";
 
 // Scoring signal weights exposed in the config panel. Keys are snake_case to
 // match the scoring engine (SCOPING.md Section 8).
@@ -45,6 +46,7 @@ const WEIGHT_LABELS: [string, string][] = [
 // catchment, and the interactive map with ranked clickable areas renders here
 // (SCOPING.md Section 3.2).
 export default function HomePage() {
+  const { isAdmin } = useUser();
   const [kind, setKind] = useState<InputKind>("postcode");
   const [value, setValue] = useState("");
   const [developmentName, setDevelopmentName] = useState("");
@@ -481,6 +483,15 @@ export default function HomePage() {
                     Fills the brief and themes exports with the brand colour.
                   </p>
                 </div>
+              )}
+              {profiles.length === 0 && isAdmin && (
+                <p className="text-xs text-neutral-400">
+                  No builder profiles yet.{" "}
+                  <a href="/builders" className="text-light-accent underline">
+                    Create one in Builders
+                  </a>{" "}
+                  to fill the brief and theme exports in one click.
+                </p>
               )}
               <div>
                 <span className="mb-1.5 block text-xs font-medium text-neutral-500">
