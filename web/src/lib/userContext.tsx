@@ -16,18 +16,35 @@ const UserContext = createContext<UserContextValue>({
   loading: true,
 });
 
+const ROLE_KEY = "landlynk.role";
+
 // Loads the signed-in account once and shares role across the app, so the nav
-// and pages can gate admin features. Also hydrates the local settings cache
-// from the account so the catchment form seeds from per-account defaults.
+// and pages can gate admin features. The role is cached in localStorage and used
+// as the initial value, so admin nav items do not flash in on every navigation
+// (each page load re-mounts this provider). Also hydrates the local settings
+// cache from the account so the catchment form seeds from per-account defaults.
+function cachedRole(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(ROLE_KEY);
+}
+
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AppUser | null>(null);
+  const [user, setUser] = useState<AppUser | null>(() => {
+    const role = cachedRole();
+    return role ? { email: null, name: null, role } : null;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     getMe()
       .then((u) => {
-        if (active) setUser(u);
+        if (active) {
+          setUser(u);
+          if (typeof window !== "undefined" && u.role) {
+            window.localStorage.setItem(ROLE_KEY, u.role);
+          }
+        }
       })
       .catch(() => {
         /* unauthenticated or worker down; nav simply hides admin items */

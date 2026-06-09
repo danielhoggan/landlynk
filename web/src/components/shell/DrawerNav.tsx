@@ -18,7 +18,30 @@ interface DrawerNavProps {
 export function DrawerNav({ open, onClose }: DrawerNavProps) {
   const pathname = usePathname();
   const { isAdmin } = useUser();
-  const items = NAV_ITEMS.filter((i) => !i.adminOnly || isAdmin);
+  const mainItems = NAV_ITEMS.filter((i) => !i.adminOnly);
+  const adminItems = isAdmin ? NAV_ITEMS.filter((i) => i.adminOnly) : [];
+
+  const renderItem = (item: (typeof NAV_ITEMS)[number]) => {
+    const Icon = item.icon;
+    const active = isActive(pathname, item.href);
+    return (
+      <li key={item.href}>
+        <a
+          href={item.href}
+          onClick={onClose}
+          aria-current={active ? "page" : undefined}
+          className={`flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition-colors ${
+            active
+              ? "bg-light-accent/10 text-light-accent"
+              : "text-neutral-700 hover:bg-neutral-100"
+          }`}
+        >
+          <Icon size={18} />
+          {item.label}
+        </a>
+      </li>
+    );
+  };
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -53,29 +76,15 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
             <X size={22} />
           </button>
         </div>
-        <ul className="space-y-1">
-          {items.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(pathname, item.href);
-            return (
-              <li key={item.href}>
-                <a
-                  href={item.href}
-                  onClick={onClose}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-light-accent/10 text-light-accent"
-                      : "text-neutral-700 hover:bg-neutral-100"
-                  }`}
-                >
-                  <Icon size={18} />
-                  {item.label}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="space-y-1">{mainItems.map(renderItem)}</ul>
+        {adminItems.length > 0 && (
+          <>
+            <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+              Admin
+            </p>
+            <ul className="space-y-1">{adminItems.map(renderItem)}</ul>
+          </>
+        )}
         <div className="mt-auto space-y-3">
           <button
             type="button"
