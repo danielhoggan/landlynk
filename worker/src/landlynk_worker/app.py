@@ -532,6 +532,9 @@ class BuilderRequest(BaseModel):
     group_id: str = Field(alias="groupId")
     name: str
     theme_heading: str = Field(default="#4169E1", alias="themeHeading")
+    theme_secondary: str | None = Field(default=None, alias="themeSecondary")
+    theme_accent: str | None = Field(default=None, alias="themeAccent")
+    fonts: list[str] = []
 
     model_config = {"populate_by_name": True}
 
@@ -551,7 +554,15 @@ def admin_create_builder(
     _require_admin(user)
     builder_id = str(uuid.uuid4())
     get_store().create_builder(
-        builder_id, request.group_id, request.name, request.theme_heading
+        {
+            "id": builder_id,
+            "groupId": request.group_id,
+            "name": request.name,
+            "themeHeading": request.theme_heading,
+            "themeSecondary": request.theme_secondary,
+            "themeAccent": request.theme_accent,
+            "fonts": request.fonts,
+        }
     )
     _audit(
         user,
@@ -571,6 +582,64 @@ def admin_delete_builder(
     get_store().delete_builder(builder_id)
     _audit(user, "builder.brand.delete", target_type="brand", target_id=builder_id)
     return Response(status_code=204)
+
+
+class LogoRequest(BaseModel):
+    """A base64 logo upload for a brand (data only, no data: URL prefix)."""
+
+    filename: str = "logo.png"
+    content: str  # base64
+
+
+@app.post("/admin/builders/{builder_id}/logo")
+def admin_upload_logo(
+    builder_id: str, request: LogoRequest, user: dict = Depends(current_user)
+) -> dict:
+    import base64
+
+    from . import assets
+
+    _require_admin(user)
+    builder = next(
+        (b for b in get_store().list_builders() if b["id"] == builder_id), None
+    )
+    if builder is None:
+        raise HTTPException(status_code=404, detail="Brand not found")
+    try:
+        raw = base64.b64decode(request.content)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid logo data") from exc
+    ext = request.filename.rsplit(".", 1)[-1] if "." in request.filename else "png"
+    path = assets.commit_logo(builder["name"], raw, ext)
+    if path is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Logo storage not configured. Set the GitHub token.",
+        )
+    get_store().set_builder_logo(builder_id, path)
+    _audit(user, "builder.brand.logo", target_type="brand", target_id=builder_id)
+    return {"logoPath": path}
+
+
+@app.get("/builders/{builder_id}/logo")
+def get_builder_logo(builder_id: str, user: dict = Depends(current_user)) -> Response:
+    from . import assets
+
+    builder = next(
+        (b for b in get_store().list_builders() if b["id"] == builder_id), None
+    )
+    if builder is None or not builder.get("logoPath"):
+        raise HTTPException(status_code=404, detail="No logo")
+    data = assets.fetch_logo(builder["logoPath"])
+    if data is None:
+        raise HTTPException(status_code=404, detail="Logo unavailable")
+    ext = builder["logoPath"].rsplit(".", 1)[-1].lower()
+    media = (
+        "image/svg+xml"
+        if ext == "svg"
+        else f"image/{'jpeg' if ext in ('jpg','jpeg') else ext}"
+    )
+    return Response(content=data, media_type=media)
 
 
 class ProfileRequest(BaseModel):

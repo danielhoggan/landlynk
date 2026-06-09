@@ -177,10 +177,9 @@ class Storage(Protocol):
     def llm_usage_count(self, group_id: str | None, period: str) -> int: ...
     def record_audit(self, entry: dict) -> None: ...
     def list_audit(self, filters: dict, limit: int = 500) -> list[dict]: ...
-    def create_builder(
-        self, builder_id: str, group_id: str, name: str, theme_heading: str
-    ) -> None: ...
+    def create_builder(self, builder: dict) -> None: ...
     def list_builders(self, group_id: str | None = None) -> list[dict]: ...
+    def set_builder_logo(self, builder_id: str, path: str) -> bool: ...
     def delete_builder(self, builder_id: str) -> bool: ...
     def upsert_builder_profile(self, profile: dict) -> None: ...
     def get_builder_profile(self, profile_id: str) -> dict | None: ...
@@ -461,21 +460,21 @@ class InMemoryStore:
             self.delete_builder(b["id"])
         return existed
 
-    def create_builder(
-        self, builder_id: str, group_id: str, name: str, theme_heading: str
-    ) -> None:
-        self._builders[builder_id] = {
-            "id": builder_id,
-            "groupId": group_id,
-            "name": name,
-            "themeHeading": theme_heading,
-        }
+    def create_builder(self, builder: dict) -> None:
+        self._builders[builder["id"]] = {"fonts": [], "logoPath": None, **builder}
 
     def list_builders(self, group_id: str | None = None) -> list[dict]:
         builders = self._builders.values()
         if group_id is not None:
             builders = [b for b in builders if b["groupId"] == group_id]
         return sorted(builders, key=lambda b: b["name"])
+
+    def set_builder_logo(self, builder_id: str, path: str) -> bool:
+        builder = self._builders.get(builder_id)
+        if builder is None:
+            return False
+        builder["logoPath"] = path
+        return True
 
     def delete_builder(self, builder_id: str) -> bool:
         existed = self._builders.pop(builder_id, None) is not None
@@ -506,7 +505,11 @@ class InMemoryStore:
                 {
                     **p,
                     "builderName": builder["name"],
-                    "themeHeading": builder["themeHeading"],
+                    "themeHeading": builder.get("themeHeading"),
+                    "themeSecondary": builder.get("themeSecondary"),
+                    "themeAccent": builder.get("themeAccent"),
+                    "logoPath": builder.get("logoPath"),
+                    "fonts": builder.get("fonts", []),
                     "groupId": builder["groupId"],
                     "groupName": group.get("name", ""),
                 }
@@ -968,19 +971,33 @@ class PostgresStore:
             for r in rows
         ]
 
-    def create_builder(
-        self, builder_id: str, group_id: str, name: str, theme_heading: str
-    ) -> None:
+    def create_builder(self, builder: dict) -> None:
         with self._pool.connection() as conn:
             conn.execute(
-                "INSERT INTO builder (id, group_id, name, theme_heading) "
-                "VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET "
-                "name = EXCLUDED.name, theme_heading = EXCLUDED.theme_heading",
-                [builder_id, group_id, name, theme_heading],
+                "INSERT INTO builder (id, group_id, name, theme_heading, "
+                "theme_secondary, theme_accent, fonts, logo_path) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, "
+                "theme_heading = EXCLUDED.theme_heading, "
+                "theme_secondary = EXCLUDED.theme_secondary, "
+                "theme_accent = EXCLUDED.theme_accent, fonts = EXCLUDED.fonts",
+                [
+                    builder["id"],
+                    builder["groupId"],
+                    builder["name"],
+                    builder.get("themeHeading"),
+                    builder.get("themeSecondary"),
+                    builder.get("themeAccent"),
+                    json.dumps(builder.get("fonts", [])),
+                    builder.get("logoPath"),
+                ],
             )
 
     def list_builders(self, group_id: str | None = None) -> list[dict]:
-        sql = "SELECT id, group_id, name, theme_heading FROM builder"
+        sql = (
+            "SELECT id, group_id, name, theme_heading, theme_secondary, "
+            "theme_accent, fonts, logo_path FROM builder"
+        )
         params: list = []
         if group_id is not None:
             sql += " WHERE group_id = %s"
@@ -989,9 +1006,25 @@ class PostgresStore:
         with self._pool.connection() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [
-            {"id": r[0], "groupId": r[1], "name": r[2], "themeHeading": r[3]}
+            {
+                "id": r[0],
+                "groupId": r[1],
+                "name": r[2],
+                "themeHeading": r[3],
+                "themeSecondary": r[4],
+                "themeAccent": r[5],
+                "fonts": r[6] or [],
+                "logoPath": r[7],
+            }
             for r in rows
         ]
+
+    def set_builder_logo(self, builder_id: str, path: str) -> bool:
+        with self._pool.connection() as conn:
+            cur = conn.execute(
+                "UPDATE builder SET logo_path = %s WHERE id = %s", [path, builder_id]
+            )
+            return cur.rowcount > 0
 
     def delete_builder(self, builder_id: str) -> bool:
         with self._pool.connection() as conn:
@@ -1044,7 +1077,8 @@ class PostgresStore:
         sql = (
             "SELECT p.id, p.builder_id, p.name, p.segment, p.bed_range, "
             "p.price_from, p.price_to, p.strapline, p.pillars, p.features, "
-            "b.name, b.theme_heading, b.group_id, g.name "
+            "b.name, b.theme_heading, b.group_id, g.name, "
+            "b.theme_secondary, b.theme_accent, b.logo_path, b.fonts "
             "FROM builder_profile p JOIN builder b ON p.builder_id = b.id "
             "JOIN builder_group g ON b.group_id = g.id"
         )
@@ -1062,6 +1096,10 @@ class PostgresStore:
                 "themeHeading": r[11],
                 "groupId": r[12],
                 "groupName": r[13],
+                "themeSecondary": r[14],
+                "themeAccent": r[15],
+                "logoPath": r[16],
+                "fonts": r[17] or [],
             }
             for r in rows
         ]

@@ -23,6 +23,7 @@ def test_migrations_dir_ships_with_the_package():
         "0007_builder_profiles.sql",
         "0008_llm_usage.sql",
         "0009_audit_log.sql",
+        "0010_brand_theme.sql",
     ]
 
 

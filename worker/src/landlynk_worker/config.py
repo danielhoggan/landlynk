@@ -54,6 +54,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Brand logo storage in GitHub. A fine-grained PAT with contents:write on the
+    # repo, the repo in owner/name form, and the branch to commit logos to.
+    github_token: str = Field(
+        default="", validation_alias=AliasChoices("WORKER_GITHUB_TOKEN", "GITHUB_TOKEN")
+    )
+    github_repo: str = "danielhoggan/landlynk"
+    github_branch: str = "main"
+
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
