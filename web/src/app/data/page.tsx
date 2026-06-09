@@ -7,6 +7,7 @@ import {
   loadReference,
   type ReferenceStatus,
 } from "@/lib/client";
+import { useUser } from "@/lib/userContext";
 
 // Reference data is loaded server-side: the worker downloads the open ONS data
 // and loads PostGIS. No local commands. Paste each source URL (boundaries is
@@ -128,6 +129,7 @@ const DATASETS: DatasetDef[] = [
 ];
 
 export default function DataPage() {
+  const { isAdmin, loading: userLoading } = useUser();
   const [status, setStatus] = useState<Record<string, ReferenceStatus>>({});
   const [values, setValues] = useState<Record<string, Record<string, string>>>({
     geo_boundaries: { url: DEFAULT_BOUNDARIES },
@@ -168,6 +170,19 @@ export default function DataPage() {
         [d.id]: err instanceof Error ? err.message : "Failed",
       }));
     }
+  }
+
+  if (userLoading) {
+    return <p className="p-4 text-sm text-neutral-500">Loading...</p>;
+  }
+  if (!isAdmin) {
+    return (
+      <div className="mx-auto max-w-2xl p-4">
+        <p className="rounded-card border border-neutral-200 bg-white p-4 text-sm text-neutral-600">
+          This page is for admins only.
+        </p>
+      </div>
+    );
   }
 
   return (

@@ -26,7 +26,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "How it works", icon: Compass, href: "/how-it-works" },
   { label: "History", icon: History, href: "/history" },
   { label: "Archived", icon: Archive, href: "/archived" },
-  { label: "Reference data", icon: Database, href: "/data" },
+  { label: "Reference data", icon: Database, href: "/data", adminOnly: true },
   { label: "Users", icon: Users, href: "/users", adminOnly: true },
   { label: "Builders", icon: Building2, href: "/builders", adminOnly: true },
   { label: "AI models", icon: Sparkles, href: "/models", adminOnly: true },

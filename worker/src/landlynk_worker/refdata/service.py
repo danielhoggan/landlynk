@@ -65,6 +65,25 @@ def get_status(pool: ConnectionPool | None = None) -> dict[str, dict]:
     return persisted
 
 
+def get_health(pool: ConnectionPool | None = None) -> dict:
+    """A RAG summary of reference loading, safe for any user (no sources).
+
+    green when every dataset is loaded, amber when some are (or a load is in
+    flight), red when none are. Carries only counts, never source URLs.
+    """
+    status = get_status(pool)
+    total = len(DATASETS)
+    loaded = sum(1 for d in DATASETS if status.get(d, {}).get("status") == "loaded")
+    running = any(status.get(d, {}).get("status") == "running" for d in DATASETS)
+    if loaded == total:
+        state = "green"
+    elif loaded > 0 or running:
+        state = "amber"
+    else:
+        state = "red"
+    return {"state": state, "loaded": loaded, "total": total}
+
+
 def _set(
     dataset: str,
     status: str,

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Logo } from "./Logo";
 import { NAV_ITEMS, isActive } from "./navItems";
+import { ReferenceStatusDot } from "./ReferenceStatusDot";
 import { useUser } from "@/lib/userContext";
 
 interface DrawerNavProps {
@@ -86,6 +87,7 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
           </>
         )}
         <div className="mt-auto space-y-3">
+          <ReferenceStatusDot />
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/signin" })}

@@ -188,6 +188,19 @@ def _require_access(catchment_id: str, user: dict) -> None:
         raise HTTPException(status_code=403, detail="No access to this catchment")
 
 
+@app.get("/reference/health")
+def reference_health(user: dict = Depends(current_user)) -> dict:
+    """RAG summary of reference loading for the status dot. No source detail, so
+    any signed-in user may read it; the full provenance stays admin only."""
+    pool = None
+    if settings.persist_results:
+        try:
+            pool = get_pool()
+        except Exception:
+            pool = None
+    return refdata.get_health(pool)
+
+
 @app.get("/admin/reference/status")
 def reference_status(x_admin_token: str | None = Header(default=None)) -> dict:
     _check_admin(x_admin_token)

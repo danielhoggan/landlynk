@@ -277,6 +277,18 @@ export async function setUserGroup(
   });
 }
 
+export interface ReferenceHealth {
+  state: "green" | "amber" | "red";
+  loaded: number;
+  total: number;
+}
+
+export async function getReferenceHealth(): Promise<ReferenceHealth> {
+  const res = await fetch("/api/reference/health");
+  if (!res.ok) return { state: "red", loaded: 0, total: 0 };
+  return res.json();
+}
+
 export interface AppUser {
   email: string | null;
   name: string | null;
