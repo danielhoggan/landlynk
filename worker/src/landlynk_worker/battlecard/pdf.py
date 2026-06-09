@@ -18,13 +18,18 @@ import io
 import os
 from pathlib import Path
 
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.graphics.shapes import Drawing
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
+    KeepInFrame,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -37,6 +42,15 @@ from .schema import Battlecard, DataValue
 
 # Default document heading colour where a client brand does not override.
 _DEFAULT_HEADING = "#4169E1"  # Royal Blue
+_GOLD = colors.HexColor("#C9A24B")
+_GREY = colors.HexColor("#9AA3AD")
+_INK = colors.HexColor("#1E2A32")
+_TENURE_COLORS = [
+    colors.HexColor("#C04A1F"),
+    colors.HexColor("#1F5A3C"),
+    colors.HexColor("#0A1F44"),
+    colors.HexColor("#8E959C"),
+]
 
 
 def _register_fonts() -> tuple[str, str]:
@@ -74,221 +88,359 @@ def _fmt(dv: DataValue, *, money: bool = False, pct: bool = False) -> str:
     return f"{dv.value:,.0f}"
 
 
-def _styles(heading_hex: str) -> tuple:
-    styles = getSampleStyleSheet()
-    h1 = ParagraphStyle(
-        "H1",
-        parent=styles["Heading1"],
-        textColor=colors.HexColor(heading_hex),
-        fontName=_BOLD_FONT,
-    )
-    h2 = ParagraphStyle(
-        "H2",
-        parent=styles["Heading2"],
-        textColor=colors.HexColor(heading_hex),
-        fontName=_BOLD_FONT,
-    )
-    body = ParagraphStyle(
-        "Body", parent=styles["BodyText"], fontName=_BODY_FONT, leading=14
-    )
-    return h1, h2, body
+def _styles(heading_hex: str) -> dict:
+    navy = colors.HexColor(heading_hex)
+    base = getSampleStyleSheet()
+    return {
+        "navy": navy,
+        "title": ParagraphStyle(
+            "Title",
+            parent=base["Normal"],
+            fontName=_BOLD_FONT,
+            fontSize=20,
+            leading=22,
+            textColor=colors.white,
+        ),
+        "location": ParagraphStyle(
+            "Loc",
+            parent=base["Normal"],
+            fontName=_BODY_FONT,
+            fontSize=10,
+            textColor=_GOLD,
+            spaceBefore=2,
+        ),
+        "side_label": ParagraphStyle(
+            "SideLabel",
+            parent=base["Normal"],
+            fontName=_BOLD_FONT,
+            fontSize=8,
+            textColor=_GOLD,
+            spaceBefore=6,
+            spaceAfter=2,
+        ),
+        "stat_value": ParagraphStyle(
+            "StatVal",
+            parent=base["Normal"],
+            fontName=_BOLD_FONT,
+            fontSize=13,
+            leading=14,
+            textColor=colors.white,
+        ),
+        "stat_label": ParagraphStyle(
+            "StatLab",
+            parent=base["Normal"],
+            fontName=_BODY_FONT,
+            fontSize=6.5,
+            textColor=_GREY,
+        ),
+        "strap": ParagraphStyle(
+            "Strap",
+            parent=base["Normal"],
+            fontName=_BODY_FONT,
+            fontSize=8,
+            textColor=_GREY,
+            fontStyle="italic",
+        ),
+        "pillars": ParagraphStyle(
+            "Pillars",
+            parent=base["Normal"],
+            fontName=_BOLD_FONT,
+            fontSize=10,
+            textColor=_INK,
+            alignment=TA_CENTER,
+        ),
+        "header": ParagraphStyle(
+            "HeaderBar",
+            parent=base["Normal"],
+            fontName=_BOLD_FONT,
+            fontSize=9,
+            textColor=colors.white,
+            backColor=navy,
+            borderPadding=(4, 4, 4, 4),
+            spaceBefore=4,
+            spaceAfter=4,
+            leading=12,
+        ),
+        "bullet": ParagraphStyle(
+            "Bullet",
+            parent=base["Normal"],
+            fontName=_BODY_FONT,
+            fontSize=9,
+            textColor=_INK,
+            leading=12,
+            leftIndent=8,
+            bulletIndent=0,
+        ),
+        "bullet_bold": ParagraphStyle(
+            "BulletBold",
+            parent=base["Normal"],
+            fontName=_BOLD_FONT,
+            fontSize=9,
+            textColor=_INK,
+            leading=12,
+        ),
+        "chart_label": ParagraphStyle(
+            "ChartLabel",
+            parent=base["Normal"],
+            fontName=_BODY_FONT,
+            fontSize=7,
+            textColor=_INK,
+        ),
+    }
 
 
 def render_battlecard_pdf(card: Battlecard, heading_color: str | None = None) -> bytes:
-    """Render a single Battlecard payload to PDF bytes."""
+    """Render a single Battlecard payload to PDF bytes (one landscape page)."""
     return render_battlecards_pdf([card], heading_color)
 
 
 def render_battlecards_pdf(
     cards: list[Battlecard], heading_color: str | None = None
 ) -> bytes:
-    """Render one or more Battlecards into a single PDF, one per page break.
+    """Render one or more Battlecards into a single PDF, one page per area.
 
-    Used for the shortlist export, so a builder gets every selected area as one
-    combined document.
+    The single-slide reference layout: a brand sidebar, two messaging columns
+    and three charts. Used for the shortlist export so a builder gets every
+    selected area as one combined document.
     """
     heading_hex = heading_color or _DEFAULT_HEADING
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
-        pagesize=A4,
-        leftMargin=18 * mm,
-        rightMargin=18 * mm,
-        topMargin=16 * mm,
-        bottomMargin=16 * mm,
+        pagesize=landscape(A4),
+        leftMargin=10 * mm,
+        rightMargin=10 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm,
         title=(
             "LandLynk Battlecards"
             if len(cards) != 1
             else f"Battlecard {cards[0].area_code}"
         ),
     )
-    h1, h2, body = _styles(heading_hex)
+    styles = _styles(heading_hex)
     story: list = []
     for i, card in enumerate(cards):
         if i > 0:
             story.append(PageBreak())
-        story.extend(_card_flowables(card, h1, h2, body))
+        story.extend(_card_flowables(card, styles))
     doc.build(story)
     return buffer.getvalue()
 
 
-def _card_flowables(
-    card: Battlecard,
-    h1: ParagraphStyle,
-    h2: ParagraphStyle,
-    body: ParagraphStyle,
-) -> list:
+def _numf(dv: DataValue) -> float:
+    return 0.0 if dv.value is None else float(dv.value)
+
+
+def _short_money(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    if value >= 1_000_000:
+        return f"£{value / 1_000_000:.1f}m"
+    if value >= 1_000:
+        return f"£{value / 1_000:.0f}k"
+    return f"£{value:,.0f}"
+
+
+def _bar_drawing(
+    categories: list[str],
+    values: list[float],
+    color: colors.Color,
+    width: float,
+    height: float,
+) -> Drawing:
+    d = Drawing(width, height)
+    chart = VerticalBarChart()
+    chart.x = 14
+    chart.y = 24
+    chart.width = width - 24
+    chart.height = height - 40
+    chart.data = [values]
+    chart.categoryAxis.categoryNames = [str(c) for c in categories]
+    chart.categoryAxis.labels.fontSize = 6
+    chart.categoryAxis.labels.fontName = _BODY_FONT
+    chart.categoryAxis.labels.angle = 20
+    chart.categoryAxis.labels.dy = -4
+    chart.valueAxis.visible = False
+    chart.valueAxis.valueMin = 0
+    chart.bars[0].fillColor = color
+    chart.bars[0].strokeColor = None
+    d.add(chart)
+    return d
+
+
+def _pie_drawing(
+    values: list[float], palette: list, width: float, height: float
+) -> Drawing:
+    d = Drawing(width, height)
+    pie = Pie()
+    size = min(width, height) - 20
+    pie.width = size
+    pie.height = size
+    pie.x = (width - size) / 2
+    pie.y = 6
+    pie.data = [max(v, 0.0001) for v in values]
+    pie.innerRadiusFraction = 0.55
+    pie.slices.strokeWidth = 0.5
+    pie.slices.strokeColor = colors.white
+    for i in range(len(values)):
+        pie.slices[i].fillColor = palette[i % len(palette)]
+    d.add(pie)
+    return d
+
+
+def _card_flowables(card: Battlecard, st: dict) -> list:
     vs = card.visual_summary
-    story: list = []
-
-    # --- Page 1: visual summary ---
-    story.append(Paragraph(vs.header.development_name, h1))
-    location = ", ".join(p for p in [vs.header.town, vs.header.postcode] if p)
-    story.append(Paragraph(location, body))
-    story.append(Paragraph(vs.header.strapline, body))
-    if vs.header.lifestyle_pillars:
-        story.append(Paragraph(" | ".join(vs.header.lifestyle_pillars), body))
-    story.append(Spacer(1, 6 * mm))
-
-    story.append(Paragraph("Key statistics", h2))
+    h = vs.header
     stats = vs.key_statistics
-    story.append(
-        _two_col_table(
-            [
-                ("Bed range", stats.bed_range),
-                (
-                    "Average household income",
-                    _fmt(stats.average_household_income, money=True),
-                ),
-                ("Owner occupied", _fmt(stats.owner_occupied_percentage, pct=True)),
-                ("Price from", _fmt(stats.price_from, money=True)),
-                ("Median age", _fmt(stats.median_age)),
-                ("Population catchment", _fmt(stats.population_catchment)),
-                ("Households catchment", _fmt(stats.households_catchment)),
-                ("Family households", _fmt(stats.family_household_share, pct=True)),
-            ]
-        )
-    )
-    story.append(Spacer(1, 5 * mm))
+    navy = st["navy"]
 
-    story.append(Paragraph("Priority", h2))
-    story.append(
-        Paragraph(
-            f"Rank {card.rank}. Score {card.score.total:.2f} ({card.score.band} priority).",
-            body,
-        )
-    )
-    ctx = card.catchment_context
-    if ctx.income_index.value is not None:
-        story.append(
-            Paragraph(
-                f"Income index {ctx.income_index.value:.0f} versus the catchment "
-                f"average of 100. {_fmt(ctx.share_of_catchment_population, pct=True)} "
-                "of the catchment population.",
-                body,
+    # --- sidebar cell -------------------------------------------------------
+    side: list = [
+        Paragraph(h.development_name.upper(), st["title"]),
+    ]
+    location = ", ".join(p for p in [h.town, h.postcode] if p)
+    if location:
+        side.append(Paragraph(location, st["location"]))
+    side.append(Paragraph("KEY STATISTICS", st["side_label"]))
+
+    tiles = [
+        (f"{stats.bed_range} Bed", "HOMES"),
+        (_short_money(stats.price_from.value), "FROM"),
+        (_short_money(stats.average_household_income.value), "AVG HH INCOME"),
+        (f"{_fmt(stats.median_age)} yrs", "MEDIAN AGE"),
+        (_fmt(stats.owner_occupied_percentage, pct=True), "OWNER OCCUPIED"),
+        (_fmt(stats.population_catchment), "POP. CATCHMENT"),
+    ]
+    rows = []
+    for i in range(0, len(tiles), 2):
+        row = []
+        for value, label in tiles[i : i + 2]:
+            row.append(
+                [Paragraph(value, st["stat_value"]), Paragraph(label, st["stat_label"])]
             )
-        )
-    story.append(Spacer(1, 5 * mm))
-
-    story.append(Paragraph("Pricing rationale", h2))
-    story.append(Paragraph(card.pricing_rationale.positioning, body))
-    story.append(Spacer(1, 4 * mm))
-
-    story.append(Paragraph("Addressable segments inside the catchment", h2))
-    seg = card.addressable_segments
-    story.append(
-        _two_col_table(
-            [
-                ("First-time buyer pipeline", _fmt(seg.first_time_buyer_pipeline)),
-                ("Downsizer pool", _fmt(seg.downsizer_pool)),
-                ("Family households", _fmt(seg.family_households)),
-            ]
-        )
-    )
-    story.append(Spacer(1, 5 * mm))
-
-    story.append(Paragraph("Target audience and messaging", h2))
-    for msg in vs.audience_messaging:
-        story.append(Paragraph(f"<b>{msg.tier.title()}: {msg.audience}</b>", body))
-        for line in msg.message_lines:
-            story.append(Paragraph(line, body))
-    story.append(Spacer(1, 5 * mm))
-
-    if vs.development_features:
-        story.append(Paragraph("The development and location", h2))
-        for feature in vs.development_features:
-            story.append(Paragraph(f"- {feature}", body))
-        story.append(Spacer(1, 5 * mm))
-
-    story.append(Paragraph("Age demographics", h2))
-    story.append(
-        _two_col_table(
-            [
-                (b.label, _fmt(b.percentage, pct=True))
-                for b in vs.charts.age_demographics
-            ]
-        )
-    )
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Housing tenure", h2))
-    tenure = vs.charts.housing_tenure
-    story.append(
-        _two_col_table(
-            [
-                ("Owns outright", _fmt(tenure.owns_outright, pct=True)),
-                ("Owns with mortgage", _fmt(tenure.owns_with_mortgage, pct=True)),
-                ("Social rented", _fmt(tenure.social_rented, pct=True)),
-                ("Private rented", _fmt(tenure.private_rented, pct=True)),
-            ]
-        )
-    )
-
-    # --- Page 2: audience and demographic commentary ---
-    ad = card.audience_and_demographics
-    story.append(Paragraph("Audience messaging overview", h1))
-    for tier in ad.audience_tiers:
-        story.append(Paragraph(f"{tier.tier.title()}: {tier.audience}", h2))
-        story.append(Paragraph(tier.body, body))
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Demographic commentary", h2))
-    for cohort in ad.age_cohorts:
-        story.append(Paragraph(f"<b>{cohort.cohort}</b>", body))
-        story.append(Paragraph(cohort.body, body))
-
-    # --- Page 3: income and tenure commentary ---
-    it = card.income_and_tenure
-    story.append(Paragraph("Household income", h1))
-    story.append(Paragraph(it.income_commentary, body))
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Housing tenure", h2))
-    story.append(Paragraph(it.tenure_commentary, body))
-    story.append(Spacer(1, 5 * mm))
-
-    dc = card.data_confidence
-    story.append(Paragraph(f"Data confidence: {dc.level}", h2))
-    story.append(Paragraph(dc.note, body))
-    if dc.suppressed_fields:
-        story.append(
-            Paragraph("Suppressed inputs: " + ", ".join(dc.suppressed_fields), body)
-        )
-
-    return story
-
-
-def _two_col_table(rows: list[tuple[str, str]]) -> Table:
-    table = Table(
-        [[label, value] for label, value in rows], colWidths=[80 * mm, 80 * mm]
-    )
-    table.setStyle(
+        rows.append(row)
+    stat_table = Table(rows, colWidths=[30 * mm, 30 * mm])
+    stat_table.setStyle(
         TableStyle(
             [
-                ("FONTNAME", (0, 0), (-1, -1), _BODY_FONT),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#666666")),
-                ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#DDDDDD")),
                 ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
             ]
         )
     )
-    return table
+    side.append(stat_table)
+    if h.strapline:
+        side.append(Spacer(1, 4 * mm))
+        side.append(Paragraph(h.strapline, st["strap"]))
+
+    # --- main cell ----------------------------------------------------------
+    main: list = []
+    if h.lifestyle_pillars:
+        main.append(Paragraph("  ·  ".join(h.lifestyle_pillars), st["pillars"]))
+        main.append(Spacer(1, 2 * mm))
+
+    main.append(Paragraph("TARGET AUDIENCE &amp; MESSAGING", st["header"]))
+    lines = 0
+    for m in vs.audience_messaging:
+        if lines >= 7:
+            break
+        main.append(Paragraph(f"{m.tier.title()}: {m.audience}", st["bullet_bold"]))
+        lines += 1
+        for line in m.message_lines:
+            if lines >= 7:
+                break
+            main.append(Paragraph(line, st["bullet"], bulletText="•"))
+            lines += 1
+
+    main.append(Paragraph("THE DEVELOPMENT &amp; LOCATION", st["header"]))
+    summary = (
+        f"{stats.bed_range} bed homes from {_short_money(stats.price_from.value)} "
+        f"in {h.town}"
+    )
+    main.append(Paragraph(summary, st["bullet_bold"]))
+    for feature in vs.development_features[:7]:
+        main.append(Paragraph(feature, st["bullet"], bulletText="•"))
+    main.append(Spacer(1, 2 * mm))
+
+    # charts row
+    charts = vs.charts
+    cw = 62 * mm
+    ch = 42 * mm
+    age = _bar_drawing(
+        [b.label for b in charts.age_demographics],
+        [_numf(b.percentage) for b in charts.age_demographics],
+        navy,
+        cw,
+        ch,
+    )
+    inc = charts.household_income
+    income = _bar_drawing(
+        ["Mean", "Median", "Low LA", "High LA"],
+        [
+            _numf(inc.mean),
+            _numf(inc.median),
+            _numf(inc.lowest_la.value),
+            _numf(inc.highest_la.value),
+        ],
+        navy,
+        cw,
+        ch,
+    )
+    t = charts.housing_tenure
+    tenure = _pie_drawing(
+        [
+            _numf(t.owns_outright),
+            _numf(t.owns_with_mortgage),
+            _numf(t.social_rented),
+            _numf(t.private_rented),
+        ],
+        _TENURE_COLORS,
+        cw,
+        ch,
+    )
+    chart_table = Table(
+        [
+            [
+                Paragraph("AGE DEMOGRAPHICS", st["header"]),
+                Paragraph("HOUSEHOLD INCOME", st["header"]),
+                Paragraph("HOUSING TENURE", st["header"]),
+            ],
+            [age, income, tenure],
+            [
+                Paragraph("", st["chart_label"]),
+                Paragraph("", st["chart_label"]),
+                Paragraph("Outright, mortgage, social, private", st["chart_label"]),
+            ],
+        ],
+        colWidths=[cw + 4 * mm, cw + 4 * mm, cw + 4 * mm],
+    )
+    chart_table.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]
+        )
+    )
+    main.append(chart_table)
+
+    master = Table([[side, main]], colWidths=[64 * mm, 205 * mm])
+    master.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, 0), navy),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (0, 0), 8),
+                ("RIGHTPADDING", (0, 0), (0, 0), 8),
+                ("TOPPADDING", (0, 0), (0, 0), 10),
+                ("LEFTPADDING", (1, 0), (1, 0), 10),
+                ("RIGHTPADDING", (1, 0), (1, 0), 4),
+                ("TOPPADDING", (1, 0), (1, 0), 4),
+            ]
+        )
+    )
+    return [KeepInFrame(277 * mm, 188 * mm, [master], mode="shrink")]
