@@ -25,7 +25,7 @@ export function RankingList({
 }: RankingListProps) {
   if (areas.length === 0) return null;
   return (
-    <ol className="divide-y divide-neutral-200 overflow-hidden rounded-card border border-neutral-200">
+    <ol className="divide-y divide-neutral-200 overflow-hidden rounded-card border border-neutral-200 bg-white">
       {areas.map((area) => {
         const selected = area.areaCode === selectedAreaCode;
         const starred = starredCodes?.has(area.areaCode) ?? false;

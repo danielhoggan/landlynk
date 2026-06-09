@@ -84,6 +84,15 @@ export function BattlecardDrawer({
             </div>
           )}
 
+          {!battlecard.pricingRationale &&
+            !battlecard.addressableSegments &&
+            !battlecard.catchmentContext && (
+              <p className="rounded-card border border-priority-mid/40 bg-priority-mid/10 p-3 text-xs text-neutral-600">
+                This run predates the pricing rationale and addressable segment
+                insights. Rebuild the catchment to generate the full Battlecard.
+              </p>
+            )}
+
           <BattlecardInsights
             pricing={battlecard.pricingRationale}
             segments={battlecard.addressableSegments}

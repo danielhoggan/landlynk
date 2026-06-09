@@ -6,8 +6,8 @@ demographic commentary then income and tenure commentary (SCOPING.md Section 9).
 
 Brand theming is per client and passed in, never hard-coded (design-framework.md).
 Headings use the theme primary colour, defaulting to Royal Blue. Document font
-is Tenorite per the house conventions; the proprietary font file is registered
-at startup when available and falls back to a standard face otherwise. Generated
+is Poppins; the TTF files are registered at startup when available (the worker
+image downloads them at build) and fall back to Helvetica otherwise. Generated
 prose already follows the house conventions (no em dashes, no Oxford commas, no
 markdown headers).
 """
@@ -15,11 +15,15 @@ markdown headers).
 from __future__ import annotations
 
 import io
+import os
+from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     PageBreak,
     Paragraph,
@@ -33,7 +37,30 @@ from .schema import Battlecard, DataValue
 
 # Default document heading colour where a client brand does not override.
 _DEFAULT_HEADING = "#4169E1"  # Royal Blue
-_BODY_FONT = "Helvetica"  # Tenorite fallback until the licensed font is registered
+
+
+def _register_fonts() -> tuple[str, str]:
+    """Register Poppins from the font directory, falling back to Helvetica.
+
+    The worker image fetches Poppins-Regular and Poppins-SemiBold at build time
+    into LANDLYNK_FONT_DIR (default /app/fonts). When the files are absent, as in
+    the offline test environment, the document uses Helvetica so rendering never
+    fails on a missing font.
+    """
+    font_dir = Path(os.environ.get("LANDLYNK_FONT_DIR", "/app/fonts"))
+    regular = font_dir / "Poppins-Regular.ttf"
+    bold = font_dir / "Poppins-SemiBold.ttf"
+    if regular.is_file() and bold.is_file():
+        try:
+            pdfmetrics.registerFont(TTFont("Poppins", str(regular)))
+            pdfmetrics.registerFont(TTFont("Poppins-Bold", str(bold)))
+            return "Poppins", "Poppins-Bold"
+        except Exception:  # corrupt or unreadable font, fall back rather than fail
+            pass
+    return "Helvetica", "Helvetica-Bold"
+
+
+_BODY_FONT, _BOLD_FONT = _register_fonts()
 
 
 def _fmt(dv: DataValue, *, money: bool = False, pct: bool = False) -> str:
@@ -53,13 +80,13 @@ def _styles(heading_hex: str) -> tuple:
         "H1",
         parent=styles["Heading1"],
         textColor=colors.HexColor(heading_hex),
-        fontName="Helvetica-Bold",
+        fontName=_BOLD_FONT,
     )
     h2 = ParagraphStyle(
         "H2",
         parent=styles["Heading2"],
         textColor=colors.HexColor(heading_hex),
-        fontName="Helvetica-Bold",
+        fontName=_BOLD_FONT,
     )
     body = ParagraphStyle(
         "Body", parent=styles["BodyText"], fontName=_BODY_FONT, leading=14

@@ -18,6 +18,7 @@ from pptx.util import Inches, Pt
 from .schema import Battlecard, DataValue
 
 _DEFAULT_HEADING = "4169E1"  # Royal Blue, no leading hash for python-pptx
+_FONT = "Poppins"  # named only; PowerPoint substitutes if the font is not installed
 
 
 def _hex(color: str | None) -> RGBColor:
@@ -42,6 +43,7 @@ def _add_title(slide: Slide, text: str, heading: RGBColor) -> None:
     run.text = text
     run.font.size = Pt(30)
     run.font.bold = True
+    run.font.name = _FONT
     run.font.color.rgb = heading
 
 
@@ -53,6 +55,7 @@ def _add_body(slide: Slide, lines: list[str], top: float = 1.5, size: int = 16) 
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.text = line
         p.font.size = Pt(size)
+        p.font.name = _FONT
 
 
 def render_battlecard_pptx(card: Battlecard, heading_color: str | None = None) -> bytes:

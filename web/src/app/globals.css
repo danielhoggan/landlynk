@@ -9,7 +9,7 @@
 
 body {
   @apply bg-light-bg text-neutral-900 antialiased;
-  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-family: var(--font-poppins), Poppins, system-ui, sans-serif;
 }
 
 /* Frosted glass used by the sticky mobile top bar and the drawer scrim. */
@@ -20,7 +20,7 @@ body {
 
 /* Web output font for client-facing prose rendered in the app. */
 .output-prose {
-  font-family: var(--font-tenor-sans), "Tenor Sans", Georgia, serif;
+  font-family: var(--font-poppins), Poppins, system-ui, sans-serif;
 }
 
 /* Hide horizontal scrollbars on the tab strip and overflow rows. */

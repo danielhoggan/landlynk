@@ -38,6 +38,8 @@ export interface ScoringConfig {
   /** Minimum area overlap with the isochrone to retain it, 0 to 1. */
   overlapThreshold: number;
   driveTimeMinutes: number;
+  /** Gross household income multiple used to imply an affordable price. */
+  affordabilityMultiple: number;
 }
 
 export interface CatchmentInput {
@@ -45,7 +47,18 @@ export interface CatchmentInput {
   /** Raw postcode or OS grid reference as entered. */
   value: string;
   developmentName: string;
-  config: ScoringConfig;
+  /** Stored config (snake_case from the worker). Absent on older runs. */
+  config?: StoredConfig | null;
+}
+
+/** The scoring config as stored and returned by the worker (snake_case keys). */
+export interface StoredConfig {
+  weights?: Record<string, number>;
+  priceBand?: { from: number; to: number };
+  bedRange?: string;
+  overlapThreshold?: number;
+  driveTimeMinutes?: number;
+  affordabilityMultiple?: number;
 }
 
 /** GeoJSON geometry, kept loose here. PostGIS is the source of truth. */

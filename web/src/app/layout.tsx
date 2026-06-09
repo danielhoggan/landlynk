@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
-import { Inter, Tenor_Sans } from "next/font/google";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { AppShell } from "@/components/shell/AppShell";
 
-// App UI font: Inter. Web output font: Tenor Sans (design-framework.md).
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const tenorSans = Tenor_Sans({
-  weight: "400",
+// Single typeface for now: Poppins for both the app UI and generated web output.
+const poppins = Poppins({
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
-  variable: "--font-tenor-sans",
+  variable: "--font-poppins",
 });
 
 export const metadata: Metadata = {
@@ -24,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en-GB" className={`${inter.variable} ${tenorSans.variable}`}>
+    <html lang="en-GB" className={poppins.variable}>
       <body>
         <Providers>
           <AppShell>{children}</AppShell>

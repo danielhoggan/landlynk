@@ -119,6 +119,7 @@ class _MemRecord:
     status: str = "queued"
     error: str | None = None
     result: CatchmentResult | None = None
+    config: dict | None = None
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -131,7 +132,9 @@ class InMemoryStore:
     def create_job(
         self, catchment_id: str, job: JobInput, config: ScoringConfig, created_by: str
     ) -> None:
-        self._records[catchment_id] = _MemRecord(job=job)
+        self._records[catchment_id] = _MemRecord(
+            job=job, config=scoring_config_to_dict(config)
+        )
 
     def mark_status(
         self, catchment_id: str, status: str, error: str | None = None
@@ -158,6 +161,7 @@ class InMemoryStore:
                 "kind": record.job.kind,
                 "value": record.job.value,
                 "developmentName": record.job.development_name,
+                "config": record.config,
             },
             "coordinate": (
                 None
@@ -289,13 +293,13 @@ class PostgresStore:
             head = conn.execute(
                 "SELECT input_kind, input_value, development_name, status, error, "
                 "ST_X(coordinate) AS lng, ST_Y(coordinate) AS lat, "
-                "ST_AsGeoJSON(isochrone) AS isochrone "
+                "ST_AsGeoJSON(isochrone) AS isochrone, config "
                 "FROM catchment WHERE id = %s",
                 [catchment_id],
             ).fetchone()
             if head is None:
                 return None
-            kind, value, dev_name, status, error, lng, lat, isochrone = head
+            kind, value, dev_name, status, error, lng, lat, isochrone, config = head
 
             area_rows = conn.execute(
                 "SELECT ca.area_code, ca.area_type, gb.area_name, "
@@ -326,7 +330,12 @@ class PostgresStore:
         ]
         return {
             "id": catchment_id,
-            "input": {"kind": kind, "value": value, "developmentName": dev_name},
+            "input": {
+                "kind": kind,
+                "value": value,
+                "developmentName": dev_name,
+                "config": config,
+            },
             "coordinate": None if lat is None else {"lat": lat, "lng": lng},
             "isochrone": json.loads(isochrone) if isochrone else None,
             "status": status,

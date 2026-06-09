@@ -19,6 +19,8 @@ import {
   type MetricKey,
   type MetricRanges,
 } from "@/lib/areaTags";
+import { loadSettings } from "@/lib/settings";
+import { RunAssumptions } from "@/components/RunAssumptions";
 
 // Scoring signal weights exposed in the config panel. Keys are snake_case to
 // match the scoring engine (SCOPING.md Section 8).
@@ -51,6 +53,7 @@ export default function HomePage() {
   const [priceTo, setPriceTo] = useState("");
   const [bedRange, setBedRange] = useState("");
   const [driveTime, setDriveTime] = useState("30");
+  const [affordability, setAffordability] = useState("4.5");
   const [showBrief, setShowBrief] = useState(false);
 
   // Scoring config. Weight keys are snake_case to match the scoring engine.
@@ -66,6 +69,19 @@ export default function HomePage() {
   });
   const setWeight = (k: string, v: string) =>
     setWeights((w) => ({ ...w, [k]: v }));
+
+  // Seed the form from the saved default assumptions (Settings). The values
+  // used are still stored per run, so this only changes new submissions.
+  useEffect(() => {
+    const s = loadSettings();
+    setAffordability(String(s.affordabilityMultiple));
+    setOverlap(String(s.overlapThreshold));
+    setWeights(
+      Object.fromEntries(
+        Object.entries(s.weights).map(([k, v]) => [k, String(v)]),
+      ),
+    );
+  }, []);
 
   const splitList = (s: string) =>
     s
@@ -122,13 +138,25 @@ export default function HomePage() {
   };
 
   // Shortlist: starred areas the user wants combined into one export document.
+  // Persisted per catchment so a selection survives a reload or revisit.
   const [starred, setStarred] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState<"pdf" | "pptx" | null>(null);
+  const starKey = catchment ? `landlynk.stars.${catchment.id}` : null;
+  useEffect(() => {
+    if (!starKey) return;
+    try {
+      const raw = window.localStorage.getItem(starKey);
+      setStarred(new Set(raw ? (JSON.parse(raw) as string[]) : []));
+    } catch {
+      setStarred(new Set());
+    }
+  }, [starKey]);
   const toggleStar = (areaCode: string) =>
     setStarred((prev) => {
       const next = new Set(prev);
       if (next.has(areaCode)) next.delete(areaCode);
       else next.add(areaCode);
+      if (starKey) window.localStorage.setItem(starKey, JSON.stringify([...next]));
       return next;
     });
 
@@ -192,12 +220,11 @@ export default function HomePage() {
       }
       if (bedRange) config.bedRange = bedRange;
       if (driveTime) config.driveTimeMinutes = Number(driveTime);
-      if (showScoring) {
-        config.overlapThreshold = Number(overlap);
-        config.weights = Object.fromEntries(
-          Object.entries(weights).map(([k, v]) => [k, Number(v)]),
-        );
-      }
+      if (affordability) config.affordabilityMultiple = Number(affordability);
+      config.overlapThreshold = Number(overlap);
+      config.weights = Object.fromEntries(
+        Object.entries(weights).map(([k, v]) => [k, Number(v)]),
+      );
 
       const { id } = await submitCatchment({
         kind,
@@ -390,6 +417,17 @@ export default function HomePage() {
                   type="number"
                 />
               </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field
+                  label="Affordability multiple"
+                  suffix="×"
+                  hint="income to price"
+                  value={affordability}
+                  onChange={setAffordability}
+                  placeholder="4.5"
+                  type="number"
+                />
+              </div>
 
               <div className="rounded-card bg-neutral-50 p-4">
                 <button
@@ -458,6 +496,10 @@ export default function HomePage() {
             page, then build again.
           </p>
         </div>
+      )}
+
+      {catchment?.status === "complete" && areas.length > 0 && (
+        <RunAssumptions config={catchment.input?.config} />
       )}
 
       {catchment?.status === "complete" && areas.length > 0 && (
@@ -531,7 +573,10 @@ export default function HomePage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setStarred(new Set())}
+                    onClick={() => {
+                      setStarred(new Set());
+                      if (starKey) window.localStorage.removeItem(starKey);
+                    }}
                     className="text-xs font-medium text-neutral-400 hover:text-neutral-700"
                   >
                     Clear stars

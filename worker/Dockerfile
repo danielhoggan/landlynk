@@ -8,6 +8,16 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Document font for the PDF export. Poppins is open (SIL OFL); fetched at build
+# so generated PDFs embed it. If the fetch fails the renderer falls back to
+# Helvetica at runtime, so the build is never blocked on font availability.
+ENV LANDLYNK_FONT_DIR=/app/fonts
+RUN mkdir -p /app/fonts && python -c "\
+import urllib.request as u; \
+base='https://github.com/google/fonts/raw/main/ofl/poppins/'; \
+[u.urlretrieve(base+f, '/app/fonts/'+f) for f in ('Poppins-Regular.ttf','Poppins-SemiBold.ttf')]" \
+    || echo 'Poppins fetch failed; PDF falls back to Helvetica'
+
 COPY src ./src
 COPY migrations ./migrations
 ENV PYTHONPATH=/app/src

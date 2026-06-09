@@ -1,20 +1,56 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { Settings, LogOut } from "lucide-react";
+import { Settings, LogOut, Check } from "lucide-react";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  saveSettings,
+  type AppSettings,
+} from "@/lib/settings";
 
-// Settings: the signed-in account, the default scoring weights for reference,
-// and sign out. Theme is controlled by the persistent toggle, bottom-left.
-const DEFAULT_WEIGHTS: [string, string][] = [
-  ["Income fit", "0.30"],
-  ["Tenure signal", "0.20"],
-  ["Age skew", "0.20"],
-  ["Addressable scale", "0.20"],
-  ["Household type", "0.10"],
+// Settings: the signed-in account, and the editable default assumptions the
+// catchment form starts from (affordability multiple, overlap threshold and
+// scoring weights). Defaults are stored in the browser; the values actually
+// used are saved with each catchment by the worker, so any ranking stays
+// reproducible regardless of later changes here.
+
+const WEIGHT_LABELS: [keyof AppSettings["weights"], string][] = [
+  ["income_fit", "Income fit"],
+  ["tenure_signal", "Tenure signal"],
+  ["age_skew", "Age skew"],
+  ["addressable_scale", "Addressable scale"],
+  ["household_type", "Household type"],
 ];
 
 export default function SettingsPage() {
   const { data: session } = useSession();
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSettings(loadSettings());
+  }, []);
+
+  const update = (patch: Partial<AppSettings>) => {
+    setSettings((s) => ({ ...s, ...patch }));
+    setSaved(false);
+  };
+  const updateWeight = (key: keyof AppSettings["weights"], value: number) => {
+    setSettings((s) => ({ ...s, weights: { ...s.weights, [key]: value } }));
+    setSaved(false);
+  };
+
+  const onSave = () => {
+    saveSettings(settings);
+    setSaved(true);
+  };
+  const onReset = () => {
+    setSettings(DEFAULT_SETTINGS);
+    saveSettings(DEFAULT_SETTINGS);
+    setSaved(true);
+  };
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4">
@@ -22,7 +58,7 @@ export default function SettingsPage() {
         <Settings size={20} /> Settings
       </h1>
 
-      <section className="rounded-card border border-neutral-200 p-4">
+      <section className="rounded-card border border-neutral-200 bg-white p-5">
         <h2 className="mb-2 text-sm font-semibold">Account</h2>
         <p className="text-sm text-neutral-500">
           {session?.user?.name ?? session?.user?.email ?? "Signed in"}
@@ -36,25 +72,103 @@ export default function SettingsPage() {
         </button>
       </section>
 
-      <section className="rounded-card border border-neutral-200 p-4">
-        <h2 className="mb-2 text-sm font-semibold">Default scoring weights</h2>
-        <p className="mb-3 text-xs text-neutral-500">
-          The defaults applied when a catchment does not override them. Tune per
-          run from the catchment form; the values are stored with each catchment
-          so any ranking stays reproducible.
-        </p>
-        <dl className="grid grid-cols-2 gap-2">
-          {DEFAULT_WEIGHTS.map(([label, value]) => (
-            <div
-              key={label}
-              className="flex items-center justify-between rounded-card border border-neutral-200 px-3 py-2 text-sm"
-            >
-              <dt className="text-neutral-500">{label}</dt>
-              <dd className="font-semibold tabular-nums">{value}</dd>
-            </div>
-          ))}
-        </dl>
+      <section className="space-y-5 rounded-card border border-neutral-200 bg-white p-5">
+        <div>
+          <h2 className="text-sm font-semibold">Default assumptions</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            These seed the catchment form. The values used are stored with each
+            run, so changing them here never alters a past ranking. A run built
+            on different assumptions is flagged on its results.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <NumberField
+            label="Affordability multiple"
+            hint="× gross household income"
+            value={settings.affordabilityMultiple}
+            step={0.1}
+            onChange={(v) => update({ affordabilityMultiple: v })}
+          />
+          <NumberField
+            label="Overlap threshold"
+            hint="0 to 1"
+            value={settings.overlapThreshold}
+            step={0.05}
+            onChange={(v) => update({ overlapThreshold: v })}
+          />
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium text-neutral-500">
+            Scoring weights
+            <span className="ml-1 font-normal text-neutral-400">
+              normalised, need not sum to 1
+            </span>
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {WEIGHT_LABELS.map(([key, label]) => (
+              <NumberField
+                key={key}
+                label={label}
+                value={settings.weights[key]}
+                step={0.05}
+                onChange={(v) => updateWeight(key, v)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 border-t border-neutral-200 pt-4">
+          <button
+            type="button"
+            onClick={onSave}
+            className="flex items-center gap-2 rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
+          >
+            {saved ? <Check size={16} /> : null}
+            {saved ? "Saved" : "Save defaults"}
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-xs font-medium text-neutral-400 hover:text-neutral-700"
+          >
+            Reset to defaults
+          </button>
+        </div>
       </section>
     </div>
+  );
+}
+
+function NumberField({
+  label,
+  hint,
+  value,
+  step,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+        {label}
+        {hint && (
+          <span className="ml-1 font-normal text-neutral-400">{hint}</span>
+        )}
+      </span>
+      <input
+        type="number"
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full rounded-card border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-light-accent focus:ring-2 focus:ring-light-accent/20"
+      />
+    </label>
   );
 }

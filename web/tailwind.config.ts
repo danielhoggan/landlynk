@@ -37,9 +37,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // App UI font: Inter. Web output font: Tenor Sans.
-        sans: ["Inter", "system-ui", "sans-serif"],
-        output: ["'Tenor Sans'", "Georgia", "serif"],
+        // Single typeface for now: Poppins for both UI and web output.
+        sans: ["var(--font-poppins)", "Poppins", "system-ui", "sans-serif"],
+        output: ["var(--font-poppins)", "Poppins", "system-ui", "sans-serif"],
       },
       borderRadius: {
         card: "14px",

@@ -16,6 +16,19 @@ def test_defaults_when_no_config_given():
     config = to_scoring_config(req)
     assert config.drive_time_minutes == 30
     assert config.bed_range == "2 to 5"
+    assert config.affordability_multiple == 4.5
+
+
+def test_affordability_multiple_override_applied():
+    req = CatchmentJobRequest.model_validate(
+        {
+            "kind": "postcode",
+            "value": "IP14 1AA",
+            "developmentName": "X",
+            "config": {"affordabilityMultiple": 5.0},
+        }
+    )
+    assert to_scoring_config(req).affordability_multiple == 5.0
 
 
 def test_config_overrides_applied():

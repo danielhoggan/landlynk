@@ -14,9 +14,9 @@ export interface BrandTheme {
   /** Logo URL or path, resolved at render time. */
   logo: string | null;
   fonts: {
-    /** Document font. Tenorite for PDF and PPTX. */
+    /** Document font for PDF and PPTX. Poppins for now. */
     document: string;
-    /** HTML font, the web-safe equivalent. Tenor Sans. */
+    /** HTML font for web output. Poppins for now. */
     web: string;
   };
 }
@@ -35,8 +35,8 @@ export const DEFAULT_THEME: BrandTheme = {
   },
   logo: null,
   fonts: {
-    document: "Tenorite",
-    web: "Tenor Sans",
+    document: "Poppins",
+    web: "Poppins",
   },
 };
 
@@ -54,7 +54,7 @@ export const HOPKINS_THEME: BrandTheme = {
   },
   logo: null,
   fonts: {
-    document: "Tenorite",
-    web: "Tenor Sans",
+    document: "Poppins",
+    web: "Poppins",
   },
 };
