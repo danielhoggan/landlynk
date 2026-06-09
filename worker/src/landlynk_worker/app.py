@@ -640,6 +640,13 @@ def _shortlist_cards(catchment_id: str, area_codes: list[str]) -> list[Battlecar
     return cards
 
 
+def _heading(catchment_id: str) -> str | None:
+    """The brand heading colour stored with the run, for themed exports."""
+    catchment = get_store().get_catchment(catchment_id)
+    config = (catchment or {}).get("input", {}).get("config") or {}
+    return config.get("brandHeading")
+
+
 @app.post("/catchments/{catchment_id}/shortlist/pdf")
 def shortlist_pdf(
     catchment_id: str, request: ShortlistRequest, user: dict = Depends(current_user)
@@ -648,7 +655,7 @@ def shortlist_pdf(
     cards = _shortlist_cards(catchment_id, request.area_codes)
     if not cards:
         raise HTTPException(status_code=404, detail="No battlecards for shortlist")
-    pdf = render_battlecards_pdf(cards)
+    pdf = render_battlecards_pdf(cards, _heading(catchment_id))
     return Response(
         content=pdf,
         media_type="application/pdf",
@@ -666,7 +673,7 @@ def shortlist_pptx(
     cards = _shortlist_cards(catchment_id, request.area_codes)
     if not cards:
         raise HTTPException(status_code=404, detail="No battlecards for shortlist")
-    pptx = render_battlecards_pptx(cards)
+    pptx = render_battlecards_pptx(cards, _heading(catchment_id))
     return Response(
         content=pptx,
         media_type=(
@@ -723,7 +730,7 @@ def combined_pdf(
     _require_access(catchment_id, user)
     card = _combined_card(catchment_id, request)
     return Response(
-        content=render_battlecard_pdf(card),
+        content=render_battlecard_pdf(card, _heading(catchment_id)),
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="landlynk-combined.pdf"'},
     )
@@ -736,7 +743,7 @@ def combined_pptx(
     _require_access(catchment_id, user)
     card = _combined_card(catchment_id, request)
     return Response(
-        content=render_battlecard_pptx(card),
+        content=render_battlecard_pptx(card, _heading(catchment_id)),
         media_type=(
             "application/vnd.openxmlformats-officedocument.presentationml.presentation"
         ),
@@ -754,7 +761,7 @@ def get_battlecard_pdf(
     data = get_store().get_battlecard(catchment_id, area_code)
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
-    pdf = render_battlecard_pdf(Battlecard.model_validate(data))
+    pdf = render_battlecard_pdf(Battlecard.model_validate(data), _heading(catchment_id))
     return Response(
         content=pdf,
         media_type="application/pdf",
@@ -772,7 +779,9 @@ def get_battlecard_pptx(
     data = get_store().get_battlecard(catchment_id, area_code)
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
-    pptx = render_battlecard_pptx(Battlecard.model_validate(data))
+    pptx = render_battlecard_pptx(
+        Battlecard.model_validate(data), _heading(catchment_id)
+    )
     return Response(
         content=pptx,
         media_type=(

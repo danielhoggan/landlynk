@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Users } from "lucide-react";
-import { listUsers, setUserRole, type AppUser } from "@/lib/client";
+import {
+  listUsers,
+  setUserRole,
+  listGroups,
+  setUserGroup,
+  type AppUser,
+  type BuilderGroup,
+} from "@/lib/client";
 import { useUser } from "@/lib/userContext";
 
 const ROLES = ["admin", "internal-user", "external-user"];
@@ -18,6 +25,7 @@ const ROLE_LABELS: Record<string, string> = {
 export default function UsersPage() {
   const { user, isAdmin, loading } = useUser();
   const [users, setUsers] = useState<AppUser[] | null>(null);
+  const [groups, setGroups] = useState<BuilderGroup[]>([]);
   const [error, setError] = useState("");
   const [savingEmail, setSavingEmail] = useState<string | null>(null);
 
@@ -28,6 +36,9 @@ export default function UsersPage() {
       .catch((e) =>
         setError(e instanceof Error ? e.message : "Failed to load"),
       );
+    listGroups()
+      .then(setGroups)
+      .catch(() => setGroups([]));
   }, [isAdmin]);
 
   if (loading) {
@@ -51,6 +62,25 @@ export default function UsersPage() {
       await setUserRole(email, role);
       setUsers((prev) =>
         prev ? prev.map((u) => (u.email === email ? { ...u, role } : u)) : prev,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingEmail(null);
+    }
+  }
+
+  async function changeGroup(email: string, groupId: string) {
+    setSavingEmail(email);
+    setError("");
+    try {
+      await setUserGroup(email, groupId || null);
+      setUsers((prev) =>
+        prev
+          ? prev.map((u) =>
+              u.email === email ? { ...u, builderGroupId: groupId || null } : u,
+            )
+          : prev,
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed");
@@ -94,6 +124,24 @@ export default function UsersPage() {
                   {u.email}
                 </span>
               </span>
+              {u.role === "external-user" && (
+                <select
+                  value={u.builderGroupId ?? ""}
+                  disabled={savingEmail === u.email}
+                  onChange={(e) =>
+                    changeGroup(u.email as string, e.target.value)
+                  }
+                  title="Builder group"
+                  className="rounded-card border border-neutral-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-light-accent disabled:opacity-50"
+                >
+                  <option value="">No group</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <select
                 value={u.role}
                 disabled={savingEmail === u.email}

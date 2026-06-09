@@ -14,8 +14,10 @@ import type { Battlecard } from "@/lib/types/battlecard";
 import {
   combinedExport,
   getBattlecard,
+  getBuilderProfiles,
   pollCatchment,
   submitCatchment,
+  type BuilderProfile,
 } from "@/lib/client";
 import {
   SIGNAL_TAGS,
@@ -60,6 +62,9 @@ export default function HomePage() {
   const [priceTo, setPriceTo] = useState("");
   const [bedRange, setBedRange] = useState("");
   const [segment, setSegment] = useState("");
+  const [profiles, setProfiles] = useState<BuilderProfile[]>([]);
+  const [profileId, setProfileId] = useState("");
+  const [brandHeading, setBrandHeading] = useState("");
   const [driveTime, setDriveTime] = useState("30");
   const [catchmentMode, setCatchmentMode] = useState<"driveTime" | "radius">(
     "driveTime",
@@ -100,6 +105,31 @@ export default function HomePage() {
       ),
     );
   }, []);
+
+  // Builder profiles the signed-in user may use (scoped to their group if
+  // external). Selecting one fills the brief and themes the exports.
+  useEffect(() => {
+    getBuilderProfiles()
+      .then(setProfiles)
+      .catch(() => setProfiles([]));
+  }, []);
+
+  function applyProfile(id: string) {
+    setProfileId(id);
+    const p = profiles.find((x) => x.id === id);
+    if (!p) {
+      setBrandHeading("");
+      return;
+    }
+    if (p.segment) setSegment(p.segment);
+    if (p.bedRange) setBedRange(p.bedRange);
+    if (p.priceFrom != null) setPriceFrom(String(p.priceFrom));
+    if (p.priceTo != null) setPriceTo(String(p.priceTo));
+    if (p.strapline) setStrapline(p.strapline);
+    if (p.pillars?.length) setPillars(p.pillars.join(", "));
+    if (p.features?.length) setFeatures(p.features.join(", "));
+    setBrandHeading(p.themeHeading ?? "");
+  }
 
   const splitList = (s: string) =>
     s
@@ -267,6 +297,7 @@ export default function HomePage() {
       }
       if (bedRange) config.bedRange = bedRange;
       if (segment) config.segment = segment;
+      if (brandHeading) config.brandHeading = brandHeading;
       if (catchmentMode === "radius") {
         config.catchmentMode = "radius";
         if (radiusKm) config.radiusKm = Number(radiusKm);
@@ -413,6 +444,30 @@ export default function HomePage() {
 
           {showBrief && (
             <div className="mt-4 space-y-5">
+              {profiles.length > 0 && (
+                <div>
+                  <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+                    Builder profile
+                  </span>
+                  <select
+                    value={profileId}
+                    onChange={(e) => applyProfile(e.target.value)}
+                    className="w-full rounded-card border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-light-accent focus:outline-none"
+                  >
+                    <option value="">None (manual brief)</option>
+                    {profiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.groupName ? `${p.groupName} · ` : ""}
+                        {p.builderName ? `${p.builderName} · ` : ""}
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-neutral-400">
+                    Fills the brief and themes exports with the brand colour.
+                  </p>
+                </div>
+              )}
               <div>
                 <span className="mb-1.5 block text-xs font-medium text-neutral-500">
                   Target segment

@@ -30,6 +30,7 @@ class ScoringConfigModel(BaseModel):
     catchment_mode: str | None = Field(default=None, alias="catchmentMode")
     radius_km: float | None = Field(default=None, alias="radiusKm")
     segment: str | None = None
+    brand_heading: str | None = Field(default=None, alias="brandHeading")
     affordability_multiple: float | None = Field(
         default=None, alias="affordabilityMultiple"
     )
@@ -80,6 +81,7 @@ def to_scoring_config(req: CatchmentJobRequest) -> ScoringConfig:
         ),
         catchment_mode=cfg.catchment_mode or base.catchment_mode,
         radius_km=(cfg.radius_km if cfg.radius_km is not None else base.radius_km),
+        brand_heading=cfg.brand_heading or base.brand_heading,
         affordability_multiple=(
             cfg.affordability_multiple
             if cfg.affordability_multiple is not None

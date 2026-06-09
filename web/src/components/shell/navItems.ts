@@ -7,6 +7,7 @@ import {
   Archive,
   Users,
   Sparkles,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Archived", icon: Archive, href: "/archived" },
   { label: "Reference data", icon: Database, href: "/data" },
   { label: "Users", icon: Users, href: "/users", adminOnly: true },
+  { label: "Builders", icon: Building2, href: "/builders", adminOnly: true },
   { label: "AI models", icon: Sparkles, href: "/models", adminOnly: true },
   { label: "Settings", icon: Settings, href: "/settings" },
 ];

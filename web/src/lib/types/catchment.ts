@@ -61,6 +61,7 @@ export interface StoredConfig {
   catchmentMode?: string;
   radiusKm?: number;
   segment?: string;
+  brandHeading?: string;
   affordabilityMultiple?: number;
 }
 

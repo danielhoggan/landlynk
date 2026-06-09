@@ -21,6 +21,7 @@ export interface SubmitPayload {
     catchmentMode?: string;
     radiusKm?: number;
     segment?: string;
+    brandHeading?: string;
     affordabilityMultiple?: number;
   };
 }
@@ -167,10 +168,120 @@ export async function generateAreaProfile(
   return data;
 }
 
+export interface BuilderProfile {
+  id: string;
+  builderId: string;
+  name: string;
+  segment?: string | null;
+  bedRange?: string | null;
+  priceFrom?: number | null;
+  priceTo?: number | null;
+  strapline?: string | null;
+  pillars: string[];
+  features: string[];
+  builderName?: string;
+  themeHeading?: string;
+  groupId?: string;
+  groupName?: string;
+}
+
+export interface BuilderGroup {
+  id: string;
+  name: string;
+}
+
+export interface Builder {
+  id: string;
+  groupId: string;
+  name: string;
+  themeHeading: string;
+}
+
+async function jsonOrThrow<T>(res: Response, what: string): Promise<T> {
+  if (!res.ok) throw new Error(`${what} (${res.status})`);
+  return res.json();
+}
+
+export async function getBuilderProfiles(): Promise<BuilderProfile[]> {
+  return jsonOrThrow(await fetch("/api/builders/profiles"), "Could not load profiles");
+}
+
+export async function listGroups(): Promise<BuilderGroup[]> {
+  return jsonOrThrow(await fetch("/api/admin/builders/groups"), "Could not load groups");
+}
+
+export async function createGroup(name: string): Promise<BuilderGroup> {
+  return jsonOrThrow(
+    await fetch("/api/admin/builders/groups", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    }),
+    "Could not create group",
+  );
+}
+
+export async function deleteGroup(id: string): Promise<void> {
+  await fetch(`/api/admin/builders/groups/${id}`, { method: "DELETE" });
+}
+
+export async function listBuilders(groupId?: string): Promise<Builder[]> {
+  const q = groupId ? `?groupId=${encodeURIComponent(groupId)}` : "";
+  return jsonOrThrow(await fetch(`/api/admin/builders${q}`), "Could not load brands");
+}
+
+export async function createBuilder(body: {
+  groupId: string;
+  name: string;
+  themeHeading: string;
+}): Promise<{ id: string }> {
+  return jsonOrThrow(
+    await fetch("/api/admin/builders", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    "Could not create brand",
+  );
+}
+
+export async function deleteBuilder(id: string): Promise<void> {
+  await fetch(`/api/admin/builders/${id}`, { method: "DELETE" });
+}
+
+export async function saveProfile(
+  body: Partial<BuilderProfile> & { builderId: string; name: string },
+): Promise<{ id: string }> {
+  return jsonOrThrow(
+    await fetch("/api/admin/builders/profiles", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    "Could not save profile",
+  );
+}
+
+export async function deleteProfile(id: string): Promise<void> {
+  await fetch(`/api/admin/builders/profiles/${id}`, { method: "DELETE" });
+}
+
+export async function setUserGroup(
+  email: string,
+  groupId: string | null,
+): Promise<void> {
+  await fetch(`/api/admin/users/${encodeURIComponent(email)}/group`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ groupId }),
+  });
+}
+
 export interface AppUser {
   email: string | null;
   name: string | null;
   role: string;
+  builderGroupId?: string | null;
 }
 
 export async function getMe(): Promise<AppUser> {
