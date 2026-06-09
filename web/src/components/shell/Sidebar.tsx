@@ -1,6 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
+import { LogOut } from "lucide-react";
 import { Logo } from "./Logo";
 import { NAV_ITEMS, isActive } from "./navItems";
 
@@ -37,9 +39,23 @@ export function Sidebar() {
           })}
         </ul>
       </nav>
-      <p className="mt-auto px-2 text-xs text-neutral-400">
-        The Geographic Intelligence Engine. Open data, explainable rankings.
-      </p>
+      <div className="mt-auto space-y-3">
+        <button
+          type="button"
+          onClick={() => signOut({ callbackUrl: "/signin" })}
+          className="flex w-full items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
+        >
+          <LogOut size={18} /> Sign out
+        </button>
+        <div className="border-t border-neutral-200 px-2 pt-3">
+          <p className="text-xs font-medium text-neutral-500">
+            Product of Mediaworks
+          </p>
+          <p className="mt-1 text-xs text-neutral-400">
+            The Geographic Intelligence Engine. Open data, explainable rankings.
+          </p>
+        </div>
+      </div>
     </aside>
   );
 }

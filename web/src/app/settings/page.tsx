@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
-import { Settings, LogOut, Check } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Settings, Check } from "lucide-react";
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -63,13 +63,9 @@ export default function SettingsPage() {
         <p className="text-sm text-neutral-500">
           {session?.user?.name ?? session?.user?.email ?? "Signed in"}
         </p>
-        <button
-          type="button"
-          onClick={() => signOut({ callbackUrl: "/signin" })}
-          className="mt-3 flex items-center gap-2 rounded-card border border-neutral-300 px-3 py-2 text-sm font-semibold"
-        >
-          <LogOut size={16} /> Sign out
-        </button>
+        <p className="mt-2 text-xs text-neutral-400">
+          Sign out from the bottom of the navigation.
+        </p>
       </section>
 
       <section className="space-y-5 rounded-card border border-neutral-200 bg-white p-5">

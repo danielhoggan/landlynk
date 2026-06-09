@@ -633,7 +633,7 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
+      <div className="space-y-4">
         <CatchmentMap
           areas={areas}
           isochrone={catchment?.isochrone ?? null}

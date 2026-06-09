@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { X } from "lucide-react";
+import { X, LogOut } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { Logo } from "./Logo";
 import { NAV_ITEMS, isActive } from "./navItems";
 
@@ -34,7 +35,7 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
       />
       <nav
         aria-label="Main navigation"
-        className={`fixed left-0 top-0 z-50 h-full w-72 max-w-[80%] border-r border-neutral-200 bg-white p-5 transition-transform duration-[280ms] ease-drawer ${
+        className={`fixed left-0 top-0 z-50 flex h-full w-72 max-w-[80%] flex-col border-r border-neutral-200 bg-white p-5 transition-transform duration-[280ms] ease-drawer ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -72,6 +73,20 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
             );
           })}
         </ul>
+        <div className="mt-auto space-y-3">
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: "/signin" })}
+            className="flex w-full items-center gap-3 rounded-card px-3 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100"
+          >
+            <LogOut size={18} /> Sign out
+          </button>
+          <div className="border-t border-neutral-200 px-2 pt-3">
+            <p className="text-xs font-medium text-neutral-500">
+              Product of Mediaworks
+            </p>
+          </div>
+        </div>
       </nav>
     </div>
   );
