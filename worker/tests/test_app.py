@@ -168,6 +168,30 @@ def test_history_is_private_then_shareable(client, monkeypatch):
     assert shared["shared"] is True
 
 
+def test_opening_a_run_requires_access(client, monkeypatch):
+    # Sharing is in-portal: a non-owner cannot open another user's run by id,
+    # but can once it is shared with them.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    alice, bob = _user_headers("alice@x.com"), _user_headers("bob@x.com")
+    job_id = _submit(client, alice)
+
+    assert client.get(f"/catchments/{job_id}", headers=alice).status_code == 200
+    assert client.get(f"/catchments/{job_id}", headers=bob).status_code == 403
+    assert (
+        client.get(
+            f"/catchments/{job_id}/battlecards/E02000001", headers=bob
+        ).status_code
+        == 403
+    )
+
+    client.post(
+        f"/catchments/{job_id}/shares", json={"emails": ["bob@x.com"]}, headers=alice
+    )
+    assert client.get(f"/catchments/{job_id}", headers=bob).status_code == 200
+    # Admins can open anything.
+    assert client.get(f"/catchments/{job_id}").status_code == 200
+
+
 def test_archive_hides_from_default_history(client, monkeypatch):
     monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
     alice = _user_headers("alice@x.com")

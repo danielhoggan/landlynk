@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession } from "@/lib/requireSession";
+import { requireSession, sessionUser } from "@/lib/requireSession";
+import { userHeaders } from "@/lib/workerClient";
 
 const WORKER_BASE_URL = process.env.WORKER_BASE_URL ?? "http://localhost:8000";
 
@@ -28,7 +29,10 @@ export async function POST(
 
   const res = await fetch(`${WORKER_BASE_URL}/catchments/${params.id}/shortlist/pptx`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...userHeaders(sessionUser(session)),
+    },
     body: JSON.stringify({ area_codes: areaCodes }),
     cache: "no-store",
   });

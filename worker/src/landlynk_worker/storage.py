@@ -118,6 +118,9 @@ class Storage(Protocol):
     ) -> list[dict]: ...
     def delete_catchment(self, catchment_id: str) -> bool: ...
     def get_owner(self, catchment_id: str) -> str | None: ...
+    def can_access(
+        self, catchment_id: str, viewer_email: str | None, is_admin: bool
+    ) -> bool: ...
     def set_archived(self, catchment_id: str, archived: bool) -> bool: ...
     def add_shares(self, catchment_id: str, emails: list[str]) -> None: ...
     def remove_share(self, catchment_id: str, email: str) -> bool: ...
@@ -249,6 +252,12 @@ class InMemoryStore:
     def get_owner(self, catchment_id: str) -> str | None:
         record = self._records.get(catchment_id)
         return record.owner if record else None
+
+    def can_access(
+        self, catchment_id: str, viewer_email: str | None, is_admin: bool
+    ) -> bool:
+        record = self._records.get(catchment_id)
+        return record is not None and self._visible(record, viewer_email, is_admin)
 
     def set_archived(self, catchment_id: str, archived: bool) -> bool:
         record = self._records.get(catchment_id)
@@ -513,6 +522,27 @@ class PostgresStore:
                 "SELECT owner_email FROM catchment WHERE id = %s", [catchment_id]
             ).fetchone()
         return row[0] if row else None
+
+    def can_access(
+        self, catchment_id: str, viewer_email: str | None, is_admin: bool
+    ) -> bool:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT owner_email FROM catchment WHERE id = %s", [catchment_id]
+            ).fetchone()
+            if row is None:
+                return False
+            if is_admin:
+                return True
+            owner = row[0]
+            if owner is not None and owner == viewer_email:
+                return True
+            share = conn.execute(
+                "SELECT 1 FROM catchment_share WHERE catchment_id = %s "
+                "AND shared_with_email = %s",
+                [catchment_id, viewer_email],
+            ).fetchone()
+            return share is not None
 
     def set_archived(self, catchment_id: str, archived: bool) -> bool:
         with self._pool.connection() as conn:

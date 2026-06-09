@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireSession } from "@/lib/requireSession";
+import { requireSession, sessionUser } from "@/lib/requireSession";
+import { userHeaders } from "@/lib/workerClient";
 
 const WORKER_BASE_URL = process.env.WORKER_BASE_URL ?? "http://localhost:8000";
 
@@ -16,6 +17,7 @@ export async function GET(
 
   const res = await fetch(`${WORKER_BASE_URL}/catchments/${params.id}/kml`, {
     cache: "no-store",
+    headers: userHeaders(sessionUser(session)),
   });
   if (!res.ok) {
     return NextResponse.json(

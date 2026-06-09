@@ -171,6 +171,15 @@ def _require_owner_or_admin(catchment_id: str, user: dict) -> None:
         raise HTTPException(status_code=403, detail="Not your catchment")
 
 
+def _require_access(catchment_id: str, user: dict) -> None:
+    """Opening a run is governed by ownership and in-portal sharing, not by
+    holding its id. Owner, anyone it is shared with, or an admin may read it."""
+    if not get_store().can_access(
+        catchment_id, user.get("email"), user.get("role") == "admin"
+    ):
+        raise HTTPException(status_code=403, detail="No access to this catchment")
+
+
 @app.get("/admin/reference/status")
 def reference_status(x_admin_token: str | None = Header(default=None)) -> dict:
     _check_admin(x_admin_token)
@@ -230,10 +239,11 @@ def list_catchments(
 
 
 @app.get("/catchments/{catchment_id}")
-def get_catchment(catchment_id: str) -> dict:
+def get_catchment(catchment_id: str, user: dict = Depends(current_user)) -> dict:
     data = get_store().get_catchment(catchment_id)
     if data is None:
         raise HTTPException(status_code=404, detail="Catchment not found")
+    _require_access(catchment_id, user)
     return data
 
 
@@ -341,7 +351,10 @@ def admin_set_role(
 
 
 @app.get("/catchments/{catchment_id}/battlecards/{area_code}")
-def get_battlecard(catchment_id: str, area_code: str) -> dict:
+def get_battlecard(
+    catchment_id: str, area_code: str, user: dict = Depends(current_user)
+) -> dict:
+    _require_access(catchment_id, user)
     data = get_store().get_battlecard(catchment_id, area_code)
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
@@ -349,7 +362,10 @@ def get_battlecard(catchment_id: str, area_code: str) -> dict:
 
 
 @app.get("/catchments/{catchment_id}/kml")
-def get_catchment_kml(catchment_id: str) -> Response:
+def get_catchment_kml(
+    catchment_id: str, user: dict = Depends(current_user)
+) -> Response:
+    _require_access(catchment_id, user)
     store = get_store()
     catchment = store.get_catchment(catchment_id)
     if catchment is None:
@@ -390,7 +406,10 @@ def _shortlist_cards(catchment_id: str, area_codes: list[str]) -> list[Battlecar
 
 
 @app.post("/catchments/{catchment_id}/shortlist/pdf")
-def shortlist_pdf(catchment_id: str, request: ShortlistRequest) -> Response:
+def shortlist_pdf(
+    catchment_id: str, request: ShortlistRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_access(catchment_id, user)
     cards = _shortlist_cards(catchment_id, request.area_codes)
     if not cards:
         raise HTTPException(status_code=404, detail="No battlecards for shortlist")
@@ -405,7 +424,10 @@ def shortlist_pdf(catchment_id: str, request: ShortlistRequest) -> Response:
 
 
 @app.post("/catchments/{catchment_id}/shortlist/pptx")
-def shortlist_pptx(catchment_id: str, request: ShortlistRequest) -> Response:
+def shortlist_pptx(
+    catchment_id: str, request: ShortlistRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_access(catchment_id, user)
     cards = _shortlist_cards(catchment_id, request.area_codes)
     if not cards:
         raise HTTPException(status_code=404, detail="No battlecards for shortlist")
@@ -422,7 +444,10 @@ def shortlist_pptx(catchment_id: str, request: ShortlistRequest) -> Response:
 
 
 @app.get("/catchments/{catchment_id}/battlecards/{area_code}/pdf")
-def get_battlecard_pdf(catchment_id: str, area_code: str) -> Response:
+def get_battlecard_pdf(
+    catchment_id: str, area_code: str, user: dict = Depends(current_user)
+) -> Response:
+    _require_access(catchment_id, user)
     data = get_store().get_battlecard(catchment_id, area_code)
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
@@ -437,7 +462,10 @@ def get_battlecard_pdf(catchment_id: str, area_code: str) -> Response:
 
 
 @app.get("/catchments/{catchment_id}/battlecards/{area_code}/pptx")
-def get_battlecard_pptx(catchment_id: str, area_code: str) -> Response:
+def get_battlecard_pptx(
+    catchment_id: str, area_code: str, user: dict = Depends(current_user)
+) -> Response:
+    _require_access(catchment_id, user)
     data = get_store().get_battlecard(catchment_id, area_code)
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")

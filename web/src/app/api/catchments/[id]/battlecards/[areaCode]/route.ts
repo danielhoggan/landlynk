@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSession } from "@/lib/requireSession";
+import { requireSession, sessionUser } from "@/lib/requireSession";
 import { getBattlecard } from "@/lib/workerClient";
 
 // GET /api/catchments/:id/battlecards/:areaCode. Serve one area's stored
@@ -13,6 +13,16 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const battlecard = await getBattlecard(params.id, params.areaCode);
-  return NextResponse.json(battlecard);
+  try {
+    const battlecard = await getBattlecard(
+      params.id,
+      params.areaCode,
+      sessionUser(session),
+    );
+    return NextResponse.json(battlecard);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Not found";
+    const status = message.includes("403") ? 403 : 404;
+    return NextResponse.json({ error: message }, { status });
+  }
 }
