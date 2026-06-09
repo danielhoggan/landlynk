@@ -374,3 +374,23 @@ def test_reference_load_unknown_dataset(client):
 
 def test_reference_status_ok(client):
     assert client.get("/admin/reference/status").status_code == 200
+
+
+def test_audit_log_records_and_filters(client, monkeypatch):
+    # Actions land in the audit trail; admin can read and filter it.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job = _submit(client)  # run.create by admin
+    client.delete(f"/catchments/{job}")  # run.delete by admin
+
+    rows = client.get("/admin/audit").json()
+    actions = {r["action"] for r in rows}
+    assert {"run.create", "run.delete"} <= actions
+    assert all("actorEmail" in r and "createdAt" in r for r in rows)
+
+    only_delete = client.get("/admin/audit?action=run.delete").json()
+    assert only_delete and all(r["action"] == "run.delete" for r in only_delete)
+
+    # Non-admins cannot read the audit log.
+    assert (
+        client.get("/admin/audit", headers=_user_headers("u@x.com")).status_code == 403
+    )

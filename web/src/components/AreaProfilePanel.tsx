@@ -99,7 +99,11 @@ export function AreaProfilePanel({
             disabled={busy || exhausted}
             className="rounded-card bg-light-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
           >
-            {busy ? "Generating..." : "Whole catchment"}
+            {busy
+              ? "Adding..."
+              : profile
+                ? "Whole catchment"
+                : "Add AI lookup"}
           </button>
           {starred.length > 0 && (
             <button
@@ -108,7 +112,7 @@ export function AreaProfilePanel({
               disabled={busy || exhausted}
               className="rounded-card border border-light-accent px-3 py-1.5 text-xs font-semibold text-light-accent transition hover:bg-light-accent/5 disabled:opacity-50"
             >
-              Starred ({starred.length})
+              {profile ? "Starred" : "Add for starred"} ({starred.length})
             </button>
           )}
           {profile && (
@@ -173,7 +177,8 @@ export function AreaProfilePanel({
 
       {!profile && !error && !pending && (
         <p className="mt-2 text-xs text-neutral-500">
-          Generate an AI summary of the area and its amenities. Review before use.
+          Add an AI lookup of the area and its amenities. It shows here and is
+          included in the matching combined export. Review before use.
         </p>
       )}
 

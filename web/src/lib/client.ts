@@ -304,6 +304,35 @@ export async function setUserGroup(
   });
 }
 
+export interface AuditEntry {
+  id: number;
+  createdAt: string | null;
+  actorEmail: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  detail: Record<string, unknown> | null;
+  cost: number;
+}
+
+export async function getAudit(filters: {
+  actor?: string;
+  action?: string;
+  minCost?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}): Promise<AuditEntry[]> {
+  const qs = new URLSearchParams();
+  if (filters.actor) qs.set("actor", filters.actor);
+  if (filters.action) qs.set("action", filters.action);
+  if (filters.minCost) qs.set("min_cost", filters.minCost);
+  if (filters.dateFrom) qs.set("date_from", filters.dateFrom);
+  if (filters.dateTo) qs.set("date_to", filters.dateTo);
+  const res = await fetch(`/api/admin/audit?${qs.toString()}`);
+  if (!res.ok) throw new Error(`Could not load audit log (${res.status})`);
+  return res.json();
+}
+
 export interface ReferenceHealth {
   state: "green" | "amber" | "red";
   loaded: number;

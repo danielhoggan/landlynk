@@ -171,6 +171,53 @@ def _require_admin(user: dict) -> None:
         raise HTTPException(status_code=403, detail="Admin role required")
 
 
+def _audit(
+    user: dict,
+    action: str,
+    *,
+    target_type: str | None = None,
+    target_id: str | None = None,
+    detail: dict | None = None,
+    cost: float = 0,
+) -> None:
+    """Append an audit entry. Never raises: auditing must not break the action."""
+    try:
+        get_store().record_audit(
+            {
+                "actorEmail": user.get("email"),
+                "action": action,
+                "targetType": target_type,
+                "targetId": target_id,
+                "detail": detail,
+                "cost": cost,
+            }
+        )
+    except Exception:  # pragma: no cover - best effort
+        _log.exception("audit write failed for %s", action)
+
+
+@app.get("/admin/audit")
+def admin_audit(
+    actor: str | None = None,
+    action: str | None = None,
+    min_cost: float | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    user: dict = Depends(current_user),
+) -> list[dict]:
+    """Filterable audit trail for the admin Audits tab."""
+    _require_admin(user)
+    return get_store().list_audit(
+        {
+            "actor": actor,
+            "action": action,
+            "minCost": min_cost,
+            "dateFrom": date_from,
+            "dateTo": date_to,
+        }
+    )
+
+
 def _require_owner_or_admin(catchment_id: str, user: dict) -> None:
     if user.get("role") == "admin":
         return
@@ -247,6 +294,13 @@ def submit_catchment_job(
         created_by=user.get("email") or "system",
     )
     background.add_task(_run_job, job_id, request, config)
+    _audit(
+        user,
+        "run.create",
+        target_type="catchment",
+        target_id=job_id,
+        detail={"development": request.development_name, "input": request.value},
+    )
     return {"id": job_id}
 
 
@@ -274,6 +328,7 @@ def delete_catchment(catchment_id: str, user: dict = Depends(current_user)) -> R
     _require_admin(user)
     if not get_store().delete_catchment(catchment_id):
         raise HTTPException(status_code=404, detail="Catchment not found")
+    _audit(user, "run.delete", target_type="catchment", target_id=catchment_id)
     return Response(status_code=204)
 
 
@@ -446,6 +501,13 @@ def admin_create_group(
     _require_admin(user)
     group_id = str(uuid.uuid4())
     get_store().create_builder_group(group_id, request.name or "", request.monthly_cap)
+    _audit(
+        user,
+        "builder.group.create",
+        target_type="group",
+        target_id=group_id,
+        detail={"name": request.name, "monthlyCap": request.monthly_cap},
+    )
     return {"id": group_id, "name": request.name}
 
 
@@ -462,6 +524,7 @@ def admin_update_group(
 def admin_delete_group(group_id: str, user: dict = Depends(current_user)) -> Response:
     _require_admin(user)
     get_store().delete_builder_group(group_id)
+    _audit(user, "builder.group.delete", target_type="group", target_id=group_id)
     return Response(status_code=204)
 
 
@@ -490,6 +553,13 @@ def admin_create_builder(
     get_store().create_builder(
         builder_id, request.group_id, request.name, request.theme_heading
     )
+    _audit(
+        user,
+        "builder.brand.create",
+        target_type="brand",
+        target_id=builder_id,
+        detail={"name": request.name, "groupId": request.group_id},
+    )
     return {"id": builder_id}
 
 
@@ -499,6 +569,7 @@ def admin_delete_builder(
 ) -> Response:
     _require_admin(user)
     get_store().delete_builder(builder_id)
+    _audit(user, "builder.brand.delete", target_type="brand", target_id=builder_id)
     return Response(status_code=204)
 
 
@@ -525,6 +596,13 @@ def admin_save_profile(
     profile = request.model_dump(by_alias=True)
     profile["id"] = request.id or str(uuid.uuid4())
     get_store().upsert_builder_profile(profile)
+    _audit(
+        user,
+        "builder.profile.save",
+        target_type="profile",
+        target_id=profile["id"],
+        detail={"name": request.name},
+    )
     return {"id": profile["id"]}
 
 
@@ -534,6 +612,7 @@ def admin_delete_profile(
 ) -> Response:
     _require_admin(user)
     get_store().delete_builder_profile(profile_id)
+    _audit(user, "builder.profile.delete", target_type="profile", target_id=profile_id)
     return Response(status_code=204)
 
 
@@ -549,6 +628,13 @@ def admin_set_user_group(
 ) -> Response:
     _require_admin(user)
     get_store().set_user_group(email, request.group_id)
+    _audit(
+        user,
+        "user.group",
+        target_type="user",
+        target_id=email,
+        detail={"groupId": request.group_id},
+    )
     return Response(status_code=204)
 
 
@@ -587,6 +673,7 @@ def admin_set_default_model(
     if request.model not in {m["id"] for m in available_models()}:
         raise HTTPException(status_code=400, detail="Model not available")
     get_store().set_config("default_model", {"model": request.model})
+    _audit(user, "ai.default_model", detail={"model": request.model})
     return Response(status_code=204)
 
 
@@ -649,6 +736,14 @@ def area_profile(
         user.get("email"), user.get("builderGroupId"), model, _usage_period()
     )
     store.save_area_profile(cache_key, model, payload)
+    _audit(
+        user,
+        "ai.generate",
+        target_type="catchment",
+        target_id=catchment_id,
+        detail={"model": model, "areas": len(codes)},
+        cost=1,
+    )
     return {"model": model, **payload, "cached": False}
 
 
@@ -668,6 +763,13 @@ def admin_set_role(
         raise HTTPException(status_code=400, detail=f"Unknown role: {request.role}")
     if not get_store().set_role(email, request.role):
         raise HTTPException(status_code=404, detail="User not found")
+    _audit(
+        user,
+        "user.role",
+        target_type="user",
+        target_id=email,
+        detail={"role": request.role},
+    )
     return Response(status_code=204)
 
 

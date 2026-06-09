@@ -175,6 +175,8 @@ class Storage(Protocol):
         self, email: str | None, group_id: str | None, model: str, period: str
     ) -> None: ...
     def llm_usage_count(self, group_id: str | None, period: str) -> int: ...
+    def record_audit(self, entry: dict) -> None: ...
+    def list_audit(self, filters: dict, limit: int = 500) -> list[dict]: ...
     def create_builder(
         self, builder_id: str, group_id: str, name: str, theme_heading: str
     ) -> None: ...
@@ -234,6 +236,7 @@ class InMemoryStore:
         self._builders: dict[str, dict] = {}
         self._profiles: dict[str, dict] = {}
         self._usage: list[dict] = []
+        self._audit: list[dict] = []
 
     def create_job(
         self, catchment_id: str, job: JobInput, config: ScoringConfig, created_by: str
@@ -417,6 +420,40 @@ class InMemoryStore:
             for u in self._usage
             if u["group_id"] == group_id and u["period"] == period
         )
+
+    def record_audit(self, entry: dict) -> None:
+        row = {
+            **entry,
+            "id": len(self._audit) + 1,
+            "createdAt": datetime.now(UTC).isoformat(),
+        }
+        self._audit.append(row)
+
+    def list_audit(self, filters: dict, limit: int = 500) -> list[dict]:
+        rows = list(reversed(self._audit))
+
+        def keep(r: dict) -> bool:
+            if (
+                filters.get("actor")
+                and filters["actor"].lower() not in (r.get("actorEmail") or "").lower()
+            ):
+                return False
+            if filters.get("action") and r.get("action") != filters["action"]:
+                return False
+            if filters.get("minCost") is not None and float(r.get("cost") or 0) < float(
+                filters["minCost"]
+            ):
+                return False
+            if (
+                filters.get("dateFrom")
+                and (r.get("createdAt") or "") < filters["dateFrom"]
+            ):
+                return False
+            if filters.get("dateTo") and (r.get("createdAt") or "") > filters["dateTo"]:
+                return False
+            return True
+
+        return [r for r in rows if keep(r)][:limit]
 
     def delete_builder_group(self, group_id: str) -> bool:
         existed = self._groups.pop(group_id, None) is not None
@@ -873,6 +910,63 @@ class PostgresStore:
                 [group_id, period],
             ).fetchone()
         return int(row[0]) if row else 0
+
+    def record_audit(self, entry: dict) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO audit_log "
+                "(actor_email, action, target_type, target_id, detail, cost) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                [
+                    entry.get("actorEmail"),
+                    entry.get("action"),
+                    entry.get("targetType"),
+                    entry.get("targetId"),
+                    json.dumps(entry.get("detail")) if entry.get("detail") else None,
+                    entry.get("cost", 0),
+                ],
+            )
+
+    def list_audit(self, filters: dict, limit: int = 500) -> list[dict]:
+        clauses: list[str] = []
+        params: list = []
+        if filters.get("actor"):
+            clauses.append("actor_email ILIKE %s")
+            params.append(f"%{filters['actor']}%")
+        if filters.get("action"):
+            clauses.append("action = %s")
+            params.append(filters["action"])
+        if filters.get("minCost") is not None:
+            clauses.append("cost >= %s")
+            params.append(filters["minCost"])
+        if filters.get("dateFrom"):
+            clauses.append("created_at >= %s")
+            params.append(filters["dateFrom"])
+        if filters.get("dateTo"):
+            clauses.append("created_at <= %s")
+            params.append(filters["dateTo"])
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at, actor_email, action, target_type, "
+                "target_id, detail, cost FROM audit_log" + where + " "
+                "ORDER BY created_at DESC LIMIT %s",
+                params,
+            ).fetchall()
+        return [
+            {
+                "id": r[0],
+                "createdAt": r[1].isoformat() if r[1] else None,
+                "actorEmail": r[2],
+                "action": r[3],
+                "targetType": r[4],
+                "targetId": r[5],
+                "detail": r[6],
+                "cost": float(r[7]) if r[7] is not None else 0,
+            }
+            for r in rows
+        ]
 
     def create_builder(
         self, builder_id: str, group_id: str, name: str, theme_heading: str
