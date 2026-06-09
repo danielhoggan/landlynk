@@ -26,6 +26,7 @@ import {
 } from "@/lib/areaTags";
 import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
+import { AreaProfilePanel } from "@/components/AreaProfilePanel";
 
 // Scoring signal weights exposed in the config panel. Keys are snake_case to
 // match the scoring engine (SCOPING.md Section 8).
@@ -581,6 +582,13 @@ export default function HomePage() {
 
       {catchment?.status === "complete" && areas.length > 0 && (
         <RunAssumptions config={catchment.input?.config} />
+      )}
+
+      {catchment?.status === "complete" && areas.length > 0 && (
+        <AreaProfilePanel
+          catchmentId={catchment.id}
+          starred={Array.from(starred)}
+        />
       )}
 
       {catchment?.status === "complete" && areas.length > 0 && (

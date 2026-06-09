@@ -231,6 +231,52 @@ def test_roles_and_user_directory(client):
     assert client.get("/me", headers=alice).json()["role"] == "admin"
 
 
+def test_models_admin_and_area_profile(client, monkeypatch):
+    # With a provider key configured, an admin sees models and sets the default,
+    # and the area profile generates then serves from cache.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    monkeypatch.setattr(app_module.settings, "openai_api_key", "sk-test")
+
+    models = client.get("/admin/models").json()
+    assert any(m["id"] == "gpt-4o" for m in models["models"])
+    assert (
+        client.put("/admin/models/default", json={"model": "gpt-4o"}).status_code == 204
+    )
+
+    # A normal user cannot manage models.
+    assert (
+        client.get("/admin/models", headers=_user_headers("a@x.com")).status_code == 403
+    )
+
+    job_id = _submit(client)
+    calls = {"n": 0}
+
+    def fake_generate(names, model, transport=None):
+        calls["n"] += 1
+        return {
+            "description": "Lovely area.",
+            "amenities": [{"name": "Park", "category": "Leisure"}],
+        }
+
+    monkeypatch.setattr(
+        app_module, "generate_area_profile", fake_generate, raising=False
+    )
+    monkeypatch.setattr(
+        "landlynk_worker.enrichment.generate_area_profile", fake_generate
+    )
+
+    first = client.post(
+        f"/catchments/{job_id}/area-profile", json={"scope": "whole"}
+    ).json()
+    assert first["description"] == "Lovely area."
+    assert first["cached"] is False
+    second = client.post(
+        f"/catchments/{job_id}/area-profile", json={"scope": "whole"}
+    ).json()
+    assert second["cached"] is True
+    assert calls["n"] == 1  # second served from cache, not regenerated
+
+
 def test_account_settings_roundtrip(client):
     alice = _user_headers("alice@x.com")
     client.get("/me", headers=alice)  # upsert the user first (settings FK)

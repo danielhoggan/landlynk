@@ -19,6 +19,7 @@ def test_migrations_dir_ships_with_the_package():
         "0003_house_prices.sql",
         "0004_reference_loads.sql",
         "0005_users_sharing_archive.sql",
+        "0006_ai_enrichment.sql",
     ]
 
 

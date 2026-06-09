@@ -1,0 +1,46 @@
+"""AI Local Area Profile generation: parsing and provider dispatch (offline)."""
+
+from __future__ import annotations
+
+import pytest
+
+from landlynk_worker.enrichment.area_profile import generate_area_profile
+from landlynk_worker.enrichment.models import MODELS, model_provider
+
+
+def test_model_provider_known_and_unknown():
+    assert model_provider("gpt-4o") == "openai"
+    assert model_provider("claude-sonnet-4-5") == "anthropic"
+    assert model_provider("gemini-1.5-pro") == "google"
+    assert model_provider("nope") is None
+
+
+def test_generate_parses_json_and_filters_categories():
+    captured = {}
+
+    def fake(model: str, prompt: str) -> str:
+        captured["model"] = model
+        captured["prompt"] = prompt
+        return (
+            '```json\n{"description": "A leafy commuter town.", '
+            '"amenities": [{"name": "Station", "category": "Transport"}, '
+            '{"name": "Odd", "category": "Bogus"}]}\n```'
+        )
+
+    out = generate_area_profile(["Ipswich", "Babergh"], "gpt-4o", transport=fake)
+    assert out["description"].startswith("A leafy")
+    assert out["amenities"][0] == {"name": "Station", "category": "Transport"}
+    # Unknown categories collapse to Other.
+    assert out["amenities"][1]["category"] == "Other"
+    assert "Ipswich, Babergh" in captured["prompt"]
+    assert captured["model"] == "gpt-4o"
+
+
+def test_generate_rejects_unknown_model():
+    with pytest.raises(ValueError):
+        generate_area_profile(["X"], "no-such-model", transport=lambda m, p: "{}")
+
+
+def test_models_registry_covers_three_providers():
+    providers = {m.provider for m in MODELS}
+    assert providers == {"anthropic", "openai", "google"}

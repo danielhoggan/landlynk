@@ -61,6 +61,12 @@ DEPLOYMENT.md. Rough order below.
       this is the default; set it only to point at a self-hosted ORS or Valhalla.
 - [ ] `WORKER_PERSIST_RESULTS` = `true`. Optional, default is true.
 - [ ] `WORKER_DEFAULT_DRIVE_TIME_MINUTES` = `30`. Optional, default is 30.
+- [ ] AI Local Area Profile keys (optional, enables the amenities lookup). Add
+      any you use; the AI models admin page only offers providers with a key set:
+  - `WORKER_ANTHROPIC_API_KEY` = your Anthropic key.
+  - `WORKER_OPENAI_API_KEY` = your OpenAI key.
+  - `WORKER_GOOGLE_API_KEY` = your Google (Gemini) key.
+      Then pick the default model on the in-app AI models page (admin only).
 - [ ] `WORKER_ADMIN_EMAILS` = comma-separated emails always granted the admin
       role on sign in, e.g. `danielhoggan@gmail.com`. Bootstraps the first
       admin, who can then set other users' roles from the Users page. Required

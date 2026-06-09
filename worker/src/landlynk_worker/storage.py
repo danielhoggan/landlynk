@@ -136,6 +136,12 @@ class Storage(Protocol):
     def get_settings(self, email: str) -> dict | None: ...
     def save_settings(self, email: str, settings: dict) -> None: ...
 
+    # Global app config (e.g. the default AI model) and the area-profile cache.
+    def get_config(self, key: str) -> dict | None: ...
+    def set_config(self, key: str, value: dict) -> None: ...
+    def get_area_profile(self, cache_key: str) -> dict | None: ...
+    def save_area_profile(self, cache_key: str, model: str, payload: dict) -> None: ...
+
 
 @dataclass
 class _MemRecord:
@@ -171,6 +177,8 @@ class InMemoryStore:
         self._records: dict[str, _MemRecord] = {}
         self._users: dict[str, dict] = {}
         self._settings: dict[str, dict] = {}
+        self._config: dict[str, dict] = {}
+        self._area_profiles: dict[str, dict] = {}
 
     def create_job(
         self, catchment_id: str, job: JobInput, config: ScoringConfig, created_by: str
@@ -314,6 +322,18 @@ class InMemoryStore:
 
     def save_settings(self, email: str, settings: dict) -> None:
         self._settings[email.lower()] = settings
+
+    def get_config(self, key: str) -> dict | None:
+        return self._config.get(key)
+
+    def set_config(self, key: str, value: dict) -> None:
+        self._config[key] = value
+
+    def get_area_profile(self, cache_key: str) -> dict | None:
+        return self._area_profiles.get(cache_key)
+
+    def save_area_profile(self, cache_key: str, model: str, payload: dict) -> None:
+        self._area_profiles[cache_key] = {"model": model, **payload}
 
 
 class PostgresStore:
@@ -646,4 +666,37 @@ class PostgresStore:
                 "ON CONFLICT (email) DO UPDATE SET settings = EXCLUDED.settings, "
                 "updated_at = now()",
                 [email.lower(), json.dumps(settings)],
+            )
+
+    def get_config(self, key: str) -> dict | None:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT value FROM app_config WHERE key = %s", [key]
+            ).fetchone()
+        return row[0] if row else None
+
+    def set_config(self, key: str, value: dict) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO app_config (key, value) VALUES (%s, %s) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "
+                "updated_at = now()",
+                [key, json.dumps(value)],
+            )
+
+    def get_area_profile(self, cache_key: str) -> dict | None:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT model, payload FROM area_profile_cache WHERE cache_key = %s",
+                [cache_key],
+            ).fetchone()
+        return None if row is None else {"model": row[0], **row[1]}
+
+    def save_area_profile(self, cache_key: str, model: str, payload: dict) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO area_profile_cache (cache_key, model, payload) "
+                "VALUES (%s, %s, %s) ON CONFLICT (cache_key) DO UPDATE SET "
+                "model = EXCLUDED.model, payload = EXCLUDED.payload, created_at = now()",
+                [cache_key, model, json.dumps(payload)],
             )

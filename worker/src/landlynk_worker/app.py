@@ -331,6 +331,99 @@ def admin_list_users(user: dict = Depends(current_user)) -> list[dict]:
     return get_store().list_users()
 
 
+def _default_model() -> str | None:
+    from .enrichment import available_models
+    from .enrichment.models import default_available_model
+
+    stored = get_store().get_config("default_model")
+    chosen = (stored or {}).get("model") if stored else None
+    ids = {m["id"] for m in available_models()}
+    if chosen in ids:
+        return chosen
+    return default_available_model()
+
+
+@app.get("/admin/models")
+def admin_list_models(user: dict = Depends(current_user)) -> dict:
+    """Available AI models (by configured provider keys) and the chosen default."""
+    _require_admin(user)
+    from .enrichment import available_models
+
+    return {"models": available_models(), "default": _default_model()}
+
+
+class DefaultModelRequest(BaseModel):
+    model: str
+
+
+@app.put("/admin/models/default", status_code=204)
+def admin_set_default_model(
+    request: DefaultModelRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_admin(user)
+    from .enrichment import available_models
+
+    if request.model not in {m["id"] for m in available_models()}:
+        raise HTTPException(status_code=400, detail="Model not available")
+    get_store().set_config("default_model", {"model": request.model})
+    return Response(status_code=204)
+
+
+class AreaProfileRequest(BaseModel):
+    area_codes: list[str] = []
+    scope: str = "whole"
+    model: str | None = None
+    refresh: bool = False
+
+
+@app.post("/catchments/{catchment_id}/area-profile")
+def area_profile(
+    catchment_id: str,
+    request: AreaProfileRequest,
+    user: dict = Depends(current_user),
+) -> dict:
+    """Generate (or return cached) an AI Local Area Profile for the area set."""
+    import hashlib
+
+    from .enrichment import generate_area_profile
+
+    _require_access(catchment_id, user)
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    areas = catchment.get("areas", [])
+    by_code = {a["areaCode"]: a.get("name", a["areaCode"]) for a in areas}
+    if request.scope == "whole" or not request.area_codes:
+        codes = [a["areaCode"] for a in areas]
+    else:
+        codes = [c for c in request.area_codes if c in by_code]
+    if not codes:
+        raise HTTPException(status_code=404, detail="No areas for the profile")
+
+    model = request.model or _default_model()
+    if not model:
+        raise HTTPException(
+            status_code=503, detail="No AI model configured. Add a provider key."
+        )
+
+    key_src = "|".join(sorted(codes)) + "::" + model
+    cache_key = hashlib.sha256(key_src.encode()).hexdigest()
+    if not request.refresh:
+        cached = store.get_area_profile(cache_key)
+        if cached is not None:
+            return {**cached, "cached": True}
+
+    names = [by_code[c] for c in codes]
+    try:
+        payload = generate_area_profile(names, model)
+    except Exception as exc:
+        _log.exception("Area profile generation failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    store.save_area_profile(cache_key, model, payload)
+    return {"model": model, **payload, "cached": False}
+
+
 class RoleRequest(BaseModel):
     role: str
 

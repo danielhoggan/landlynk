@@ -114,6 +114,58 @@ export async function combinedExport(
   return res.blob();
 }
 
+export interface AiModel {
+  id: string;
+  label: string;
+  provider: string;
+}
+
+export async function getModels(): Promise<{
+  models: AiModel[];
+  default: string | null;
+}> {
+  const res = await fetch("/api/models");
+  if (!res.ok) throw new Error(`Could not load models (${res.status})`);
+  return res.json();
+}
+
+export async function setDefaultModel(model: string): Promise<void> {
+  const res = await fetch("/api/models/default", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model }),
+  });
+  if (!res.ok) throw new Error(`Could not set model (${res.status})`);
+}
+
+export interface AreaProfile {
+  description: string;
+  amenities: { name: string; category: string }[];
+  model?: string;
+  cached?: boolean;
+}
+
+export async function generateAreaProfile(
+  id: string,
+  body: {
+    scope: "selection" | "whole";
+    areaCodes?: string[];
+    model?: string;
+    refresh?: boolean;
+  },
+): Promise<AreaProfile> {
+  const res = await fetch(`/api/catchments/${id}/area-profile`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Could not generate profile (${res.status})`);
+  }
+  return data;
+}
+
 export interface AppUser {
   email: string | null;
   name: string | null;

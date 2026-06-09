@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # the first admin, who can then promote others from the Users page.
     admin_emails: str = ""
 
+    # AI provider keys for the Local Area Profile enrichment. Set the providers
+    # you use in Railway; the available models in the app reflect which keys are
+    # present. An admin picks the default model from those.
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    google_api_key: str = ""
+
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
