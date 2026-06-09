@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import refdata
 from .api_models import CatchmentJobRequest, to_development_info, to_scoring_config
@@ -337,6 +337,140 @@ def put_my_settings(payload: dict, user: dict = Depends(current_user)) -> Respon
 def admin_list_users(user: dict = Depends(current_user)) -> list[dict]:
     _require_admin(user)
     return get_store().list_users()
+
+
+# --- builder profiles -------------------------------------------------------
+
+
+def _scope_group(user: dict) -> str | None:
+    """The group a user is restricted to, or None to see all profiles.
+
+    Admins and internal users are unscoped. An external user pinned to a group
+    sees only that group's brands and profiles.
+    """
+    if user.get("role") == "admin":
+        return None
+    return user.get("builderGroupId")
+
+
+@app.get("/builders/profiles")
+def list_profiles(user: dict = Depends(current_user)) -> list[dict]:
+    """Targeting profiles the caller may use, scoped to their group if external."""
+    return get_store().list_builder_profiles(_scope_group(user))
+
+
+class GroupRequest(BaseModel):
+    name: str
+
+
+@app.get("/admin/builders/groups")
+def admin_groups(user: dict = Depends(current_user)) -> list[dict]:
+    _require_admin(user)
+    return get_store().list_builder_groups()
+
+
+@app.post("/admin/builders/groups")
+def admin_create_group(
+    request: GroupRequest, user: dict = Depends(current_user)
+) -> dict:
+    _require_admin(user)
+    group_id = str(uuid.uuid4())
+    get_store().create_builder_group(group_id, request.name)
+    return {"id": group_id, "name": request.name}
+
+
+@app.delete("/admin/builders/groups/{group_id}", status_code=204)
+def admin_delete_group(group_id: str, user: dict = Depends(current_user)) -> Response:
+    _require_admin(user)
+    get_store().delete_builder_group(group_id)
+    return Response(status_code=204)
+
+
+class BuilderRequest(BaseModel):
+    group_id: str = Field(alias="groupId")
+    name: str
+    theme_heading: str = Field(default="#4169E1", alias="themeHeading")
+
+    model_config = {"populate_by_name": True}
+
+
+@app.get("/admin/builders")
+def admin_builders(
+    group_id: str | None = None, user: dict = Depends(current_user)
+) -> list[dict]:
+    _require_admin(user)
+    return get_store().list_builders(group_id)
+
+
+@app.post("/admin/builders")
+def admin_create_builder(
+    request: BuilderRequest, user: dict = Depends(current_user)
+) -> dict:
+    _require_admin(user)
+    builder_id = str(uuid.uuid4())
+    get_store().create_builder(
+        builder_id, request.group_id, request.name, request.theme_heading
+    )
+    return {"id": builder_id}
+
+
+@app.delete("/admin/builders/{builder_id}", status_code=204)
+def admin_delete_builder(
+    builder_id: str, user: dict = Depends(current_user)
+) -> Response:
+    _require_admin(user)
+    get_store().delete_builder(builder_id)
+    return Response(status_code=204)
+
+
+class ProfileRequest(BaseModel):
+    id: str | None = None
+    builder_id: str = Field(alias="builderId")
+    name: str
+    segment: str | None = None
+    bed_range: str | None = Field(default=None, alias="bedRange")
+    price_from: float | None = Field(default=None, alias="priceFrom")
+    price_to: float | None = Field(default=None, alias="priceTo")
+    strapline: str | None = None
+    pillars: list[str] = []
+    features: list[str] = []
+
+    model_config = {"populate_by_name": True}
+
+
+@app.post("/admin/builders/profiles")
+def admin_save_profile(
+    request: ProfileRequest, user: dict = Depends(current_user)
+) -> dict:
+    _require_admin(user)
+    profile = request.model_dump(by_alias=True)
+    profile["id"] = request.id or str(uuid.uuid4())
+    get_store().upsert_builder_profile(profile)
+    return {"id": profile["id"]}
+
+
+@app.delete("/admin/builders/profiles/{profile_id}", status_code=204)
+def admin_delete_profile(
+    profile_id: str, user: dict = Depends(current_user)
+) -> Response:
+    _require_admin(user)
+    get_store().delete_builder_profile(profile_id)
+    return Response(status_code=204)
+
+
+class UserGroupRequest(BaseModel):
+    group_id: str | None = Field(default=None, alias="groupId")
+
+    model_config = {"populate_by_name": True}
+
+
+@app.put("/admin/users/{email}/group", status_code=204)
+def admin_set_user_group(
+    email: str, request: UserGroupRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_admin(user)
+    get_store().set_user_group(email, request.group_id)
+    return Response(status_code=204)
 
 
 def _default_model() -> str | None:

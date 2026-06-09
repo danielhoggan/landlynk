@@ -32,6 +32,31 @@ class JobInput:
     development_name: str
 
 
+def _user_row(row: tuple) -> dict:
+    return {
+        "email": row[0],
+        "name": row[1],
+        "role": row[2],
+        "builderGroupId": row[3] if len(row) > 3 else None,
+    }
+
+
+def _profile_row(row: tuple) -> dict:
+    """Map a builder_profile row (first 10 columns) to the API shape."""
+    return {
+        "id": row[0],
+        "builderId": row[1],
+        "name": row[2],
+        "segment": row[3],
+        "bedRange": row[4],
+        "priceFrom": float(row[5]) if row[5] is not None else None,
+        "priceTo": float(row[6]) if row[6] is not None else None,
+        "strapline": row[7],
+        "pillars": row[8] or [],
+        "features": row[9] or [],
+    }
+
+
 def scoring_config_to_dict(config: ScoringConfig) -> dict:
     """Serialise the scoring config stored with a catchment for reproducibility."""
     return {
@@ -134,6 +159,21 @@ class Storage(Protocol):
     def get_user(self, email: str) -> dict | None: ...
     def list_users(self) -> list[dict]: ...
     def set_role(self, email: str, role: str) -> bool: ...
+    def set_user_group(self, email: str, group_id: str | None) -> bool: ...
+
+    # Builder org model: groups, brands and saved targeting profiles.
+    def create_builder_group(self, group_id: str, name: str) -> None: ...
+    def list_builder_groups(self) -> list[dict]: ...
+    def delete_builder_group(self, group_id: str) -> bool: ...
+    def create_builder(
+        self, builder_id: str, group_id: str, name: str, theme_heading: str
+    ) -> None: ...
+    def list_builders(self, group_id: str | None = None) -> list[dict]: ...
+    def delete_builder(self, builder_id: str) -> bool: ...
+    def upsert_builder_profile(self, profile: dict) -> None: ...
+    def get_builder_profile(self, profile_id: str) -> dict | None: ...
+    def delete_builder_profile(self, profile_id: str) -> bool: ...
+    def list_builder_profiles(self, group_id: str | None = None) -> list[dict]: ...
     def get_settings(self, email: str) -> dict | None: ...
     def save_settings(self, email: str, settings: dict) -> None: ...
 
@@ -180,6 +220,9 @@ class InMemoryStore:
         self._settings: dict[str, dict] = {}
         self._config: dict[str, dict] = {}
         self._area_profiles: dict[str, dict] = {}
+        self._groups: dict[str, dict] = {}
+        self._builders: dict[str, dict] = {}
+        self._profiles: dict[str, dict] = {}
 
     def create_job(
         self, catchment_id: str, job: JobInput, config: ScoringConfig, created_by: str
@@ -301,6 +344,7 @@ class InMemoryStore:
             "email": email,
             "name": name or (existing or {}).get("name"),
             "role": role,
+            "builderGroupId": (existing or {}).get("builderGroupId"),
         }
         self._users[email] = user
         return user
@@ -317,6 +361,78 @@ class InMemoryStore:
             return False
         user["role"] = role
         return True
+
+    def set_user_group(self, email: str, group_id: str | None) -> bool:
+        user = self._users.get(email.lower())
+        if user is None:
+            return False
+        user["builderGroupId"] = group_id
+        return True
+
+    # --- builder org model ---
+    def create_builder_group(self, group_id: str, name: str) -> None:
+        self._groups[group_id] = {"id": group_id, "name": name}
+
+    def list_builder_groups(self) -> list[dict]:
+        return sorted(self._groups.values(), key=lambda g: g["name"])
+
+    def delete_builder_group(self, group_id: str) -> bool:
+        existed = self._groups.pop(group_id, None) is not None
+        for b in [b for b in self._builders.values() if b["groupId"] == group_id]:
+            self.delete_builder(b["id"])
+        return existed
+
+    def create_builder(
+        self, builder_id: str, group_id: str, name: str, theme_heading: str
+    ) -> None:
+        self._builders[builder_id] = {
+            "id": builder_id,
+            "groupId": group_id,
+            "name": name,
+            "themeHeading": theme_heading,
+        }
+
+    def list_builders(self, group_id: str | None = None) -> list[dict]:
+        builders = self._builders.values()
+        if group_id is not None:
+            builders = [b for b in builders if b["groupId"] == group_id]
+        return sorted(builders, key=lambda b: b["name"])
+
+    def delete_builder(self, builder_id: str) -> bool:
+        existed = self._builders.pop(builder_id, None) is not None
+        for p in [p for p in self._profiles.values() if p["builderId"] == builder_id]:
+            self._profiles.pop(p["id"], None)
+        return existed
+
+    def upsert_builder_profile(self, profile: dict) -> None:
+        self._profiles[profile["id"]] = profile
+
+    def get_builder_profile(self, profile_id: str) -> dict | None:
+        return self._profiles.get(profile_id)
+
+    def delete_builder_profile(self, profile_id: str) -> bool:
+        return self._profiles.pop(profile_id, None) is not None
+
+    def list_builder_profiles(self, group_id: str | None = None) -> list[dict]:
+        """Profiles enriched with brand and group; scoped to a group if given."""
+        out = []
+        for p in self._profiles.values():
+            builder = self._builders.get(p["builderId"])
+            if builder is None:
+                continue
+            if group_id is not None and builder["groupId"] != group_id:
+                continue
+            group = self._groups.get(builder["groupId"], {})
+            out.append(
+                {
+                    **p,
+                    "builderName": builder["name"],
+                    "themeHeading": builder["themeHeading"],
+                    "groupId": builder["groupId"],
+                    "groupName": group.get("name", ""),
+                }
+            )
+        return sorted(out, key=lambda p: (p["groupName"], p["builderName"], p["name"]))
 
     def get_settings(self, email: str) -> dict | None:
         return self._settings.get(email.lower())
@@ -624,26 +740,28 @@ class PostgresStore:
                     [email, name],
                 )
             row = conn.execute(
-                "SELECT email, name, role FROM app_user WHERE email = %s", [email]
+                "SELECT email, name, role, builder_group_id FROM app_user "
+                "WHERE email = %s",
+                [email],
             ).fetchone()
-        return {"email": row[0], "name": row[1], "role": row[2]}
+        return _user_row(row)
 
     def get_user(self, email: str) -> dict | None:
         with self._pool.connection() as conn:
             row = conn.execute(
-                "SELECT email, name, role FROM app_user WHERE email = %s",
+                "SELECT email, name, role, builder_group_id FROM app_user "
+                "WHERE email = %s",
                 [email.lower()],
             ).fetchone()
-        return (
-            None if row is None else {"email": row[0], "name": row[1], "role": row[2]}
-        )
+        return None if row is None else _user_row(row)
 
     def list_users(self) -> list[dict]:
         with self._pool.connection() as conn:
             rows = conn.execute(
-                "SELECT email, name, role FROM app_user ORDER BY email"
+                "SELECT email, name, role, builder_group_id FROM app_user "
+                "ORDER BY email"
             ).fetchall()
-        return [{"email": r[0], "name": r[1], "role": r[2]} for r in rows]
+        return [_user_row(r) for r in rows]
 
     def set_role(self, email: str, role: str) -> bool:
         with self._pool.connection() as conn:
@@ -652,6 +770,133 @@ class PostgresStore:
                 [role, email.lower()],
             )
             return cur.rowcount > 0
+
+    def set_user_group(self, email: str, group_id: str | None) -> bool:
+        with self._pool.connection() as conn:
+            cur = conn.execute(
+                "UPDATE app_user SET builder_group_id = %s, updated_at = now() "
+                "WHERE email = %s",
+                [group_id, email.lower()],
+            )
+            return cur.rowcount > 0
+
+    def create_builder_group(self, group_id: str, name: str) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO builder_group (id, name) VALUES (%s, %s) "
+                "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
+                [group_id, name],
+            )
+
+    def list_builder_groups(self) -> list[dict]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT id, name FROM builder_group ORDER BY name"
+            ).fetchall()
+        return [{"id": r[0], "name": r[1]} for r in rows]
+
+    def delete_builder_group(self, group_id: str) -> bool:
+        with self._pool.connection() as conn:
+            cur = conn.execute("DELETE FROM builder_group WHERE id = %s", [group_id])
+            return cur.rowcount > 0
+
+    def create_builder(
+        self, builder_id: str, group_id: str, name: str, theme_heading: str
+    ) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO builder (id, group_id, name, theme_heading) "
+                "VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET "
+                "name = EXCLUDED.name, theme_heading = EXCLUDED.theme_heading",
+                [builder_id, group_id, name, theme_heading],
+            )
+
+    def list_builders(self, group_id: str | None = None) -> list[dict]:
+        sql = "SELECT id, group_id, name, theme_heading FROM builder"
+        params: list = []
+        if group_id is not None:
+            sql += " WHERE group_id = %s"
+            params.append(group_id)
+        sql += " ORDER BY name"
+        with self._pool.connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [
+            {"id": r[0], "groupId": r[1], "name": r[2], "themeHeading": r[3]}
+            for r in rows
+        ]
+
+    def delete_builder(self, builder_id: str) -> bool:
+        with self._pool.connection() as conn:
+            cur = conn.execute("DELETE FROM builder WHERE id = %s", [builder_id])
+            return cur.rowcount > 0
+
+    def upsert_builder_profile(self, profile: dict) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO builder_profile (id, builder_id, name, segment, "
+                "bed_range, price_from, price_to, strapline, pillars, features) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (id) DO UPDATE SET builder_id = EXCLUDED.builder_id, "
+                "name = EXCLUDED.name, segment = EXCLUDED.segment, "
+                "bed_range = EXCLUDED.bed_range, price_from = EXCLUDED.price_from, "
+                "price_to = EXCLUDED.price_to, strapline = EXCLUDED.strapline, "
+                "pillars = EXCLUDED.pillars, features = EXCLUDED.features",
+                [
+                    profile["id"],
+                    profile["builderId"],
+                    profile["name"],
+                    profile.get("segment"),
+                    profile.get("bedRange"),
+                    profile.get("priceFrom"),
+                    profile.get("priceTo"),
+                    profile.get("strapline"),
+                    json.dumps(profile.get("pillars", [])),
+                    json.dumps(profile.get("features", [])),
+                ],
+            )
+
+    def get_builder_profile(self, profile_id: str) -> dict | None:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT id, builder_id, name, segment, bed_range, price_from, "
+                "price_to, strapline, pillars, features FROM builder_profile "
+                "WHERE id = %s",
+                [profile_id],
+            ).fetchone()
+        return None if row is None else _profile_row(row)
+
+    def delete_builder_profile(self, profile_id: str) -> bool:
+        with self._pool.connection() as conn:
+            cur = conn.execute(
+                "DELETE FROM builder_profile WHERE id = %s", [profile_id]
+            )
+            return cur.rowcount > 0
+
+    def list_builder_profiles(self, group_id: str | None = None) -> list[dict]:
+        sql = (
+            "SELECT p.id, p.builder_id, p.name, p.segment, p.bed_range, "
+            "p.price_from, p.price_to, p.strapline, p.pillars, p.features, "
+            "b.name, b.theme_heading, b.group_id, g.name "
+            "FROM builder_profile p JOIN builder b ON p.builder_id = b.id "
+            "JOIN builder_group g ON b.group_id = g.id"
+        )
+        params: list = []
+        if group_id is not None:
+            sql += " WHERE b.group_id = %s"
+            params.append(group_id)
+        sql += " ORDER BY g.name, b.name, p.name"
+        with self._pool.connection() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [
+            {
+                **_profile_row(r[:10]),
+                "builderName": r[10],
+                "themeHeading": r[11],
+                "groupId": r[12],
+                "groupName": r[13],
+            }
+            for r in rows
+        ]
 
     def get_settings(self, email: str) -> dict | None:
         with self._pool.connection() as conn:
