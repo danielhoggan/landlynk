@@ -562,7 +562,16 @@ def _combined_card(catchment_id: str, request: CombineRequest) -> Battlecard:
     if not payloads:
         raise HTTPException(status_code=404, detail="No areas to combine")
     config = (catchment.get("input") or {}).get("config")
-    return build_combined_battlecard(payloads, names, config)
+    # If a Local Area Profile was generated for this set with the default model,
+    # bake it into the export so the deck carries the amenities.
+    area_profile = None
+    model = _default_model()
+    if model:
+        import hashlib
+
+        key = hashlib.sha256(("|".join(sorted(codes)) + "::" + model).encode())
+        area_profile = store.get_area_profile(key.hexdigest())
+    return build_combined_battlecard(payloads, names, config, area_profile=area_profile)
 
 
 @app.post("/catchments/{catchment_id}/combined/pdf")

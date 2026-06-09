@@ -202,6 +202,21 @@ class DataConfidence(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class Amenity(BaseModel):
+    name: str
+    category: str
+
+
+class LocalAreaProfile(BaseModel):
+    """Optional AI-generated area narrative and amenities. Labelled for review."""
+
+    description: str
+    amenities: list[Amenity] = []
+    model: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
 class Battlecard(BaseModel):
     schema_version: str = Field(
         default=BATTLECARD_SCHEMA_VERSION, alias="schemaVersion"
@@ -220,5 +235,9 @@ class Battlecard(BaseModel):
     addressable_segments: AddressableSegments = Field(alias="addressableSegments")
     catchment_context: CatchmentContext = Field(alias="catchmentContext")
     data_confidence: DataConfidence = Field(alias="dataConfidence")
+    # Optional AI enrichment, attached on export when a profile was generated.
+    local_area_profile: LocalAreaProfile | None = Field(
+        default=None, alias="localAreaProfile"
+    )
 
     model_config = {"populate_by_name": True}

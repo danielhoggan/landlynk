@@ -228,6 +228,14 @@ def render_battlecards_pdf(
     return buffer.getvalue()
 
 
+def _group_amenities(amenities: list) -> list[tuple[str, list]]:
+    order = ["Transport", "Retail", "Leisure", "Education", "Healthcare", "Other"]
+    grouped: dict[str, list] = {}
+    for a in amenities:
+        grouped.setdefault(a.category, []).append(a)
+    return [(c, grouped[c]) for c in order if grouped.get(c)]
+
+
 def _numf(dv: DataValue) -> float:
     return 0.0 if dv.value is None else float(dv.value)
 
@@ -354,14 +362,22 @@ def _card_flowables(card: Battlecard, st: dict) -> list:
             main.append(Paragraph(line, st["bullet"], bulletText="•"))
             lines += 1
 
-    main.append(Paragraph("THE DEVELOPMENT &amp; LOCATION", st["header"]))
-    summary = (
-        f"{stats.bed_range} bed homes from {_short_money(stats.price_from.value)} "
-        f"in {h.town}"
-    )
-    main.append(Paragraph(summary, st["bullet_bold"]))
-    for feature in vs.development_features[:7]:
-        main.append(Paragraph(feature, st["bullet"], bulletText="•"))
+    profile = card.local_area_profile
+    if profile:
+        main.append(Paragraph("LOCAL AREA &amp; AMENITIES", st["header"]))
+        main.append(Paragraph(profile.description, st["bullet_bold"]))
+        for cat, items in _group_amenities(profile.amenities):
+            names = ", ".join(a.name for a in items[:6])
+            main.append(Paragraph(f"<b>{cat}:</b> {names}", st["bullet"]))
+    else:
+        main.append(Paragraph("THE DEVELOPMENT &amp; LOCATION", st["header"]))
+        summary = (
+            f"{stats.bed_range} bed homes from {_short_money(stats.price_from.value)} "
+            f"in {h.town}"
+        )
+        main.append(Paragraph(summary, st["bullet_bold"]))
+        for feature in vs.development_features[:7]:
+            main.append(Paragraph(feature, st["bullet"], bulletText="•"))
     main.append(Spacer(1, 2 * mm))
 
     # charts row

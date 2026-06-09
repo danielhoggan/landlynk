@@ -123,7 +123,8 @@ export function AreaProfilePanel({
           </div>
           <p className="text-[11px] text-neutral-400">
             AI-generated{profile.model ? ` by ${profile.model}` : ""}
-            {profile.cached ? " (cached)" : ""}. Please review before use.
+            {profile.cached ? " (cached)" : ""}. Please review before use. Included
+            in the matching combined export.
           </p>
         </div>
       )}

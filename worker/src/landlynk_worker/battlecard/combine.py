@@ -151,6 +151,7 @@ def build_combined_battlecard(
     names: dict[str, str],
     config_dict: dict | None,
     label: str = "Combined catchment",
+    area_profile: dict | None = None,
 ) -> Battlecard:
     """Assemble one Battlecard for the combined set of areas."""
     profiles = [reconstruct_profile(p) for p in payloads]
@@ -191,4 +192,16 @@ def build_combined_battlecard(
         income_context=income_context,
     )
     card.score.band = relative_band(1, 1)
+    if area_profile and area_profile.get("description"):
+        from .schema import Amenity, LocalAreaProfile
+
+        card.local_area_profile = LocalAreaProfile(
+            description=area_profile.get("description", ""),
+            amenities=[
+                Amenity(name=a.get("name", ""), category=a.get("category", "Other"))
+                for a in area_profile.get("amenities", [])
+                if a.get("name")
+            ],
+            model=area_profile.get("model"),
+        )
     return card

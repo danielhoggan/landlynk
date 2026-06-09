@@ -259,23 +259,33 @@ def _messaging_columns(slide: Slide, card: Battlecard, navy: RGBColor) -> None:
             _line(tf, line, size=10, color=_INK)
             lines += 1
 
-    # Right: the development and location.
-    _header_bar(
-        slide,
-        Inches(8.45),
-        Inches(0.9),
-        Inches(4.65),
-        "The development & location",
-        navy,
-    )
+    # Right: development and location, or local amenities when AI enrichment is
+    # attached (the wider-catchment card has amenities rather than site features).
+    profile = card.local_area_profile
+    title = "Local area & amenities" if profile else "The development & location"
+    _header_bar(slide, Inches(8.45), Inches(0.9), Inches(4.65), title, navy)
     tf = _box(slide, Inches(8.55), Inches(1.3), Inches(4.55), Inches(2.4))
-    summary = (
-        f"{vs.key_statistics.bed_range} bed homes from "
-        f"{_fmt(vs.key_statistics.price_from, money=True)} in {vs.header.town}"
-    )
-    _line(tf, summary, size=10.5, color=_INK, bold=True, first=True)
-    for feature in vs.development_features[:7]:
-        _line(tf, feature, size=10, color=_INK)
+    if profile:
+        _line(tf, profile.description, size=9.5, color=_INK, first=True)
+        for cat, items in _group_amenities(profile.amenities):
+            names = ", ".join(a.name for a in items[:6])
+            _line(tf, f"{cat}: {names}", size=9, color=_INK)
+    else:
+        summary = (
+            f"{vs.key_statistics.bed_range} bed homes from "
+            f"{_fmt(vs.key_statistics.price_from, money=True)} in {vs.header.town}"
+        )
+        _line(tf, summary, size=10.5, color=_INK, bold=True, first=True)
+        for feature in vs.development_features[:7]:
+            _line(tf, feature, size=10, color=_INK)
+
+
+def _group_amenities(amenities: list) -> list[tuple[str, list]]:
+    order = ["Transport", "Retail", "Leisure", "Education", "Healthcare", "Other"]
+    grouped: dict[str, list] = {}
+    for a in amenities:
+        grouped.setdefault(a.category, []).append(a)
+    return [(c, grouped[c]) for c in order if grouped.get(c)]
 
 
 def _charts_row(slide: Slide, card: Battlecard, navy: RGBColor) -> None:
