@@ -128,6 +128,14 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/segments")
+def list_segments_endpoint() -> list[dict]:
+    """The predefined audience segments for segment-first targeting."""
+    from .scoring.segments import list_segments
+
+    return list_segments()
+
+
 def _check_admin(token: str | None) -> None:
     if settings.admin_token and token != settings.admin_token:
         raise HTTPException(status_code=401, detail="Invalid admin token")

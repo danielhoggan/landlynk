@@ -29,6 +29,7 @@ class ScoringConfigModel(BaseModel):
     drive_time_minutes: int | None = Field(default=None, alias="driveTimeMinutes")
     catchment_mode: str | None = Field(default=None, alias="catchmentMode")
     radius_km: float | None = Field(default=None, alias="radiusKm")
+    segment: str | None = None
     affordability_multiple: float | None = Field(
         default=None, alias="affordabilityMultiple"
     )
@@ -63,7 +64,7 @@ def to_scoring_config(req: CatchmentJobRequest) -> ScoringConfig:
         if cfg.price_band
         else base.price_band
     )
-    return ScoringConfig(
+    config = ScoringConfig(
         weights=cfg.weights or base.weights,
         price_band=price_band,
         bed_range=cfg.bed_range or base.bed_range,
@@ -85,6 +86,15 @@ def to_scoring_config(req: CatchmentJobRequest) -> ScoringConfig:
             else base.affordability_multiple
         ),
     )
+    # A chosen segment sets the age and tenure preference vectors, and the bed
+    # range unless the caller gave an explicit one.
+    if cfg.segment:
+        from .scoring.segments import apply_segment
+
+        config = apply_segment(
+            config, cfg.segment, override_bed_range=cfg.bed_range is None
+        )
+    return config
 
 
 def to_development_info(req: CatchmentJobRequest) -> DevelopmentInfo:

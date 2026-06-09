@@ -20,6 +20,7 @@ export interface SubmitPayload {
     overlapThreshold?: number;
     catchmentMode?: string;
     radiusKm?: number;
+    segment?: string;
     affordabilityMultiple?: number;
   };
 }

@@ -42,6 +42,7 @@ def scoring_config_to_dict(config: ScoringConfig) -> dict:
         "driveTimeMinutes": config.drive_time_minutes,
         "catchmentMode": config.catchment_mode,
         "radiusKm": config.radius_km,
+        "segment": config.segment,
         "affordabilityMultiple": config.affordability_multiple,
         "tenurePreference": config.tenure_preference,
         "agePreference": config.age_preference,

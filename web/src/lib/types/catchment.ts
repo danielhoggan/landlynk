@@ -60,6 +60,7 @@ export interface StoredConfig {
   driveTimeMinutes?: number;
   catchmentMode?: string;
   radiusKm?: number;
+  segment?: string;
   affordabilityMultiple?: number;
 }
 

@@ -27,6 +27,7 @@ import {
 import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
 import { AreaProfilePanel } from "@/components/AreaProfilePanel";
+import { SEGMENTS } from "@/lib/segments";
 
 // Scoring signal weights exposed in the config panel. Keys are snake_case to
 // match the scoring engine (SCOPING.md Section 8).
@@ -58,6 +59,7 @@ export default function HomePage() {
   const [priceFrom, setPriceFrom] = useState("");
   const [priceTo, setPriceTo] = useState("");
   const [bedRange, setBedRange] = useState("");
+  const [segment, setSegment] = useState("");
   const [driveTime, setDriveTime] = useState("30");
   const [catchmentMode, setCatchmentMode] = useState<"driveTime" | "radius">(
     "driveTime",
@@ -264,6 +266,7 @@ export default function HomePage() {
         config.priceBand = { from: Number(priceFrom), to: Number(priceTo) };
       }
       if (bedRange) config.bedRange = bedRange;
+      if (segment) config.segment = segment;
       if (catchmentMode === "radius") {
         config.catchmentMode = "radius";
         if (radiusKm) config.radiusKm = Number(radiusKm);
@@ -410,6 +413,27 @@ export default function HomePage() {
 
           {showBrief && (
             <div className="mt-4 space-y-5">
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+                  Target segment
+                </span>
+                <select
+                  value={segment}
+                  onChange={(e) => setSegment(e.target.value)}
+                  className="w-full rounded-card border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-light-accent focus:outline-none"
+                >
+                  <option value="">Balanced (no segment)</option>
+                  {SEGMENTS.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label} — {s.description}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-neutral-400">
+                  Ranks the catchment for this audience. Leave balanced to use the
+                  default preferences.
+                </p>
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
                   label="Town"

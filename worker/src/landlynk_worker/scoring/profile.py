@@ -92,6 +92,8 @@ class ScoringConfig:
     # buffer of radius_km. Radius suits dense cities where drive times are noisy.
     catchment_mode: str = "drive_time"
     radius_km: float = 1.5
+    # Targeted audience segment id (see scoring/segments.py), for reproducibility.
+    segment: str | None = None
     # Income an affordability multiple maps a price to. price / multiple.
     affordability_multiple: float = 4.5
     # Preferred tenure mix for the product's audiences, weights 0..1.
