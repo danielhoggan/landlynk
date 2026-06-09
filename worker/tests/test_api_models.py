@@ -19,6 +19,20 @@ def test_defaults_when_no_config_given():
     assert config.affordability_multiple == 4.5
 
 
+def test_radius_catchment_override_applied():
+    req = CatchmentJobRequest.model_validate(
+        {
+            "kind": "postcode",
+            "value": "SW1A 1AA",
+            "developmentName": "X",
+            "config": {"catchmentMode": "radius", "radiusKm": 1.5},
+        }
+    )
+    config = to_scoring_config(req)
+    assert config.catchment_mode == "radius"
+    assert config.radius_km == 1.5
+
+
 def test_affordability_multiple_override_applied():
     req = CatchmentJobRequest.model_validate(
         {

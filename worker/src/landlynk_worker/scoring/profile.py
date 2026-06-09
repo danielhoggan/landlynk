@@ -88,6 +88,10 @@ class ScoringConfig:
     bed_range: str = "2 to 5"
     overlap_threshold: float = 0.10
     drive_time_minutes: int = 30
+    # Catchment shape: "drive_time" builds an isochrone, "radius" a circular
+    # buffer of radius_km. Radius suits dense cities where drive times are noisy.
+    catchment_mode: str = "drive_time"
+    radius_km: float = 1.5
     # Income an affordability multiple maps a price to. price / multiple.
     affordability_multiple: float = 4.5
     # Preferred tenure mix for the product's audiences, weights 0..1.

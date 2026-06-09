@@ -27,6 +27,8 @@ class ScoringConfigModel(BaseModel):
     bed_range: str | None = Field(default=None, alias="bedRange")
     overlap_threshold: float | None = Field(default=None, alias="overlapThreshold")
     drive_time_minutes: int | None = Field(default=None, alias="driveTimeMinutes")
+    catchment_mode: str | None = Field(default=None, alias="catchmentMode")
+    radius_km: float | None = Field(default=None, alias="radiusKm")
     affordability_multiple: float | None = Field(
         default=None, alias="affordabilityMultiple"
     )
@@ -75,6 +77,8 @@ def to_scoring_config(req: CatchmentJobRequest) -> ScoringConfig:
             if cfg.drive_time_minutes is not None
             else base.drive_time_minutes
         ),
+        catchment_mode=cfg.catchment_mode or base.catchment_mode,
+        radius_km=(cfg.radius_km if cfg.radius_km is not None else base.radius_km),
         affordability_multiple=(
             cfg.affordability_multiple
             if cfg.affordability_multiple is not None

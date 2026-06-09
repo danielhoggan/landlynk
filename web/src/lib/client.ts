@@ -18,6 +18,9 @@ export interface SubmitPayload {
     bedRange?: string;
     driveTimeMinutes?: number;
     overlapThreshold?: number;
+    catchmentMode?: string;
+    radiusKm?: number;
+    affordabilityMultiple?: number;
   };
 }
 

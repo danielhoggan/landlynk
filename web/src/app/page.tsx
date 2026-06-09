@@ -53,6 +53,10 @@ export default function HomePage() {
   const [priceTo, setPriceTo] = useState("");
   const [bedRange, setBedRange] = useState("");
   const [driveTime, setDriveTime] = useState("30");
+  const [catchmentMode, setCatchmentMode] = useState<"driveTime" | "radius">(
+    "driveTime",
+  );
+  const [radiusKm, setRadiusKm] = useState("1.5");
   const [affordability, setAffordability] = useState("4.5");
   const [showBrief, setShowBrief] = useState(false);
 
@@ -225,7 +229,13 @@ export default function HomePage() {
         config.priceBand = { from: Number(priceFrom), to: Number(priceTo) };
       }
       if (bedRange) config.bedRange = bedRange;
-      if (driveTime) config.driveTimeMinutes = Number(driveTime);
+      if (catchmentMode === "radius") {
+        config.catchmentMode = "radius";
+        if (radiusKm) config.radiusKm = Number(radiusKm);
+      } else {
+        config.catchmentMode = "drive_time";
+        if (driveTime) config.driveTimeMinutes = Number(driveTime);
+      }
       if (affordability) config.affordabilityMultiple = Number(affordability);
       config.overlapThreshold = Number(overlap);
       config.weights = Object.fromEntries(
@@ -416,14 +426,43 @@ export default function HomePage() {
                   placeholder="450000"
                   type="number"
                 />
-                <Field
-                  label="Drive time"
-                  suffix="min"
-                  value={driveTime}
-                  onChange={setDriveTime}
-                  placeholder="30"
-                  type="number"
-                />
+                <div>
+                  <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+                    Catchment
+                  </span>
+                  <Segmented
+                    options={[
+                      { value: "driveTime", label: "Drive time" },
+                      { value: "radius", label: "Radius" },
+                    ]}
+                    value={catchmentMode}
+                    onChange={(v) =>
+                      setCatchmentMode(v as "driveTime" | "radius")
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {catchmentMode === "driveTime" ? (
+                  <Field
+                    label="Drive time"
+                    suffix="min"
+                    value={driveTime}
+                    onChange={setDriveTime}
+                    placeholder="30"
+                    type="number"
+                  />
+                ) : (
+                  <Field
+                    label="Radius"
+                    suffix="km"
+                    hint="straight-line, good for cities"
+                    value={radiusKm}
+                    onChange={setRadiusKm}
+                    placeholder="1.5"
+                    type="number"
+                  />
+                )}
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field

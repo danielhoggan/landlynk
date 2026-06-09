@@ -40,6 +40,8 @@ def scoring_config_to_dict(config: ScoringConfig) -> dict:
         "bedRange": config.bed_range,
         "overlapThreshold": config.overlap_threshold,
         "driveTimeMinutes": config.drive_time_minutes,
+        "catchmentMode": config.catchment_mode,
+        "radiusKm": config.radius_km,
         "affordabilityMultiple": config.affordability_multiple,
         "tenurePreference": config.tenure_preference,
         "agePreference": config.age_preference,

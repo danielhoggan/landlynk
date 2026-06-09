@@ -58,6 +58,8 @@ export interface StoredConfig {
   bedRange?: string;
   overlapThreshold?: number;
   driveTimeMinutes?: number;
+  catchmentMode?: string;
+  radiusKm?: number;
   affordabilityMultiple?: number;
 }
 

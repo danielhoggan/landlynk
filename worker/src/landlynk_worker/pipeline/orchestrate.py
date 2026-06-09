@@ -27,6 +27,7 @@ from ..scoring.profile import ScoringConfig
 from ..scoring.score import ScoreBreakdown, compute_score, relative_band
 from .intersect import intersect_catchment
 from .isochrone import IsochroneCache, IsochroneParams, IsochroneProvider, get_isochrone
+from .radius import radius_polygon
 from .reference import ReferenceData
 from .resolve import Coordinate, resolve_input
 
@@ -132,18 +133,22 @@ def run_catchment(
     coordinate = deps.geocode(raw_input)
     _log.info("Geocoded to %.5f, %.5f", coordinate.lat, coordinate.lng)
 
-    # 2. Isochrone, cached by coordinate and parameters.
-    params = IsochroneParams(
-        lat=coordinate.lat,
-        lng=coordinate.lng,
-        drive_time_minutes=config.drive_time_minutes,
-    )
-    isochrone = get_isochrone(params, deps.isochrone_provider, deps.isochrone_cache)
-    isochrone_shape = shape(isochrone)
+    # 2. Build the catchment polygon: a radius buffer or a drive-time isochrone.
+    if config.catchment_mode == "radius":
+        catchment = radius_polygon(coordinate.lat, coordinate.lng, config.radius_km)
+        _log.info("Radius catchment: %.2f km", config.radius_km)
+    else:
+        params = IsochroneParams(
+            lat=coordinate.lat,
+            lng=coordinate.lng,
+            drive_time_minutes=config.drive_time_minutes,
+        )
+        catchment = get_isochrone(params, deps.isochrone_provider, deps.isochrone_cache)
+    catchment_shape = shape(catchment)
 
-    # 3. Intersect candidate boundaries against the isochrone.
-    candidates = deps.reference.candidate_area_geometries(isochrone, area_type)
-    matches = intersect_catchment(candidates, isochrone_shape, config.overlap_threshold)
+    # 3. Intersect candidate boundaries against the catchment.
+    candidates = deps.reference.candidate_area_geometries(catchment, area_type)
+    matches = intersect_catchment(candidates, catchment_shape, config.overlap_threshold)
     geometry_by_code = {c.area_code: mapping(c.geometry) for c in candidates}
     _log.info(
         "Intersect: %s candidate areas, %s retained above threshold %.2f",
@@ -203,7 +208,7 @@ def run_catchment(
     _log.info("Catchment run complete: %s ranked areas", len(areas))
     return CatchmentResult(
         coordinate=coordinate,
-        isochrone=isochrone,
+        isochrone=catchment,
         areas=areas,
         battlecards=battlecards,
     )
