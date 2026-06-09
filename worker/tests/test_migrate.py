@@ -21,6 +21,7 @@ def test_migrations_dir_ships_with_the_package():
         "0005_users_sharing_archive.sql",
         "0006_ai_enrichment.sql",
         "0007_builder_profiles.sql",
+        "0008_llm_usage.sql",
     ]
 
 

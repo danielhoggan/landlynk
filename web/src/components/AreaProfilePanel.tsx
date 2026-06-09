@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles, RefreshCw } from "lucide-react";
-import { generateAreaProfile, type AreaProfile } from "@/lib/client";
+import {
+  generateAreaProfile,
+  getUsage,
+  type AreaProfile,
+  type LlmUsage,
+} from "@/lib/client";
 
 const CATEGORY_ORDER = [
   "Transport",
@@ -25,10 +30,37 @@ export function AreaProfilePanel({
   const [profile, setProfile] = useState<AreaProfile | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [usage, setUsage] = useState<LlmUsage | null>(null);
+  const [costAck, setCostAck] = useState(false);
+  const [pending, setPending] = useState<{
+    scope: "whole" | "selection";
+    refresh: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    getUsage()
+      .then(setUsage)
+      .catch(() => setUsage({ metered: false }));
+  }, []);
+
+  const metered = usage?.metered === true;
+  const exhausted =
+    metered && usage?.remaining != null && usage.remaining <= 0;
+
+  // Internal users see a one-time cost confirmation; external users draw on a
+  // metered allowance, so the cost is already governed and no prompt is shown.
+  function requestRun(scope: "whole" | "selection", refresh = false) {
+    if (!metered && !costAck) {
+      setPending({ scope, refresh });
+      return;
+    }
+    run(scope, refresh);
+  }
 
   async function run(scope: "whole" | "selection", refresh = false) {
     setBusy(true);
     setError("");
+    setPending(null);
     try {
       const result = await generateAreaProfile(catchmentId, {
         scope,
@@ -36,6 +68,9 @@ export function AreaProfilePanel({
         refresh,
       });
       setProfile(result);
+      getUsage()
+        .then(setUsage)
+        .catch(() => {});
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not generate profile");
     } finally {
@@ -60,8 +95,8 @@ export function AreaProfilePanel({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => run("whole")}
-            disabled={busy}
+            onClick={() => requestRun("whole")}
+            disabled={busy || exhausted}
             className="rounded-card bg-light-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
           >
             {busy ? "Generating..." : "Whole catchment"}
@@ -69,8 +104,8 @@ export function AreaProfilePanel({
           {starred.length > 0 && (
             <button
               type="button"
-              onClick={() => run("selection")}
-              disabled={busy}
+              onClick={() => requestRun("selection")}
+              disabled={busy || exhausted}
               className="rounded-card border border-light-accent px-3 py-1.5 text-xs font-semibold text-light-accent transition hover:bg-light-accent/5 disabled:opacity-50"
             >
               Starred ({starred.length})
@@ -79,8 +114,8 @@ export function AreaProfilePanel({
           {profile && (
             <button
               type="button"
-              onClick={() => run("whole", true)}
-              disabled={busy}
+              onClick={() => requestRun("whole", true)}
+              disabled={busy || exhausted}
               aria-label="Regenerate"
               title="Regenerate"
               className="rounded-card border border-neutral-300 p-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
@@ -91,9 +126,52 @@ export function AreaProfilePanel({
         </div>
       </div>
 
+      {/* External users: metered allowance. */}
+      {metered && (
+        <p className="mt-2 text-xs text-neutral-500">
+          {usage?.cap == null
+            ? `${usage?.used ?? 0} generations used this month`
+            : `${usage?.remaining ?? 0} of ${usage.cap} AI generations left this month`}
+          {exhausted && (
+            <span className="text-priority-low">
+              {" "}
+              — allowance reached, resets next month.
+            </span>
+          )}
+        </p>
+      )}
+
+      {/* Internal users: one-time cost confirmation. */}
+      {pending && (
+        <div className="mt-2 rounded-card border border-priority-mid/40 bg-priority-mid/10 p-2.5 text-xs">
+          <p className="text-neutral-700">
+            This runs an AI model and incurs a cost to your account. Continue?
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCostAck(true);
+                run(pending.scope, pending.refresh);
+              }}
+              className="rounded-card bg-light-accent px-3 py-1 font-semibold text-white"
+            >
+              Generate (incurs cost)
+            </button>
+            <button
+              type="button"
+              onClick={() => setPending(null)}
+              className="rounded-card border border-neutral-300 px-3 py-1 font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && <p className="mt-2 text-xs text-priority-low">{error}</p>}
 
-      {!profile && !error && (
+      {!profile && !error && !pending && (
         <p className="mt-2 text-xs text-neutral-500">
           Generate an AI summary of the area and its amenities. Review before use.
         </p>

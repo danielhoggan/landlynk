@@ -12,6 +12,7 @@ import {
   deleteBuilder,
   saveProfile,
   deleteProfile,
+  updateGroup,
   type BuilderGroup,
   type Builder,
   type BuilderProfile,
@@ -123,22 +124,58 @@ function GroupCard({
 }) {
   const [name, setName] = useState("");
   const [colour, setColour] = useState("#0A1F44");
+  const [cap, setCap] = useState(
+    group.monthlyCap == null ? "" : String(group.monthlyCap),
+  );
+  const [savingCap, setSavingCap] = useState(false);
 
   return (
     <div className="rounded-card border border-neutral-200 bg-white p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{group.name}</h2>
-        <button
-          type="button"
-          onClick={async () => {
-            await deleteGroup(group.id);
-            onChange();
-          }}
-          className="text-neutral-400 hover:text-priority-low"
-          aria-label="Delete group"
-        >
-          <Trash2 size={16} />
-        </button>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+            Monthly AI cap
+            <input
+              value={cap}
+              onChange={(e) => setCap(e.target.value)}
+              placeholder="∞"
+              type="number"
+              title="Blank means unlimited"
+              className="w-20 rounded-card border border-neutral-300 px-2 py-1 text-xs"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={savingCap}
+            onClick={async () => {
+              setSavingCap(true);
+              try {
+                await updateGroup(group.id, {
+                  name: group.name,
+                  monthlyCap: cap === "" ? null : Number(cap),
+                });
+                onChange();
+              } finally {
+                setSavingCap(false);
+              }
+            }}
+            className="rounded-card border border-neutral-300 px-2 py-1 text-xs font-semibold disabled:opacity-50"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              await deleteGroup(group.id);
+              onChange();
+            }}
+            className="text-neutral-400 hover:text-priority-low"
+            aria-label="Delete group"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 space-y-3 pl-3">

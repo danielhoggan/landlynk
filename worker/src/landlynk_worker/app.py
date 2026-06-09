@@ -366,6 +366,60 @@ def _scope_group(user: dict) -> str | None:
     return user.get("builderGroupId")
 
 
+def _usage_period() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).strftime("%Y-%m")
+
+
+def _group_cap(group_id: str) -> int | None:
+    for g in get_store().list_builder_groups():
+        if g["id"] == group_id:
+            return g.get("monthlyCap")
+    return None
+
+
+def _llm_usage_summary(user: dict) -> dict:
+    """Remaining AI allowance for the caller. Internal users are unlimited."""
+    group_id = user.get("builderGroupId")
+    period = _usage_period()
+    if user.get("role") == "admin" or not group_id:
+        return {"period": period, "metered": False, "cap": None, "used": 0}
+    cap = _group_cap(group_id)
+    used = get_store().llm_usage_count(group_id, period)
+    remaining = None if cap is None else max(cap - used, 0)
+    return {
+        "period": period,
+        "metered": True,
+        "cap": cap,
+        "used": used,
+        "remaining": remaining,
+    }
+
+
+def _enforce_llm_quota(user: dict) -> None:
+    """Block an external user whose group has spent its monthly allowance."""
+    summary = _llm_usage_summary(user)
+    if (
+        summary["metered"]
+        and summary["cap"] is not None
+        and summary["used"] >= summary["cap"]
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Monthly AI allowance reached ({summary['cap']}). "
+                "It resets at the start of next month."
+            ),
+        )
+
+
+@app.get("/builders/usage")
+def llm_usage(user: dict = Depends(current_user)) -> dict:
+    """The caller's AI generation allowance and usage this month."""
+    return _llm_usage_summary(user)
+
+
 @app.get("/builders/profiles")
 def list_profiles(user: dict = Depends(current_user)) -> list[dict]:
     """Targeting profiles the caller may use, scoped to their group if external."""
@@ -373,7 +427,10 @@ def list_profiles(user: dict = Depends(current_user)) -> list[dict]:
 
 
 class GroupRequest(BaseModel):
-    name: str
+    name: str | None = None
+    monthly_cap: int | None = Field(default=None, alias="monthlyCap")
+
+    model_config = {"populate_by_name": True}
 
 
 @app.get("/admin/builders/groups")
@@ -388,8 +445,17 @@ def admin_create_group(
 ) -> dict:
     _require_admin(user)
     group_id = str(uuid.uuid4())
-    get_store().create_builder_group(group_id, request.name)
+    get_store().create_builder_group(group_id, request.name or "", request.monthly_cap)
     return {"id": group_id, "name": request.name}
+
+
+@app.put("/admin/builders/groups/{group_id}", status_code=204)
+def admin_update_group(
+    group_id: str, request: GroupRequest, user: dict = Depends(current_user)
+) -> Response:
+    _require_admin(user)
+    get_store().update_builder_group(group_id, request.name, request.monthly_cap)
+    return Response(status_code=204)
 
 
 @app.delete("/admin/builders/groups/{group_id}", status_code=204)
@@ -569,12 +635,19 @@ def area_profile(
         if cached is not None:
             return {**cached, "cached": True}
 
+    # A real generation is about to hit the provider. Enforce the external-user
+    # monthly allowance (pooled per builder group); internal users are unmetered.
+    _enforce_llm_quota(user)
+
     names = [by_code[c] for c in codes]
     try:
         payload = generate_area_profile(names, model)
     except Exception as exc:
         _log.exception("Area profile generation failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    store.record_llm_usage(
+        user.get("email"), user.get("builderGroupId"), model, _usage_period()
+    )
     store.save_area_profile(cache_key, model, payload)
     return {"model": model, **payload, "cached": False}
 

@@ -188,6 +188,33 @@ export interface BuilderProfile {
 export interface BuilderGroup {
   id: string;
   name: string;
+  monthlyCap?: number | null;
+}
+
+export interface LlmUsage {
+  period?: string;
+  metered: boolean;
+  cap?: number | null;
+  used?: number;
+  remaining?: number | null;
+}
+
+export async function getUsage(): Promise<LlmUsage> {
+  const res = await fetch("/api/builders/usage");
+  if (!res.ok) return { metered: false };
+  return res.json();
+}
+
+export async function updateGroup(
+  id: string,
+  body: { name?: string; monthlyCap?: number | null },
+): Promise<void> {
+  const res = await fetch(`/api/admin/builders/groups/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Could not update group (${res.status})`);
 }
 
 export interface Builder {

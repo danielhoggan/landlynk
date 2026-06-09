@@ -163,9 +163,18 @@ class Storage(Protocol):
     def set_user_group(self, email: str, group_id: str | None) -> bool: ...
 
     # Builder org model: groups, brands and saved targeting profiles.
-    def create_builder_group(self, group_id: str, name: str) -> None: ...
+    def create_builder_group(
+        self, group_id: str, name: str, monthly_cap: int | None = None
+    ) -> None: ...
+    def update_builder_group(
+        self, group_id: str, name: str | None, monthly_cap: int | None
+    ) -> bool: ...
     def list_builder_groups(self) -> list[dict]: ...
     def delete_builder_group(self, group_id: str) -> bool: ...
+    def record_llm_usage(
+        self, email: str | None, group_id: str | None, model: str, period: str
+    ) -> None: ...
+    def llm_usage_count(self, group_id: str | None, period: str) -> int: ...
     def create_builder(
         self, builder_id: str, group_id: str, name: str, theme_heading: str
     ) -> None: ...
@@ -224,6 +233,7 @@ class InMemoryStore:
         self._groups: dict[str, dict] = {}
         self._builders: dict[str, dict] = {}
         self._profiles: dict[str, dict] = {}
+        self._usage: list[dict] = []
 
     def create_job(
         self, catchment_id: str, job: JobInput, config: ScoringConfig, created_by: str
@@ -371,11 +381,42 @@ class InMemoryStore:
         return True
 
     # --- builder org model ---
-    def create_builder_group(self, group_id: str, name: str) -> None:
-        self._groups[group_id] = {"id": group_id, "name": name}
+    def create_builder_group(
+        self, group_id: str, name: str, monthly_cap: int | None = None
+    ) -> None:
+        self._groups[group_id] = {
+            "id": group_id,
+            "name": name,
+            "monthlyCap": monthly_cap,
+        }
+
+    def update_builder_group(
+        self, group_id: str, name: str | None, monthly_cap: int | None
+    ) -> bool:
+        group = self._groups.get(group_id)
+        if group is None:
+            return False
+        if name is not None:
+            group["name"] = name
+        group["monthlyCap"] = monthly_cap
+        return True
 
     def list_builder_groups(self) -> list[dict]:
         return sorted(self._groups.values(), key=lambda g: g["name"])
+
+    def record_llm_usage(
+        self, email: str | None, group_id: str | None, model: str, period: str
+    ) -> None:
+        self._usage.append(
+            {"email": email, "group_id": group_id, "model": model, "period": period}
+        )
+
+    def llm_usage_count(self, group_id: str | None, period: str) -> int:
+        return sum(
+            1
+            for u in self._usage
+            if u["group_id"] == group_id and u["period"] == period
+        )
 
     def delete_builder_group(self, group_id: str) -> bool:
         existed = self._groups.pop(group_id, None) is not None
@@ -781,25 +822,57 @@ class PostgresStore:
             )
             return cur.rowcount > 0
 
-    def create_builder_group(self, group_id: str, name: str) -> None:
+    def create_builder_group(
+        self, group_id: str, name: str, monthly_cap: int | None = None
+    ) -> None:
         with self._pool.connection() as conn:
             conn.execute(
-                "INSERT INTO builder_group (id, name) VALUES (%s, %s) "
-                "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
-                [group_id, name],
+                "INSERT INTO builder_group (id, name, monthly_llm_cap) "
+                "VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET "
+                "name = EXCLUDED.name, monthly_llm_cap = EXCLUDED.monthly_llm_cap",
+                [group_id, name, monthly_cap],
             )
+
+    def update_builder_group(
+        self, group_id: str, name: str | None, monthly_cap: int | None
+    ) -> bool:
+        with self._pool.connection() as conn:
+            cur = conn.execute(
+                "UPDATE builder_group SET "
+                "name = COALESCE(%s, name), monthly_llm_cap = %s WHERE id = %s",
+                [name, monthly_cap, group_id],
+            )
+            return cur.rowcount > 0
 
     def list_builder_groups(self) -> list[dict]:
         with self._pool.connection() as conn:
             rows = conn.execute(
-                "SELECT id, name FROM builder_group ORDER BY name"
+                "SELECT id, name, monthly_llm_cap FROM builder_group ORDER BY name"
             ).fetchall()
-        return [{"id": r[0], "name": r[1]} for r in rows]
+        return [{"id": r[0], "name": r[1], "monthlyCap": r[2]} for r in rows]
 
     def delete_builder_group(self, group_id: str) -> bool:
         with self._pool.connection() as conn:
             cur = conn.execute("DELETE FROM builder_group WHERE id = %s", [group_id])
             return cur.rowcount > 0
+
+    def record_llm_usage(
+        self, email: str | None, group_id: str | None, model: str, period: str
+    ) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO llm_usage (email, group_id, model, period) "
+                "VALUES (%s, %s, %s, %s)",
+                [email, group_id, model, period],
+            )
+
+    def llm_usage_count(self, group_id: str | None, period: str) -> int:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT count(*) FROM llm_usage WHERE group_id = %s AND period = %s",
+                [group_id, period],
+            ).fetchone()
+        return int(row[0]) if row else 0
 
     def create_builder(
         self, builder_id: str, group_id: str, name: str, theme_heading: str
