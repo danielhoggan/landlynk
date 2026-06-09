@@ -69,6 +69,11 @@ DEPLOYMENT.md. Rough order below.
   - Google (Gemini): `WORKER_GOOGLE_API_KEY`, `GOOGLE_API_KEY` or `GEMINI_API_KEY`.
       Set these on the worker service, then redeploy/restart it so the new values
       load. Then pick the default model on the in-app AI models page (admin only).
+- [ ] `WORKER_GITHUB_TOKEN` (optional, enables brand logo upload). A fine-grained
+      GitHub PAT with contents:write on this repo. Logos uploaded on the Builders
+      page are committed to brand-assets/ and read back for the UI and exports.
+      Optional `WORKER_GITHUB_REPO` (default `danielhoggan/landlynk`) and
+      `WORKER_GITHUB_BRANCH` (default `main`) override the target.
 - [x] `WORKER_ADMIN_EMAILS` = comma-separated emails always granted the admin
       role on sign in, e.g. `danielhoggan@gmail.com`. Bootstraps the first
       admin, who can then set other users' roles from the Users page. Required
