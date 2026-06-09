@@ -83,11 +83,17 @@ export default function CostsPage() {
 
       {report && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-card border border-neutral-200 bg-white p-4">
-              <p className="text-xs text-neutral-500">Total estimated spend</p>
+              <p className="text-xs text-neutral-500">Total cost</p>
               <p className="mt-1 text-2xl font-semibold tabular-nums">
                 {gbp(report.total)}
+              </p>
+            </div>
+            <div className="rounded-card border border-neutral-200 bg-white p-4">
+              <p className="text-xs text-neutral-500">Tokens</p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums">
+                {report.tokens.toLocaleString()}
               </p>
             </div>
             <div className="rounded-card border border-neutral-200 bg-white p-4">
@@ -113,6 +119,7 @@ export default function CostsPage() {
                   <th className="px-3 py-2 font-semibold">Brand</th>
                   <th className="px-3 py-2 font-semibold">Model</th>
                   <th className="px-3 py-2 font-semibold">Job</th>
+                  <th className="px-3 py-2 text-right font-semibold">Tokens</th>
                   <th className="px-3 py-2 text-right font-semibold">Cost</th>
                 </tr>
               </thead>
@@ -132,6 +139,9 @@ export default function CostsPage() {
                     <td className="px-3 py-2 font-mono text-[11px] text-neutral-400">
                       {it.catchmentId?.slice(0, 8) ?? ""}
                     </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-neutral-500">
+                      {(it.tokens ?? 0).toLocaleString()}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {gbp(it.cost)}
                     </td>
@@ -140,7 +150,7 @@ export default function CostsPage() {
                 {report.items.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-3 py-6 text-center text-neutral-400"
                     >
                       No AI spend in this range.

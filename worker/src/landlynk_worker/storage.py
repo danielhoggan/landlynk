@@ -64,15 +64,20 @@ def _build_cost_report(items: list[dict]) -> dict:
         agg: dict[str, dict] = {}
         for it in items:
             k = it.get(key) or "unknown"
-            bucket = agg.setdefault(k, {key: k, "generations": 0, "cost": 0.0})
+            bucket = agg.setdefault(
+                k, {key: k, "generations": 0, "cost": 0.0, "tokens": 0}
+            )
             bucket["generations"] += 1
             bucket["cost"] = round(bucket["cost"] + float(it["cost"]), 4)
+            bucket["tokens"] += int(it.get("tokens") or 0)
         return sorted(agg.values(), key=lambda b: b["cost"], reverse=True)
 
     total = round(sum(float(it["cost"]) for it in items), 4)
+    total_tokens = sum(int(it.get("tokens") or 0) for it in items)
     recent = sorted(items, key=lambda it: it.get("createdAt") or "", reverse=True)
     return {
         "total": total,
+        "tokens": total_tokens,
         "generations": len(items),
         "byUser": group_by("actorEmail"),
         "byModel": group_by("model"),
@@ -473,6 +478,7 @@ class InMemoryStore:
                     "catchmentId": r.get("targetId"),
                     "model": (r.get("detail") or {}).get("model"),
                     "groupId": (r.get("detail") or {}).get("groupId"),
+                    "tokens": (r.get("detail") or {}).get("tokens") or 0,
                     "cost": float(r.get("cost") or 0),
                 }
                 for r in rows
@@ -1045,6 +1051,7 @@ class PostgresStore:
                 "catchmentId": r[2],
                 "model": (r[3] or {}).get("model"),
                 "groupId": (r[3] or {}).get("groupId"),
+                "tokens": (r[3] or {}).get("tokens") or 0,
                 "cost": float(r[4]),
             }
             for r in rows

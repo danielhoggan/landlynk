@@ -18,29 +18,50 @@ class ModelInfo:
     id: str
     label: str
     provider: str  # "anthropic" | "openai" | "google"
-    # Indicative cost in GBP for one Local Area Profile generation. A profile is
-    # a short prompt and a ~1.5k token JSON reply, so these are rough per-call
-    # estimates from published per-token pricing, for budgeting not billing.
+    # Indicative GBP cost for one generation, used for the pre-flight estimate
+    # before real token counts are known.
     est_cost_gbp: float = 0.01
+    # GBP per 1,000 tokens, input and output, from published pricing (approx).
+    # Used to cost a generation precisely once the provider reports token usage.
+    rate_in: float = 0.002
+    rate_out: float = 0.008
 
 
 # Order is the preference order for the default when none is set.
 MODELS: tuple[ModelInfo, ...] = (
-    ModelInfo("claude-sonnet-4-5", "Claude Sonnet 4.5", "anthropic", 0.02),
-    ModelInfo("claude-haiku-4-5", "Claude Haiku 4.5", "anthropic", 0.005),
-    ModelInfo("gpt-4o", "GPT-4o", "openai", 0.02),
-    ModelInfo("gpt-4o-mini", "GPT-4o mini", "openai", 0.002),
-    ModelInfo("gemini-1.5-pro", "Gemini 1.5 Pro", "google", 0.012),
-    ModelInfo("gemini-1.5-flash", "Gemini 1.5 Flash", "google", 0.001),
+    ModelInfo(
+        "claude-sonnet-4-5", "Claude Sonnet 4.5", "anthropic", 0.02, 0.0024, 0.012
+    ),
+    ModelInfo(
+        "claude-haiku-4-5", "Claude Haiku 4.5", "anthropic", 0.005, 0.0006, 0.0032
+    ),
+    ModelInfo("gpt-4o", "GPT-4o", "openai", 0.02, 0.002, 0.008),
+    ModelInfo("gpt-4o-mini", "GPT-4o mini", "openai", 0.002, 0.00012, 0.00048),
+    ModelInfo("gemini-1.5-pro", "Gemini 1.5 Pro", "google", 0.012, 0.001, 0.004),
+    ModelInfo(
+        "gemini-1.5-flash", "Gemini 1.5 Flash", "google", 0.001, 0.00006, 0.00024
+    ),
 )
 
 _BY_ID = {m.id: m for m in MODELS}
 
 
 def model_cost(model_id: str) -> float:
-    """Indicative GBP cost for one generation with the model."""
+    """Indicative GBP cost for one generation (pre-flight, before real tokens)."""
     info = _BY_ID.get(model_id)
     return info.est_cost_gbp if info else 0.0
+
+
+def token_cost(model_id: str, input_tokens: int, output_tokens: int) -> float:
+    """Precise GBP cost from real token counts, falling back to the estimate."""
+    info = _BY_ID.get(model_id)
+    if info is None:
+        return 0.0
+    if not input_tokens and not output_tokens:
+        return info.est_cost_gbp
+    return round(
+        input_tokens / 1000 * info.rate_in + output_tokens / 1000 * info.rate_out, 5
+    )
 
 
 def _provider_keys() -> dict[str, bool]:

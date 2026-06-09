@@ -837,7 +837,13 @@ def area_profile(
     except Exception as exc:
         _log.exception("Area profile generation failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    from .enrichment import model_cost
+    from .enrichment import token_cost
+
+    usage = payload.pop("usage", {}) or {}
+    in_tok = int(usage.get("input", 0) or 0)
+    out_tok = int(usage.get("output", 0) or 0)
+    total_tok = int(usage.get("total", in_tok + out_tok) or 0)
+    cost = token_cost(model, in_tok, out_tok)
 
     store.record_llm_usage(
         user.get("email"), user.get("builderGroupId"), model, _usage_period()
@@ -852,8 +858,11 @@ def area_profile(
             "model": model,
             "areas": len(codes),
             "groupId": user.get("builderGroupId"),
+            "tokens": total_tok,
+            "inputTokens": in_tok,
+            "outputTokens": out_tok,
         },
-        cost=model_cost(model),
+        cost=cost,
     )
     return {"model": model, **payload, "cached": False}
 

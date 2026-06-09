@@ -38,11 +38,12 @@ _PROMPT = (
     "Healthcare, Other. Do not use em dashes or Oxford commas."
 )
 
-# A transport takes (model, prompt) and returns the model's raw text reply.
-Transport = Callable[[str, str], str]
+# A transport takes (model, prompt) and returns (raw text reply, token usage).
+# usage is {"input": int, "output": int}; zeros when the provider omits it.
+Transport = Callable[[str, str], tuple[str, dict]]
 
 
-def _anthropic(model: str, prompt: str) -> str:
+def _anthropic(model: str, prompt: str) -> tuple[str, dict]:
     resp = httpx.post(
         "https://api.anthropic.com/v1/messages",
         headers={
@@ -58,11 +59,16 @@ def _anthropic(model: str, prompt: str) -> str:
         timeout=60.0,
     )
     resp.raise_for_status()
-    blocks = resp.json().get("content", [])
-    return "".join(b.get("text", "") for b in blocks)
+    data = resp.json()
+    text = "".join(b.get("text", "") for b in data.get("content", []))
+    u = data.get("usage", {})
+    return text, {
+        "input": u.get("input_tokens", 0),
+        "output": u.get("output_tokens", 0),
+    }
 
 
-def _openai(model: str, prompt: str) -> str:
+def _openai(model: str, prompt: str) -> tuple[str, dict]:
     resp = httpx.post(
         "https://api.openai.com/v1/chat/completions",
         headers={
@@ -77,10 +83,16 @@ def _openai(model: str, prompt: str) -> str:
         timeout=60.0,
     )
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    data = resp.json()
+    text = data["choices"][0]["message"]["content"]
+    u = data.get("usage", {})
+    return text, {
+        "input": u.get("prompt_tokens", 0),
+        "output": u.get("completion_tokens", 0),
+    }
 
 
-def _google(model: str, prompt: str) -> str:
+def _google(model: str, prompt: str) -> tuple[str, dict]:
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:"
         f"generateContent?key={settings.google_api_key}"
@@ -92,9 +104,15 @@ def _google(model: str, prompt: str) -> str:
         timeout=60.0,
     )
     resp.raise_for_status()
-    candidates = resp.json().get("candidates", [])
+    data = resp.json()
+    candidates = data.get("candidates", [])
     parts = candidates[0]["content"]["parts"] if candidates else []
-    return "".join(p.get("text", "") for p in parts)
+    text = "".join(p.get("text", "") for p in parts)
+    u = data.get("usageMetadata", {})
+    return text, {
+        "input": u.get("promptTokenCount", 0),
+        "output": u.get("candidatesTokenCount", 0),
+    }
 
 
 _TRANSPORTS: dict[str, Transport] = {
@@ -130,4 +148,6 @@ def generate_area_profile(
         raise ValueError(f"Unknown model: {model}")
     call = transport or _TRANSPORTS[provider]
     prompt = _PROMPT.format(areas=", ".join(area_names[:20]))
-    return _parse(call(model, prompt))
+    text, usage = call(model, prompt)
+    total = (usage.get("input", 0) or 0) + (usage.get("output", 0) or 0)
+    return {**_parse(text), "usage": {**usage, "total": total}}

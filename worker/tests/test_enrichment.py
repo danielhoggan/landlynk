@@ -18,14 +18,15 @@ def test_model_provider_known_and_unknown():
 def test_generate_parses_json_and_filters_categories():
     captured = {}
 
-    def fake(model: str, prompt: str) -> str:
+    def fake(model: str, prompt: str):
         captured["model"] = model
         captured["prompt"] = prompt
-        return (
+        text = (
             '```json\n{"description": "A leafy commuter town.", '
             '"amenities": [{"name": "Station", "category": "Transport"}, '
             '{"name": "Odd", "category": "Bogus"}]}\n```'
         )
+        return text, {"input": 400, "output": 600}
 
     out = generate_area_profile(["Ipswich", "Babergh"], "gpt-4o", transport=fake)
     assert out["description"].startswith("A leafy")
@@ -34,11 +35,22 @@ def test_generate_parses_json_and_filters_categories():
     assert out["amenities"][1]["category"] == "Other"
     assert "Ipswich, Babergh" in captured["prompt"]
     assert captured["model"] == "gpt-4o"
+    # Token usage is surfaced for costing.
+    assert out["usage"] == {"input": 400, "output": 600, "total": 1000}
+
+
+def test_token_cost_uses_real_tokens():
+    from landlynk_worker.enrichment.models import model_cost, token_cost
+
+    # 400 in + 600 out for gpt-4o (0.002 / 0.008 per 1k) = 0.0008 + 0.0048.
+    assert token_cost("gpt-4o", 400, 600) == 0.0056
+    # No tokens falls back to the flat per-generation estimate.
+    assert token_cost("gpt-4o", 0, 0) == model_cost("gpt-4o")
 
 
 def test_generate_rejects_unknown_model():
     with pytest.raises(ValueError):
-        generate_area_profile(["X"], "no-such-model", transport=lambda m, p: "{}")
+        generate_area_profile(["X"], "no-such-model", transport=lambda m, p: ("{}", {}))
 
 
 def test_models_registry_covers_three_providers():

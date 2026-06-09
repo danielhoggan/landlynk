@@ -215,6 +215,7 @@ export interface CostRow {
   groupName?: string;
   generations: number;
   cost: number;
+  tokens: number;
 }
 
 export interface CostItem {
@@ -223,11 +224,13 @@ export interface CostItem {
   catchmentId: string | null;
   model: string | null;
   groupName?: string;
+  tokens?: number;
   cost: number;
 }
 
 export interface CostReport {
   total: number;
+  tokens: number;
   generations: number;
   byUser: CostRow[];
   byModel: CostRow[];
