@@ -1103,7 +1103,8 @@ def _fetch_ods_organisations(url: str) -> list[dict]:
     base = dict(parse_qsl(parts.query))
     limit = int(base.get("Limit", "1000"))
     results: list[dict] = []
-    offset = 0
+    # The ODS API offset is 1-based (record number to start at); 0 is rejected.
+    offset = 1
     # The ODS API gateway does content negotiation and rejects a non-browser
     # client: send a JSON Accept and a browser User-Agent, or it returns 406.
     headers = {
