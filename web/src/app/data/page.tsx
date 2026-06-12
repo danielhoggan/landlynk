@@ -157,6 +157,32 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
+  {
+    id: "schools",
+    title: "Schools (Ofsted)",
+    blurb:
+      "Count of schools and the share rated Good or Outstanding per MSOA, as local context. Get Information About Schools (GIAS) full extract (CSV), which carries the location and the Ofsted rating.",
+    fields: [
+      {
+        key: "url",
+        label: "GIAS edubasealldata CSV URL",
+        placeholder: "GIAS full establishment data CSV",
+      },
+    ],
+  },
+  {
+    id: "crime",
+    title: "Crime",
+    blurb:
+      "Recorded crime per 1,000 residents per MSOA, as local context. data.police.uk street-level CSV or archive zip (lat/long per incident).",
+    fields: [
+      {
+        key: "url",
+        label: "data.police.uk CSV or zip URL",
+        placeholder: "Street-level crime CSV or archive zip",
+      },
+    ],
+  },
 ];
 
 export default function DataPage() {
@@ -173,6 +199,8 @@ export default function DataPage() {
     house_prices: { url: DEFAULT_HOUSE_PRICES },
     green_space: { url: "" },
     imd: { url: "", lookupUrl: "" },
+    schools: { url: "" },
+    crime: { url: "" },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});

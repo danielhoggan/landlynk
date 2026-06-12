@@ -213,3 +213,46 @@ def test_imd_rows_aggregate_lsoa_to_msoa():
     assert by_key["imd_score"]["area_code"] == "E02000001"
     assert by_key["imd_score"]["value"] == 25.0  # mean(20,30)
     assert by_key["imd_decile"]["value"] == 4  # round(mean(3,5))
+
+
+def test_school_points_converts_bng_and_flags_good():
+    records = [
+        {
+            "EstablishmentStatus (name)": "Open",
+            "Easting": "532000",
+            "Northing": "181000",
+            "OfstedRating (name)": "Outstanding",
+        },
+        {
+            "EstablishmentStatus (name)": "Open",
+            "Easting": "532100",
+            "Northing": "181100",
+            "OfstedRating (name)": "Requires improvement",
+        },
+        {
+            "EstablishmentStatus (name)": "Closed",
+            "Easting": "532200",
+            "Northing": "181200",
+            "OfstedRating (name)": "Good",
+        },
+        {
+            "EstablishmentStatus (name)": "Open",
+            "Easting": "0",
+            "Northing": "0",
+            "OfstedRating (name)": "Good",
+        },
+    ]
+    pts = loaders._school_points(records)
+    assert len(pts) == 2  # closed and zero-location dropped
+    london = pts[0]
+    assert -0.2 < london["lng"] < 0.1 and 51.4 < london["lat"] < 51.6  # ~London
+    assert pts[0]["good"] is True and pts[1]["good"] is False
+
+
+def test_crime_points_extracts_lat_long():
+    records = [
+        {"Longitude": "-1.5", "Latitude": "52.8", "Crime type": "Burglary"},
+        {"Longitude": "", "Latitude": "", "Crime type": "No location"},
+    ]
+    pts = loaders._crime_points(records)
+    assert pts == [(-1.5, 52.8)]

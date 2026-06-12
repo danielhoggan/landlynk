@@ -596,6 +596,164 @@ def load_imd(
     return _replace_metric(pool, ["imd_score", "imd_decile"], rows)
 
 
+# --- point datasets (schools, crime): point-in-MSOA via PostGIS ---------------
+
+
+def _bng_to_wgs(easting: float, northing: float) -> tuple[float, float]:
+    from pyproj import Transformer
+
+    global _BNG
+    try:
+        tr = _BNG
+    except NameError:
+        tr = _BNG = Transformer.from_crs("EPSG:27700", "EPSG:4326", always_xy=True)
+    lng, lat = tr.transform(easting, northing)
+    return lng, lat
+
+
+_GOOD_RATINGS = {"outstanding", "good"}
+
+
+def _school_points(records: list[dict]) -> list[dict]:
+    """Open schools as {lng, lat, good} from a GIAS extract (easting/northing).
+
+    GIAS carries both the location and the Ofsted rating, so one file suffices.
+    Only open schools with a location and a rating are kept.
+    """
+    if not records:
+        return []
+    f = list(records[0].keys())
+    east_c = t.find_column(f, ("easting",))
+    north_c = t.find_column(f, ("northing",))
+    rating_c = t.find_column(
+        f, ("ofstedrating (name)", "ofsted rating", "ofstedrating")
+    )
+    status_c = t.find_column(f, ("establishmentstatus (name)", "establishmentstatus"))
+    if east_c is None or north_c is None or rating_c is None:
+        raise ValueError(f"GIAS needs easting, northing and Ofsted rating, got {f}")
+    points: list[dict] = []
+    for r in records:
+        if status_c and not str(r.get(status_c) or "").strip().lower().startswith(
+            "open"
+        ):
+            continue
+        rating = str(r.get(rating_c) or "").strip().lower()
+        if not rating or rating in ("not applicable", "", "none"):
+            continue
+        easting = t.parse_number(r.get(east_c))
+        northing = t.parse_number(r.get(north_c))
+        if easting is None or northing is None or easting == 0:
+            continue
+        lng, lat = _bng_to_wgs(easting, northing)
+        points.append({"lng": lng, "lat": lat, "good": rating in _GOOD_RATINGS})
+    return points
+
+
+def _crime_points(records: list[dict]) -> list[tuple[float, float]]:
+    """Crime incidents as (lng, lat) from data.police.uk street-level CSV rows."""
+    if not records:
+        return []
+    f = list(records[0].keys())
+    lng_c = t.find_column(f, ("longitude", "long", "lng"))
+    lat_c = t.find_column(f, ("latitude", "lat"))
+    if lng_c is None or lat_c is None:
+        raise ValueError(f"Crime CSV needs longitude and latitude, got {f}")
+    out: list[tuple[float, float]] = []
+    for r in records:
+        lng = t.parse_number(r.get(lng_c))
+        lat = t.parse_number(r.get(lat_c))
+        if lng is not None and lat is not None:
+            out.append((lng, lat))
+    return out
+
+
+def _read_point_records(url: str) -> list[dict]:
+    """Records from a CSV/XLSX, or every CSV inside a zip (data.police.uk archive)."""
+    if not url.lower().endswith(".zip"):
+        return _load_records(url)
+    content = _get_bytes(url)
+    rows: list[dict] = []
+    with zipfile.ZipFile(io.BytesIO(content)) as zf:
+        for name in zf.namelist():
+            if name.lower().endswith(".csv"):
+                rows.extend(_read_csv(zf.read(name).decode("utf-8-sig", "ignore"))[0])
+    return rows
+
+
+def load_schools(
+    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
+    points = _school_points(_load_records(url))
+    if not points:
+        return 0
+    with pool.connection() as conn, conn.transaction():
+        conn.execute(
+            "CREATE TEMP TABLE _sch (lng float8, lat float8, good bool) "
+            "ON COMMIT DROP"
+        )
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO _sch VALUES (%s, %s, %s)",
+                [(p["lng"], p["lat"], p["good"]) for p in points],
+            )
+        conn.execute(
+            "DELETE FROM area_metric WHERE metric_key IN "
+            "('schools_count', 'schools_good_pct')"
+        )
+        conn.execute(
+            "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
+            "SELECT b.area_code, %s, 'schools_count', count(*) "
+            "FROM _sch s JOIN geo_boundaries b "
+            "ON b.area_type = %s AND ST_Contains("
+            "b.geom, ST_SetSRID(ST_MakePoint(s.lng, s.lat), 4326)) "
+            "GROUP BY b.area_code",
+            [area_type, area_type],
+        )
+        conn.execute(
+            "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
+            "SELECT b.area_code, %s, 'schools_good_pct', "
+            "round(100.0 * count(*) FILTER (WHERE s.good) / NULLIF(count(*), 0)) "
+            "FROM _sch s JOIN geo_boundaries b "
+            "ON b.area_type = %s AND ST_Contains("
+            "b.geom, ST_SetSRID(ST_MakePoint(s.lng, s.lat), 4326)) "
+            "GROUP BY b.area_code",
+            [area_type, area_type],
+        )
+        n = conn.execute(
+            "SELECT count(*) FROM area_metric WHERE metric_key = 'schools_count'"
+        ).fetchone()[0]
+    return int(n)
+
+
+def load_crime(
+    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
+    points = _crime_points(_read_point_records(url))
+    if not points:
+        return 0
+    with pool.connection() as conn, conn.transaction():
+        conn.execute("CREATE TEMP TABLE _crime (lng float8, lat float8) ON COMMIT DROP")
+        with conn.cursor() as cur:
+            cur.executemany("INSERT INTO _crime VALUES (%s, %s)", points)
+        conn.execute("DELETE FROM area_metric WHERE metric_key = 'crime_per_1k'")
+        conn.execute(
+            "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
+            "SELECT b.area_code, %s, 'crime_per_1k', "
+            "round(1000.0 * count(*) / NULLIF(d.population, 0)) "
+            "FROM _crime c JOIN geo_boundaries b "
+            "ON b.area_type = %s AND ST_Contains("
+            "b.geom, ST_SetSRID(ST_MakePoint(c.lng, c.lat), 4326)) "
+            "JOIN census_demographics d ON d.area_code = b.area_code "
+            "WHERE d.population > 0 "
+            "GROUP BY b.area_code, d.population",
+            [area_type, area_type],
+        )
+        n = conn.execute(
+            "SELECT count(*) FROM area_metric WHERE metric_key = 'crime_per_1k'"
+        ).fetchone()[0]
+    return int(n)
+
+
 def _replace_table(
     pool: ConnectionPool,
     table: str,

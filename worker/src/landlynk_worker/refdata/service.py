@@ -26,6 +26,8 @@ DATASETS = (
     "house_prices",
     "green_space",
     "imd",
+    "schools",
+    "crime",
 )
 
 # dataset -> {status, rows, error, areaType, updatedAt}. Mirror of the table for
@@ -142,6 +144,10 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
             n = loaders.load_green_space(pool, params["url"], area_type)
         elif dataset == "imd":
             n = loaders.load_imd(pool, params["url"], params["lookupUrl"], area_type)
+        elif dataset == "schools":
+            n = loaders.load_schools(pool, params["url"], area_type)
+        elif dataset == "crime":
+            n = loaders.load_crime(pool, params["url"], area_type)
         else:
             raise ValueError(f"Unknown dataset: {dataset}")
         _set(dataset, "loaded", pool=pool, rows=n, area_type=area_type)

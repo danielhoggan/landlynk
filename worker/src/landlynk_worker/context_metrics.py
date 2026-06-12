@@ -33,8 +33,12 @@ CONTEXT_METRICS: tuple[ContextMetricDef, ...] = (
         "Higher is better",
         0,
     ),
+    ContextMetricDef("schools_count", "Schools in area", "", "", 0),
     ContextMetricDef(
-        "crime_per_1k", "Crime rate", "per 1,000 residents/yr", "Lower is better", 0
+        "schools_good_pct", "Good or Outstanding schools", "%", "Higher is better", 0
+    ),
+    ContextMetricDef(
+        "crime_per_1k", "Crime rate", "per 1,000 residents", "Lower is better", 0
     ),
 )
 
