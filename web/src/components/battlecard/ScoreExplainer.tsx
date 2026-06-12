@@ -8,6 +8,12 @@ const SIGNAL_LABELS: Record<string, string> = {
   ageSkew: "Age skew",
   addressableScale: "Addressable scale",
   householdType: "Household type",
+  incomeLevel: "Income level",
+  lowDeprivation: "Low deprivation",
+  greenSpace: "Green space",
+  schools: "Schools",
+  lowCrime: "Low crime",
+  healthcareAccess: "Healthcare access",
 };
 
 // Every area's deep-dive shows why it scored as it did (SCOPING.md Section 8).

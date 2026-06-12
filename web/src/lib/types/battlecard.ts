@@ -140,7 +140,13 @@ export interface ScoreContribution {
     | "tenureSignal"
     | "ageSkew"
     | "addressableScale"
-    | "householdType";
+    | "householdType"
+    | "incomeLevel"
+    | "lowDeprivation"
+    | "greenSpace"
+    | "schools"
+    | "lowCrime"
+    | "healthcareAccess";
   weight: number;
   /** Normalised 0 to 1 score for this signal before weighting. */
   rawScore: number;

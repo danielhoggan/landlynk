@@ -141,18 +141,22 @@ def generate_area_profile(
     location: str,
     model: str,
     transport: Transport | None = None,
+    objective_framing: str | None = None,
 ) -> dict:
     """Generate {description, amenities} for a development location with the model.
 
     location anchors the profile (e.g. "Montgomery Place, TF9 3RP"); the postcode
-    keeps the model on the right town. Raises ValueError for an unknown model.
-    The transport is injectable for tests.
+    keeps the model on the right town. objective_framing, when given, leads the
+    prompt so the commentary aligns with the user's business objective. Raises
+    ValueError for an unknown model. The transport is injectable for tests.
     """
     provider = model_provider(model)
     if provider is None:
         raise ValueError(f"Unknown model: {model}")
     call = transport or _TRANSPORTS[provider]
     prompt = _PROMPT.format(location=location)
+    if objective_framing:
+        prompt = f"{objective_framing}\n\n{prompt}"
     text, usage = call(model, prompt)
     total = (usage.get("input", 0) or 0) + (usage.get("output", 0) or 0)
     return {**_parse(text), "usage": {**usage, "total": total}}

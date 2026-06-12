@@ -197,6 +197,84 @@ def _bed_range_is_family(bed_range: str) -> bool:
     return bool(digits) and max(digits) >= 3
 
 
+# --- objective signals -------------------------------------------------------
+# These extend the home-sales signals above so the same engine can serve other
+# objectives (wealth targeting, retail siting, amenity-led). They draw on the
+# public data points loaded as area context (green space, deprivation, crime,
+# schools, hospital access) and on raw income. Each is pure and explainable, and
+# returns a neutral 0.0 with a clear rationale when its data is unavailable. They
+# only affect a score when an objective gives them weight; default weight is 0.
+
+
+def _context(profile: AreaProfile, key: str) -> float | None:
+    value = profile.context.get(key)
+    return float(value) if value is not None else None
+
+
+def score_income_level(profile: AreaProfile, config: ScoringConfig) -> SignalScore:
+    """Raw affluence: higher household income scores higher (saturating).
+
+    Unlike income_fit, this rewards wealth itself, for objectives such as high
+    net worth targeting where the richest areas are the goal.
+    """
+    income = profile.median_income or profile.mean_income
+    if income is None:
+        return SignalScore("income_level", 0.0, "Income suppressed, no affluence signal")
+    raw = _clamp01(1.0 - math.exp(-income / 40_000.0))
+    return SignalScore(
+        "income_level", raw, f"Household income about {income:,.0f}"
+    )
+
+
+def score_low_deprivation(profile: AreaProfile, config: ScoringConfig) -> SignalScore:
+    """Less deprived areas score higher, from the IMD decile (10 = least deprived)."""
+    decile = _context(profile, "imd_decile")
+    if decile is None:
+        return SignalScore("low_deprivation", 0.0, "No deprivation data for this area")
+    raw = _clamp01(decile / 10.0)
+    return SignalScore(
+        "low_deprivation", raw, f"IMD decile {decile:.0f} of 10 (10 = least deprived)"
+    )
+
+
+def score_green_space(profile: AreaProfile, config: ScoringConfig) -> SignalScore:
+    """Closer green space scores higher, from walk minutes to the nearest park."""
+    minutes = _context(profile, "greenspace_minutes")
+    if minutes is None:
+        return SignalScore("green_space", 0.0, "No green space data for this area")
+    raw = _clamp01(1.0 - minutes / 30.0)
+    return SignalScore(
+        "green_space", raw, f"About {minutes:.0f} min walk to green space"
+    )
+
+
+def score_schools(profile: AreaProfile, config: ScoringConfig) -> SignalScore:
+    """Share of schools rated Good or Outstanding scores higher."""
+    pct = _context(profile, "schools_good_pct")
+    if pct is None:
+        return SignalScore("schools", 0.0, "No school rating data for this area")
+    raw = _clamp01(pct / 100.0)
+    return SignalScore("schools", raw, f"{pct:.0f}% of schools Good or Outstanding")
+
+
+def score_low_crime(profile: AreaProfile, config: ScoringConfig) -> SignalScore:
+    """Lower recorded crime per 1,000 residents scores higher."""
+    crime = _context(profile, "crime_per_1k")
+    if crime is None:
+        return SignalScore("low_crime", 0.0, "No crime data for this area")
+    raw = _clamp01(1.0 - crime / 200.0)
+    return SignalScore("low_crime", raw, f"About {crime:.0f} crimes per 1,000 residents")
+
+
+def score_healthcare_access(profile: AreaProfile, config: ScoringConfig) -> SignalScore:
+    """Closer to a hospital scores higher, from distance in km."""
+    km = _context(profile, "hospital_km")
+    if km is None:
+        return SignalScore("healthcare_access", 0.0, "No hospital distance for this area")
+    raw = _clamp01(1.0 - km / 20.0)
+    return SignalScore("healthcare_access", raw, f"About {km:.0f} km to the nearest hospital")
+
+
 def band_for_score(total: float) -> str:
     """Map a 0..1 score to a priority band. Thresholds match the UI helper."""
     if total >= 0.66:
@@ -231,6 +309,13 @@ SCORERS = (
     ("age_skew", score_age_skew),
     ("addressable_scale", score_addressable_scale),
     ("household_type", score_household_type),
+    # Objective signals (default weight 0; weighted by the chosen objective).
+    ("income_level", score_income_level),
+    ("low_deprivation", score_low_deprivation),
+    ("green_space", score_green_space),
+    ("schools", score_schools),
+    ("low_crime", score_low_crime),
+    ("healthcare_access", score_healthcare_access),
 )
 
 

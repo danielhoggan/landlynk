@@ -139,7 +139,17 @@ class IncomeAndTenure(BaseModel):
 
 class ScoreContribution(BaseModel):
     signal: Literal[
-        "incomeFit", "tenureSignal", "ageSkew", "addressableScale", "householdType"
+        "incomeFit",
+        "tenureSignal",
+        "ageSkew",
+        "addressableScale",
+        "householdType",
+        "incomeLevel",
+        "lowDeprivation",
+        "greenSpace",
+        "schools",
+        "lowCrime",
+        "healthcareAccess",
     ]
     weight: float
     raw_score: float = Field(alias="rawScore")

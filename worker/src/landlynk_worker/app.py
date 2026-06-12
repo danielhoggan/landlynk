@@ -147,6 +147,14 @@ def list_segments_endpoint() -> list[dict]:
     return list_segments()
 
 
+@app.get("/objectives")
+def list_objectives_endpoint() -> list[dict]:
+    """The business objectives for objective-first targeting (with weight presets)."""
+    from .scoring.objectives import list_objectives
+
+    return list_objectives()
+
+
 def _check_admin(token: str | None) -> None:
     if settings.admin_token and token != settings.admin_token:
         raise HTTPException(status_code=401, detail="Invalid admin token")
@@ -861,7 +869,18 @@ def area_profile(
             status_code=503, detail="No AI model configured. Add a provider key."
         )
 
-    key_src = "|".join(sorted(codes)) + "::" + model
+    # The business objective frames the commentary, so it is part of the prompt
+    # and therefore part of the cache identity.
+    stored_config = (catchment.get("input") or {}).get("config") or {}
+    objective_id = stored_config.get("objective")
+    objective_framing = None
+    if objective_id:
+        from .scoring.objectives import OBJECTIVES
+
+        obj = OBJECTIVES.get(objective_id)
+        objective_framing = obj.ai_framing if obj else None
+
+    key_src = "|".join(sorted(codes)) + "::" + model + "::" + (objective_id or "")
     cache_key = hashlib.sha256(key_src.encode()).hexdigest()
     if not request.refresh:
         cached = store.get_area_profile(cache_key)
@@ -886,7 +905,8 @@ def area_profile(
         home = by_code.get(codes[0], codes[0])
         location = f"{dev_name}, {home}"
     try:
-        payload = generate_area_profile(location, model)
+        extra = {"objective_framing": objective_framing} if objective_framing else {}
+        payload = generate_area_profile(location, model, **extra)
     except Exception as exc:
         _log.exception("Area profile generation failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc

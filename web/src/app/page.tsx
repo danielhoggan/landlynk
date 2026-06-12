@@ -32,17 +32,8 @@ import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
 import { AreaProfilePanel } from "@/components/AreaProfilePanel";
 import { SEGMENTS } from "@/lib/segments";
+import { OBJECTIVES, SIGNAL_LABELS } from "@/lib/objectives";
 import { useUser } from "@/lib/userContext";
-
-// Scoring signal weights exposed in the config panel. Keys are snake_case to
-// match the scoring engine (SCOPING.md Section 8).
-const WEIGHT_LABELS: [string, string][] = [
-  ["income_fit", "Income fit"],
-  ["tenure_signal", "Tenure signal"],
-  ["age_skew", "Age skew"],
-  ["addressable_scale", "Addressable scale"],
-  ["household_type", "Household type"],
-];
 
 // MVP entry surface: paste a postcode or grid ref, the worker builds the
 // catchment, and the interactive map with ranked clickable areas renders here
@@ -66,6 +57,9 @@ export default function HomePage() {
   const [priceTo, setPriceTo] = useState("");
   const [bedRange, setBedRange] = useState("");
   const [segment, setSegment] = useState("");
+  // Business objective: what the catchment is for. Reweights the signals and
+  // frames the AI commentary. Empty keeps the default home-sales weights.
+  const [objective, setObjective] = useState("");
   const [profiles, setProfiles] = useState<BuilderProfile[]>([]);
   const [profileId, setProfileId] = useState("");
   const [brandHeading, setBrandHeading] = useState("");
@@ -95,6 +89,20 @@ export default function HomePage() {
   });
   const setWeight = (k: string, v: string) =>
     setWeights((w) => ({ ...w, [k]: v }));
+
+  // Choosing an objective pre-fills the scoring weights with its preset (the
+  // user can still tune them) and applies its default segment when set.
+  function applyObjective(id: string) {
+    setObjective(id);
+    const obj = OBJECTIVES.find((o) => o.id === id);
+    if (!obj) return;
+    setWeights(
+      Object.fromEntries(
+        Object.entries(obj.weights).map(([k, v]) => [k, String(v)]),
+      ),
+    );
+    if (obj.segment && !segment) setSegment(obj.segment);
+  }
 
   // LA area level is opt-in (Settings). MSOA is the default and stays forced
   // off unless enabled, so the form only offers what is supported.
@@ -338,6 +346,7 @@ export default function HomePage() {
       }
       if (bedRange) config.bedRange = bedRange;
       if (segment) config.segment = segment;
+      if (objective) config.objective = objective;
       if (brandHeading) config.brandHeading = brandHeading;
       if (brandTheme.secondary) config.brandSecondary = brandTheme.secondary;
       if (brandTheme.accent) config.brandAccent = brandTheme.accent;
@@ -523,6 +532,27 @@ export default function HomePage() {
               )}
               <div>
                 <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+                  Objective / business focus
+                </span>
+                <select
+                  value={objective}
+                  onChange={(e) => applyObjective(e.target.value)}
+                  className="w-full rounded-card border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-light-accent focus:outline-none"
+                >
+                  <option value="">Home sales (default)</option>
+                  {OBJECTIVES.filter((o) => o.id !== "home_sales").map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label} — {o.description}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-neutral-400">
+                  Reweights scoring and frames the AI commentary to what you are
+                  using the catchment for. Adjust the weights below to fine tune.
+                </p>
+              </div>
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-neutral-500">
                   Target segment
                 </span>
                 <select
@@ -662,10 +692,10 @@ export default function HomePage() {
                       with the catchment so the ranking stays reproducible.
                     </p>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      {WEIGHT_LABELS.map(([key, label]) => (
+                      {Object.keys(weights).map((key) => (
                         <Field
                           key={key}
-                          label={label}
+                          label={SIGNAL_LABELS[key] ?? key}
                           value={weights[key]}
                           onChange={(v) => setWeight(key, v)}
                           type="number"

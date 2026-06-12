@@ -97,6 +97,7 @@ def scoring_config_to_dict(config: ScoringConfig) -> dict:
         "catchmentMode": config.catchment_mode,
         "radiusKm": config.radius_km,
         "segment": config.segment,
+        "objective": config.objective,
         "brandHeading": config.brand_heading,
         "brandSecondary": config.brand_secondary,
         "brandAccent": config.brand_accent,

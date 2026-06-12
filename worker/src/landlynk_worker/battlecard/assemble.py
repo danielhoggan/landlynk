@@ -50,6 +50,13 @@ _SIGNAL_TO_CONTRACT = {
     "age_skew": "ageSkew",
     "addressable_scale": "addressableScale",
     "household_type": "householdType",
+    # Objective signals.
+    "income_level": "incomeLevel",
+    "low_deprivation": "lowDeprivation",
+    "green_space": "greenSpace",
+    "schools": "schools",
+    "low_crime": "lowCrime",
+    "healthcare_access": "healthcareAccess",
 }
 
 _AGE_BANDS = [
@@ -431,6 +438,9 @@ def _score_model(score: ScoreBreakdown) -> ScoreBreakdownModel:
     return ScoreBreakdownModel(
         total=round(score.total, 4),
         band=score.band,
+        # Only signals the chosen objective gives weight to appear in the
+        # breakdown, so it stays readable rather than listing every signal in
+        # the library with a zero weight.
         contributions=[
             ScoreContribution(
                 signal=_SIGNAL_TO_CONTRACT[c.signal],
@@ -440,6 +450,7 @@ def _score_model(score: ScoreBreakdown) -> ScoreBreakdownModel:
                 rationale=c.rationale,
             )
             for c in score.contributions
+            if c.weight > 0
         ],
     )
 

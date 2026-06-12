@@ -30,6 +30,7 @@ class ScoringConfigModel(BaseModel):
     catchment_mode: str | None = Field(default=None, alias="catchmentMode")
     radius_km: float | None = Field(default=None, alias="radiusKm")
     segment: str | None = None
+    objective: str | None = None
     brand_heading: str | None = Field(default=None, alias="brandHeading")
     brand_secondary: str | None = Field(default=None, alias="brandSecondary")
     brand_accent: str | None = Field(default=None, alias="brandAccent")
@@ -94,6 +95,13 @@ def to_scoring_config(req: CatchmentJobRequest) -> ScoringConfig:
             else base.affordability_multiple
         ),
     )
+    # A chosen objective reweights the signals and frames the commentary. The web
+    # sends the objective's weight preset in cfg.weights so the UI stays in sync,
+    # so only fill weights from the objective when the caller omitted them.
+    if cfg.objective:
+        from .scoring.objectives import apply_objective
+
+        config = apply_objective(config, cfg.objective, set_weights=cfg.weights is None)
     # A chosen segment sets the age and tenure preference vectors, and the bed
     # range unless the caller gave an explicit one.
     if cfg.segment:
