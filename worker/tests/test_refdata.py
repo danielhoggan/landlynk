@@ -258,6 +258,34 @@ def test_crime_points_extracts_lat_long():
     assert pts == [(-1.5, 52.8)]
 
 
+def test_norm_postcode_uppercases_and_strips_spaces():
+    assert loaders._norm_postcode("tf9 3rp") == "TF93RP"
+    assert loaders._norm_postcode("  NN15  7FJ ") == "NN157FJ"
+    assert loaders._norm_postcode("") == ""
+
+
+def test_postcode_centroid_parses_and_drops_terminated():
+    ok = loaders._postcode_centroid(
+        {"pcds": "TF9 3RP", "lat": "52.91", "long": "-2.45"}
+    )
+    assert ok == ("TF93RP", 52.91, -2.45)
+    # Terminated postcode without a grid reference (sentinel latitude) is dropped.
+    assert (
+        loaders._postcode_centroid(
+            {"pcds": "AB1 0AA", "lat": "99.999999", "long": "0.0"}
+        )
+        is None
+    )
+    assert loaders._postcode_centroid({"pcds": "", "lat": "1", "long": "1"}) is None
+
+
+def test_is_ods_url():
+    assert loaders._is_ods_url(
+        "https://directory.spineservices.nhs.uk/ORD/2-0-0/organisations"
+    )
+    assert not loaders._is_ods_url("https://www.example.com/hospitals.csv")
+
+
 def test_hospital_points_latlng_and_bng():
     records = [
         {

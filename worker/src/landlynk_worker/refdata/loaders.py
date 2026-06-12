@@ -927,6 +927,177 @@ def load_schools(
     return int(n)
 
 
+# --- postcodes (ONS Postcode Directory) and ODS hospital geocoding ------------
+
+
+def _norm_postcode(value: str) -> str:
+    """Normalise a postcode for keyed lookup: uppercase, no spaces."""
+    return re.sub(r"\s+", "", value or "").upper()
+
+
+def _postcode_centroid(row: dict) -> tuple[str, float, float] | None:
+    """One ONSPD/NSPL row to (normalised postcode, lat, lng), or None.
+
+    Terminated postcodes with no grid reference are published with a sentinel
+    latitude of 99.999999; those and any (0, 0) are dropped.
+    """
+    pc_col = (
+        row.get("pcds") or row.get("pcd") or row.get("Postcode") or row.get("postcode")
+    )
+    pc = _norm_postcode(str(pc_col or ""))
+    if not pc:
+        return None
+    lat = t.parse_number(row.get("lat") or row.get("Latitude"))
+    lng = t.parse_number(row.get("long") or row.get("Longitude"))
+    if lat is None or lng is None or lat > 90 or (lat == 0 and lng == 0):
+        return None
+    return pc, lat, lng
+
+
+def _onspd_csv_member(zf: zipfile.ZipFile) -> str:
+    """The big postcode CSV inside an ONSPD/NSPL zip (under Data/)."""
+    names = [n for n in zf.namelist() if n.lower().endswith(".csv")]
+    preferred = [n for n in names if "/data/" in n.lower() or n.lower().startswith("data/")]
+    pool = preferred or names
+    if not pool:
+        raise ValueError("No CSV found in the postcode directory zip")
+    # The directory file is by far the largest CSV; pick it over any readme CSV.
+    return max(pool, key=lambda n: zf.getinfo(n).file_size)
+
+
+def _download_to_temp(url: str, suffix: str = "") -> str:
+    """Stream a (large) download to a temp file and return its path.
+
+    Used for the postcode directory, which is hundreds of MB: streaming to disk
+    avoids holding the whole archive in memory.
+    """
+    import os
+    import tempfile
+
+    url = _require_url(url)
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    with (
+        httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as client,
+        client.stream("GET", url) as resp,
+        os.fdopen(fd, "wb") as f,
+    ):
+        resp.raise_for_status()
+        for chunk in resp.iter_bytes():
+            f.write(chunk)
+    return path
+
+
+def load_postcodes(
+    pool: ConnectionPool, url: str
+) -> int:  # pragma: no cover - large file + DB COPY, exercised live
+    """Load the ONS Postcode Directory (postcode to coordinate) for geocoding.
+
+    Streams the directory CSV from the zip straight into a COPY, so the 2.6M row
+    file never has to be held in memory at once.
+    """
+    import os
+
+    path = _download_to_temp(url, suffix=".zip")
+    n = 0
+    try:
+        with (
+            zipfile.ZipFile(path) as zf,
+            pool.connection() as conn,
+            conn.transaction(),
+        ):
+            member = _onspd_csv_member(zf)
+            conn.execute("TRUNCATE postcode_centroid")
+            with (
+                zf.open(member) as raw,
+                io.TextIOWrapper(raw, encoding="utf-8-sig", errors="ignore") as text,
+                conn.cursor() as cur,
+                cur.copy(
+                    "COPY postcode_centroid (postcode, lat, lng) FROM STDIN"
+                ) as copy,
+            ):
+                for row in csv.DictReader(text):
+                    parsed = _postcode_centroid(row)
+                    if parsed is None:
+                        continue
+                    copy.write_row(parsed)
+                    n += 1
+    finally:
+        os.unlink(path)
+    return n
+
+
+def _is_ods_url(url: str) -> bool:
+    """True for an ODS ORD (Organisation Reference Data) API endpoint."""
+    low = url.lower()
+    return "spineservices" in low or "/ord/" in low
+
+
+def _fetch_ods_organisations(url: str) -> list[dict]:
+    """Page the ODS ORD organisations endpoint into one list.
+
+    The sync API returns {"Organisations": [...]} and pages by Offset/Limit;
+    each list item carries the ODS code (OrgId), Name and PostCode, which is all
+    we need (coordinates come from geocoding the postcode).
+    """
+    parts = urlparse(_require_url(url))
+    base = dict(parse_qsl(parts.query))
+    limit = int(base.get("Limit", "1000"))
+    results: list[dict] = []
+    offset = 0
+    with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as client:
+        for _ in range(10_000):  # safety bound
+            params = {**base, "Limit": str(limit), "Offset": str(offset)}
+            u = urlunparse(parts._replace(query=urlencode(params)))
+            resp = client.get(u)
+            resp.raise_for_status()
+            orgs = resp.json().get("Organisations") or []
+            if not orgs:
+                break
+            results.extend(orgs)
+            offset += len(orgs)
+            if len(orgs) < limit:
+                break
+    return results
+
+
+def _ods_hospital_points(pool: ConnectionPool, orgs: list[dict]) -> list[dict]:
+    """ODS organisations to hospital points, geocoding postcodes via the
+    postcode_centroid table loaded from the ONS Postcode Directory."""
+    wanted: dict[str, list[tuple[str, str]]] = {}
+    for o in orgs:
+        pc = _norm_postcode(str(o.get("PostCode") or o.get("Postcode") or ""))
+        if not pc:
+            continue
+        name = str(o.get("Name") or "").strip()
+        code = str(o.get("OrgId") or o.get("OrgLink") or "").strip()
+        wanted.setdefault(pc, []).append((name, code))
+    if not wanted:
+        raise ValueError("No postcodes in the ODS response to geocode")
+    coords: dict[str, tuple[float, float]] = {}
+    with pool.connection() as conn:
+        rows = conn.execute(
+            "SELECT postcode, lat, lng FROM postcode_centroid WHERE postcode = ANY(%s)",
+            [list(wanted)],
+        ).fetchall()
+        for pc, lat, lng in rows:
+            coords[pc] = (lat, lng)
+    if not coords:
+        raise ValueError(
+            "No hospital postcodes matched. Load the Postcodes dataset first so "
+            "ODS postcodes can be geocoded."
+        )
+    points: list[dict] = []
+    for pc, entries in wanted.items():
+        if pc not in coords:
+            continue
+        lat, lng = coords[pc]
+        for name, code in entries:
+            points.append(
+                {"name": name or None, "org_code": code or None, "lat": lat, "lng": lng}
+            )
+    return points
+
+
 def _hospital_points(records: list[dict]) -> list[dict]:
     """Hospitals as {name, org_code, lng, lat} from an NHS sites file.
 
@@ -981,7 +1152,12 @@ def _hospital_points(records: list[dict]) -> list[dict]:
 def load_hospitals(
     pool: ConnectionPool, url: str, area_type: str = "MSOA"
 ) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
-    points = _hospital_points(_load_records(url))
+    # ODS ORD API carries org code + postcode (no coordinates), so geocode via
+    # the postcode directory; a plain NHS sites CSV carries coordinates directly.
+    if _is_ods_url(url):
+        points = _ods_hospital_points(pool, _fetch_ods_organisations(url))
+    else:
+        points = _hospital_points(_load_records(url))
     if not points:
         return 0
     with pool.connection() as conn, conn.transaction():

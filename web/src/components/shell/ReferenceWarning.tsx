@@ -16,6 +16,7 @@ const NAMES: Record<string, string> = {
   imd: "Deprivation (IMD)",
   schools: "Schools",
   crime: "Crime",
+  postcodes: "Postcodes",
   hospitals: "Hospitals",
   nhs_waiting: "NHS waiting times",
 };

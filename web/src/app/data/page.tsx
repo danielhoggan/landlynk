@@ -70,6 +70,14 @@ const DEFAULT_SCHOOLS =
   "https://ea-edubase-api-prod.azurewebsites.net/edubase/downloads/public/" +
   `edubasealldata${_today}.csv`;
 
+// NHS ODS Organisation Reference Data API. The list endpoint pages by
+// Offset/Limit and returns each organisation's ODS code, name and postcode;
+// the worker geocodes the postcode against the Postcodes dataset. RO198 is the
+// NHS Trust Site role; change PrimaryRoleId for a different set.
+const DEFAULT_HOSPITALS =
+  "https://directory.spineservices.nhs.uk/ORD/2-0-0/organisations?" +
+  "PrimaryRoleId=RO198&Limit=1000";
+
 interface FieldDef {
   key: string;
   label: string;
@@ -252,18 +260,33 @@ const DATASETS: DatasetDef[] = [
     ],
   },
   {
-    id: "hospitals",
-    title: "Hospitals",
+    id: "postcodes",
+    title: "Postcodes (geocoding)",
     blurb:
-      "Distance to the nearest hospital per MSOA, plus the points used for the nearest-A&E context on reports. NHS hospital sites CSV (lat/long or easting/northing, with an org code for waiting times).",
-    source:
-      "https://digital.nhs.uk/services/organisation-data-service/export-data-files/csv-downloads/other-nhs-organisations",
-    sourceLabel: "NHS ODS hospital sites",
+      "ONS Postcode Directory: maps every postcode to a coordinate. Used to geocode NHS hospital postcodes from the ODS API, so load this before Hospitals. Paste the current ONSPD zip link from the ONS Geography Portal.",
+    source: "https://geoportal.statistics.gov.uk/search?q=ONS%20Postcode%20Directory",
+    sourceLabel: "ONS Postcode Directory",
     fields: [
       {
         key: "url",
-        label: "NHS hospital sites CSV URL",
-        placeholder: "NHS ODS hospital sites CSV (lat/long or easting/northing + org code)",
+        label: "ONSPD / NSPL zip URL",
+        placeholder: "ONS Geography Portal: ONS Postcode Directory full zip",
+      },
+    ],
+  },
+  {
+    id: "hospitals",
+    title: "Hospitals",
+    blurb:
+      "Distance to the nearest hospital per MSOA, plus the points used for the nearest-A&E context on reports. Loads live from the NHS ODS organisation API (org code plus postcode), geocoded against the Postcodes dataset, so load Postcodes first. The default lists NHS Trust sites; adjust PrimaryRoleId for a different ODS role. A plain hospital-sites CSV with lat/long or easting/northing also works.",
+    source:
+      "https://digital.nhs.uk/developer/api-catalogue/organisation-data-service-ord",
+    sourceLabel: "NHS ODS ORD API",
+    fields: [
+      {
+        key: "url",
+        label: "ODS ORD API URL (or a hospital-sites CSV URL)",
+        placeholder: "NHS ODS organisations API endpoint, or an NHS sites CSV",
       },
     ],
   },
@@ -301,7 +324,8 @@ export default function DataPage() {
     imd: { url: DEFAULT_IMD, lookupUrl: "" },
     schools: { url: DEFAULT_SCHOOLS, ratingsUrl: "" },
     crime: { url: "" },
-    hospitals: { url: "" },
+    postcodes: { url: "" },
+    hospitals: { url: DEFAULT_HOSPITALS },
     nhs_waiting: { url: "" },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
