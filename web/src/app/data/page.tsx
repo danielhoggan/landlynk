@@ -40,6 +40,19 @@ const DEFAULT_INCOME =
   "smallareaincomeestimatesformiddlelayersuperoutputareasenglandandwales/" +
   "financialyearending2020/saiefy1920finalqaddownload280923.xlsx";
 
+// ONS access to gardens and public green space (the dataset page; the loader
+// follows it to the current xlsx). Pick the MSOA sheet of distance to green space.
+const DEFAULT_GREEN_SPACE =
+  "https://www.ons.gov.uk/economy/environmentalaccounts/datasets/" +
+  "accesstogardensandpublicgreenspaceingreatbritain";
+
+// MHCLG English Indices of Deprivation 2019, File 7 (all scores, ranks, deciles)
+// at LSOA. Aggregated to MSOA with the lookup below.
+const DEFAULT_IMD =
+  "https://assets.publishing.service.gov.uk/government/uploads/system/uploads/" +
+  "attachment_data/file/845345/" +
+  "File_7_-_All_IoD2019_Scores__Ranks__Deciles_and_Population_Denominators_3.csv";
+
 interface FieldDef {
   key: string;
   label: string;
@@ -153,7 +166,7 @@ const DATASETS: DatasetDef[] = [
       {
         key: "lookupUrl",
         label: "LSOA to MSOA lookup CSV URL",
-        placeholder: "ONS LSOA-to-MSOA lookup",
+        placeholder: "ONS Open Geography: LSOA(2011) to MSOA(2011) lookup, CSV export",
       },
     ],
   },
@@ -166,7 +179,7 @@ const DATASETS: DatasetDef[] = [
       {
         key: "url",
         label: "GIAS edubasealldata CSV URL",
-        placeholder: "GIAS full establishment data CSV",
+        placeholder: "get-information-schools.service.gov.uk/Downloads, edubasealldata CSV",
       },
     ],
   },
@@ -179,7 +192,7 @@ const DATASETS: DatasetDef[] = [
       {
         key: "url",
         label: "data.police.uk CSV or zip URL",
-        placeholder: "Street-level crime CSV or archive zip",
+        placeholder: "data.police.uk/data: generate a CSV/zip for your month or force",
       },
     ],
   },
@@ -192,7 +205,7 @@ const DATASETS: DatasetDef[] = [
       {
         key: "url",
         label: "NHS hospital sites CSV URL",
-        placeholder: "NHS hospitals CSV",
+        placeholder: "NHS ODS hospital sites CSV (lat/long or easting/northing + org code)",
       },
     ],
   },
@@ -205,7 +218,7 @@ const DATASETS: DatasetDef[] = [
       {
         key: "url",
         label: "NHS England waiting times CSV URL",
-        placeholder: "A&E or RTT provider CSV",
+        placeholder: "NHS England A&E attendances monthly provider CSV",
       },
     ],
   },
@@ -223,8 +236,8 @@ export default function DataPage() {
     census_tenure: { url: DEFAULT_TENURE },
     income_estimates: { url: DEFAULT_INCOME },
     house_prices: { url: DEFAULT_HOUSE_PRICES },
-    green_space: { url: "" },
-    imd: { url: "", lookupUrl: "" },
+    green_space: { url: DEFAULT_GREEN_SPACE },
+    imd: { url: DEFAULT_IMD, lookupUrl: "" },
     schools: { url: "" },
     crime: { url: "" },
     hospitals: { url: "" },
