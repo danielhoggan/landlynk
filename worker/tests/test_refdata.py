@@ -297,3 +297,33 @@ def test_nhs_waiting_rows_normalise_fraction():
     assert rows["RXX"]["ae_4hr_pct"] == 72.0  # 0.72 -> 72%
     assert rows["RYY"]["ae_4hr_pct"] == 65.0
     assert rows["RXX"]["rtt_weeks"] == 14
+
+
+def test_load_records_dated_steps_back_to_available_day(monkeypatch):
+    # Today's GIAS file is not up yet; yesterday's is. The loader steps back.
+    available = "20260610"
+    seen = []
+
+    def fake_get_bytes(u):
+        seen.append(u)
+        if available in u:
+            return b"URN,Easting,Northing,OfstedRating (name)\n1,532000,181000,Good\n"
+        raise RuntimeError("404")
+
+    monkeypatch.setattr(loaders, "_get_bytes", fake_get_bytes)
+    url = "https://gias/edubasealldata20260612.csv"
+    records = loaders._load_records_dated(url, max_back=5)
+    assert records and records[0]["URN"] == "1"
+    assert any("20260612" in u for u in seen) and any(available in u for u in seen)
+
+
+def test_load_records_dated_errors_after_window(monkeypatch):
+    import pytest
+
+    monkeypatch.setattr(
+        loaders, "_get_bytes", lambda u: (_ for _ in ()).throw(RuntimeError("404"))
+    )
+    with pytest.raises(ValueError):
+        loaders._load_records_dated(
+            "https://gias/edubasealldata20260612.csv", max_back=3
+        )

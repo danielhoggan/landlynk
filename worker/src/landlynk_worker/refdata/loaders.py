@@ -120,19 +120,22 @@ def fetch_arcgis_geojson(
     return {"type": "FeatureCollection", "features": features}
 
 
-def _read_csv(text: str) -> tuple[list[dict], str]:
-    # Strip a UTF-8 BOM so the first header is not "﻿geography code".
+def _csv_rows(text: str) -> list[dict]:
+    """Parse CSV text into dict rows, handling a BOM and the delimiter. Does not
+    require an area-code column, so point files (schools, hospitals) parse too."""
     if text.startswith("﻿"):
         text = text[1:]
-    # Sniff the delimiter (NOMIS uses commas, some ONS exports use semicolons or
-    # tabs); fall back to comma.
     try:
         delimiter = csv.Sniffer().sniff(text[:4096], delimiters=",;\t").delimiter
     except csv.Error:
         delimiter = ","
-    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
-    rows = list(reader)
-    code_field = t.find_area_code_field(reader.fieldnames or [])
+    return list(csv.DictReader(io.StringIO(text), delimiter=delimiter))
+
+
+def _read_csv(text: str) -> tuple[list[dict], str]:
+    rows = _csv_rows(text)
+    fieldnames = list(rows[0].keys()) if rows else []
+    code_field = t.find_area_code_field(fieldnames)
     return rows, code_field
 
 
@@ -431,9 +434,8 @@ def _house_price_rows(records: list[dict], area_type: str) -> list[dict]:
 # --- DB write ----------------------------------------------------------------
 
 
-def _load_records(url: str) -> list[dict]:
-    """Fetch a tabular file (xlsx/xls/csv), following an ONS page link if pasted."""
-    data = _get_bytes(url)
+def _records_from_bytes(url: str, data: bytes) -> list[dict]:
+    """Parse already-downloaded bytes, following an ONS page link if pasted."""
     resolved = _resolve_data_url(url, data)
     if resolved:
         url = resolved
@@ -443,7 +445,46 @@ def _load_records(url: str) -> list[dict]:
         return _read_xls(data)
     if low.endswith((".xlsx", ".xlsm")):
         return _read_xlsx(data)
-    return _read_csv(data.decode("utf-8-sig", "ignore"))[0]
+    return _csv_rows(data.decode("utf-8-sig", "ignore"))
+
+
+def _load_records(url: str) -> list[dict]:
+    """Fetch a tabular file (xlsx/xls/csv), following an ONS page link if pasted."""
+    return _records_from_bytes(url, _get_bytes(url))
+
+
+def _load_records_dated(url: str, max_back: int = 10) -> list[dict]:
+    """Load a date-stamped file (e.g. GIAS edubasealldataYYYYMMDD.csv).
+
+    Files like GIAS are published daily with the date in the name, so there is no
+    fixed link. Given a URL containing a YYYYMMDD, try that date then step back a
+    day at a time until one downloads, so a default of today's date just works
+    even before the day's file is published. Falls back to a clear error asking
+    for a manual URL if none in the window exist.
+    """
+    from datetime import datetime, timedelta
+
+    match = re.search(r"\d{8}", url)
+    if not match:
+        return _load_records(url)
+    stamp = match.group(0)
+    try:
+        base = datetime.strptime(stamp, "%Y%m%d").date()
+    except ValueError:
+        return _load_records(url)
+    last_error: Exception | None = None
+    for i in range(max_back):
+        day = (base - timedelta(days=i)).strftime("%Y%m%d")
+        candidate = url.replace(stamp, day, 1)
+        try:
+            return _records_from_bytes(candidate, _get_bytes(candidate))
+        except Exception as exc:  # download miss for that day; try the day before
+            last_error = exc
+    raise ValueError(
+        "Could not find a published file in the last "
+        f"{max_back} days from {url}. Paste a specific file URL instead. "
+        f"Last error: {last_error}"
+    )
 
 
 def _is_msoa(code: str) -> bool:
@@ -676,14 +717,14 @@ def _read_point_records(url: str) -> list[dict]:
     with zipfile.ZipFile(io.BytesIO(content)) as zf:
         for name in zf.namelist():
             if name.lower().endswith(".csv"):
-                rows.extend(_read_csv(zf.read(name).decode("utf-8-sig", "ignore"))[0])
+                rows.extend(_csv_rows(zf.read(name).decode("utf-8-sig", "ignore")))
     return rows
 
 
 def load_schools(
     pool: ConnectionPool, url: str, area_type: str = "MSOA"
 ) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
-    points = _school_points(_load_records(url))
+    points = _school_points(_load_records_dated(url))
     if not points:
         return 0
     with pool.connection() as conn, conn.transaction():

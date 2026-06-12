@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Database, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import {
   getReferenceStatus,
+  getReferenceHealth,
   loadReference,
   type ReferenceStatus,
 } from "@/lib/client";
@@ -52,6 +53,14 @@ const DEFAULT_IMD =
   "https://assets.publishing.service.gov.uk/government/uploads/system/uploads/" +
   "attachment_data/file/845345/" +
   "File_7_-_All_IoD2019_Scores__Ranks__Deciles_and_Population_Denominators_3.csv";
+
+// GIAS publishes a new full extract every day with the date in the filename, so
+// default to today's URL. The worker steps back a day at a time if today's file
+// is not up yet, so this just works without hunting for the dated link.
+const _today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+const DEFAULT_SCHOOLS =
+  "https://ea-edubase-api-prod.azurewebsites.net/edubase/downloads/public/" +
+  `edubasealldata${_today}.csv`;
 
 interface FieldDef {
   key: string;
@@ -238,17 +247,21 @@ export default function DataPage() {
     house_prices: { url: DEFAULT_HOUSE_PRICES },
     green_space: { url: DEFAULT_GREEN_SPACE },
     imd: { url: DEFAULT_IMD, lookupUrl: "" },
-    schools: { url: "" },
+    schools: { url: DEFAULT_SCHOOLS },
     crime: { url: "" },
     hospitals: { url: "" },
     nhs_waiting: { url: "" },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [stale, setStale] = useState<string[]>([]);
 
   const refresh = useCallback(() => {
     getReferenceStatus()
       .then(setStatus)
+      .catch(() => {});
+    getReferenceHealth()
+      .then((h) => setStale(h.stale ?? []))
       .catch(() => {});
   }, []);
 
@@ -319,6 +332,8 @@ export default function DataPage() {
           </span>
         </div>
       </header>
+
+      <StatusSummary status={status} stale={stale} />
 
       {DATASETS.map((d) => {
         const s = status[d.id];
@@ -407,4 +422,78 @@ function StatusBadge({ status }: { status?: ReferenceStatus }) {
     );
   }
   return <span className="text-xs text-neutral-400">{status.status}</span>;
+}
+
+// Overview at the top of the page: every dataset with a RAG dot, when it was last
+// updated, and any action or error to address. Green = loaded and fresh, amber =
+// loading or out of date, red = not loaded or failed.
+function StatusSummary({
+  status,
+  stale,
+}: {
+  status: Record<string, ReferenceStatus>;
+  stale: string[];
+}) {
+  const staleSet = new Set(stale);
+
+  function rag(id: string): { dot: string; label: string } {
+    const s = status[id];
+    if (!s || s.status === "not_loaded" || !s.status) {
+      return { dot: "bg-priority-low", label: "Not loaded" };
+    }
+    if (s.status === "failed") return { dot: "bg-priority-low", label: "Failed" };
+    if (s.status === "running")
+      return { dot: "bg-priority-mid", label: "Loading..." };
+    if (staleSet.has(id))
+      return { dot: "bg-priority-mid", label: "Out of date, reload" };
+    return { dot: "bg-priority-high", label: "Up to date" };
+  }
+
+  return (
+    <div className="overflow-hidden rounded-card border border-neutral-200 bg-white">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-neutral-200 text-xs text-neutral-500">
+          <tr>
+            <th className="px-3 py-2 font-semibold">Dataset</th>
+            <th className="px-3 py-2 font-semibold">Status</th>
+            <th className="px-3 py-2 font-semibold">Last updated</th>
+            <th className="px-3 py-2 text-right font-semibold">Rows</th>
+            <th className="px-3 py-2 font-semibold">Action / error</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-neutral-100">
+          {DATASETS.map((d) => {
+            const s = status[d.id];
+            const { dot, label } = rag(d.id);
+            return (
+              <tr key={d.id}>
+                <td className="px-3 py-2 font-medium">{d.title}</td>
+                <td className="px-3 py-2">
+                  <span className="flex items-center gap-1.5">
+                    <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
+                    <span className="text-xs text-neutral-600">{label}</span>
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-xs text-neutral-500">
+                  {s?.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : "-"}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-xs text-neutral-500">
+                  {s?.rows != null ? s.rows.toLocaleString() : "-"}
+                </td>
+                <td className="px-3 py-2 text-xs text-neutral-500">
+                  {s?.status === "failed"
+                    ? s.error || "Load failed"
+                    : !s || !s.status || s.status === "not_loaded"
+                      ? "Load below"
+                      : staleSet.has(d.id)
+                        ? "Reload for a newer release"
+                        : ""}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
