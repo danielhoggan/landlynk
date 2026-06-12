@@ -1044,8 +1044,12 @@ def _fetch_ods_organisations(url: str) -> list[dict]:
     limit = int(base.get("Limit", "1000"))
     results: list[dict] = []
     offset = 0
-    # The ODS ORD API returns 406 unless an explicit JSON Accept header is sent.
-    headers = {"Accept": "application/json"}
+    # The ODS ORD API returns 406 unless an explicit JSON Accept header is sent,
+    # and some gateways also reject the default client User-Agent.
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "LandLynk/1.0 (reference data loader)",
+    }
     with httpx.Client(
         timeout=_TIMEOUT, follow_redirects=True, headers=headers
     ) as client:
