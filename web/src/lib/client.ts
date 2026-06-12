@@ -425,6 +425,7 @@ export interface ReferenceHealth {
   state: "green" | "amber" | "red";
   loaded: number;
   total: number;
+  stale?: string[];
 }
 
 export async function getReferenceHealth(): Promise<ReferenceHealth> {

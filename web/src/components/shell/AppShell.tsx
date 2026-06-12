@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { TopBar } from "./TopBar";
 import { DrawerNav } from "./DrawerNav";
 import { Sidebar } from "./Sidebar";
+import { ReferenceWarning } from "./ReferenceWarning";
 
 // Routes shown without the nav chrome. The sign-in page must not expose the
 // navigation, so an unauthenticated visitor never sees the app structure.
@@ -26,6 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <DrawerNav open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <div className="md:pl-60">
         <TopBar onOpenDrawer={() => setDrawerOpen(true)} />
+        <ReferenceWarning />
         <main>{children}</main>
       </div>
     </div>

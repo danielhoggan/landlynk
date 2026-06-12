@@ -75,8 +75,12 @@ def get_health(pool: ConnectionPool | None = None) -> dict:
     """A RAG summary of reference loading, safe for any user (no sources).
 
     green when every dataset is loaded, amber when some are (or a load is in
-    flight), red when none are. Carries only counts, never source URLs.
+    flight), red when none are. Also lists loaded datasets that are older than
+    their expected refresh cadence (stale), so admins can be nudged to reload.
+    Carries only counts and dataset keys, never source URLs.
     """
+    from datetime import timedelta
+
     status = get_status(pool)
     total = len(DATASETS)
     loaded = sum(1 for d in DATASETS if status.get(d, {}).get("status") == "loaded")
@@ -87,7 +91,40 @@ def get_health(pool: ConnectionPool | None = None) -> dict:
         state = "amber"
     else:
         state = "red"
-    return {"state": state, "loaded": loaded, "total": total}
+
+    now = datetime.now(UTC)
+    stale: list[str] = []
+    for d in DATASETS:
+        s = status.get(d, {})
+        if s.get("status") != "loaded" or not s.get("updatedAt"):
+            continue
+        try:
+            when = datetime.fromisoformat(s["updatedAt"])
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=UTC)
+        except (ValueError, TypeError):
+            continue
+        if now - when > timedelta(days=_MAX_AGE_DAYS.get(d, _DEFAULT_MAX_AGE_DAYS)):
+            stale.append(d)
+    return {"state": state, "loaded": loaded, "total": total, "stale": stale}
+
+
+# How long a loaded dataset stays fresh before admins are nudged to recheck the
+# source for a newer release, by the source's typical publication cadence.
+_DEFAULT_MAX_AGE_DAYS = 365
+_MAX_AGE_DAYS = {
+    "geo_boundaries": 3650,
+    "census_demographics": 3650,
+    "census_tenure": 3650,
+    "income_estimates": 400,
+    "house_prices": 120,
+    "green_space": 1100,
+    "imd": 1500,
+    "schools": 120,
+    "crime": 60,
+    "hospitals": 365,
+    "nhs_waiting": 45,
+}
 
 
 def _set(
