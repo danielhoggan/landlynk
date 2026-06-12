@@ -18,7 +18,6 @@ const NAMES: Record<string, string> = {
   crime: "Crime",
   postcodes: "Postcodes",
   hospitals: "Hospitals",
-  nhs_waiting: "NHS waiting times",
 };
 
 const DISMISS_KEY = "landlynk.staleDismissed";

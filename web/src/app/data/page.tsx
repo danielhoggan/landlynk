@@ -294,22 +294,6 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
-  {
-    id: "nhs_waiting",
-    title: "NHS waiting times",
-    blurb:
-      "Per-provider A&E four-hour performance and RTT median wait, shown as nearest-A&E context on the report deck. NHS England A&E or RTT provider CSV (keyed by organisation code).",
-    source:
-      "https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/",
-    sourceLabel: "NHS England A&E waiting times",
-    fields: [
-      {
-        key: "url",
-        label: "NHS England waiting times CSV URL",
-        placeholder: "NHS England A&E attendances monthly provider CSV",
-      },
-    ],
-  },
 ];
 
 export default function DataPage() {
@@ -330,7 +314,6 @@ export default function DataPage() {
     crime: { url: "" },
     postcodes: { url: "" },
     hospitals: { url: DEFAULT_HOSPITALS },
-    nhs_waiting: { url: "" },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});
