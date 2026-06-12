@@ -141,3 +141,34 @@ def test_house_price_rows_uses_explicit_median_column():
     record = {"MSOA code": "E1", "Median price": "300000"}
     rows = loaders._house_price_rows([record], "MSOA")
     assert rows[0]["median_price"] == 300000.0
+
+
+def test_resolve_data_url_finds_ons_download_link():
+    html = (
+        b"<!DOCTYPE html><html><head></head><body>"
+        b'<a href="/file?uri=/peoplepopulationandcommunity/housing/datasets/'
+        b'medianhousepricesbymiddlelayersuperoutputarea/current/hpssa.xlsx" '
+        b'class="download">Download xlsx</a></body></html>'
+    )
+    url = loaders._resolve_data_url(
+        "https://www.ons.gov.uk/peoplepopulationandcommunity/housing/datasets/x",
+        html,
+    )
+    assert url == (
+        "https://www.ons.gov.uk/file?uri=/peoplepopulationandcommunity/housing/"
+        "datasets/medianhousepricesbymiddlelayersuperoutputarea/current/hpssa.xlsx"
+    )
+
+
+def test_resolve_data_url_none_for_real_file():
+    # Real xlsx bytes start with the zip signature, not HTML.
+    assert loaders._resolve_data_url("http://x/f.xlsx", b"PK\x03\x04rest") is None
+
+
+def test_resolve_data_url_errors_on_page_without_link():
+    import pytest
+
+    with pytest.raises(ValueError):
+        loaders._resolve_data_url(
+            "http://x", b"<html><head></head><body>no file</body></html>"
+        )

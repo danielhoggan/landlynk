@@ -46,6 +46,34 @@ def _get_bytes(url: str) -> bytes:
         return resp.content
 
 
+# ONS dataset pages link to the actual file as /file?uri=...xlsx (or xls/csv).
+_ONS_FILE_RE = re.compile(
+    r'href="(/file\?uri=[^"]+\.(?:xlsx|xlsm|xls|csv))"', re.IGNORECASE
+)
+
+
+def _resolve_data_url(url: str, data: bytes) -> str | None:
+    """If `data` is an HTML page (e.g. an ONS dataset page was pasted instead of
+    the file), find the first xlsx/xls/csv download link and return its absolute
+    URL. Returns None when the content is already a data file."""
+    head = data[:1024].lstrip().lower()
+    if not (
+        head.startswith(b"<!doctype html")
+        or head.startswith(b"<html")
+        or b"<head" in head
+    ):
+        return None
+    from urllib.parse import urljoin
+
+    match = _ONS_FILE_RE.search(data.decode("utf-8", "ignore"))
+    if not match:
+        raise ValueError(
+            "That URL is a web page, not a data file. Open the dataset page, then "
+            "copy the link of the xlsx or csv download itself and paste that."
+        )
+    return urljoin(url, match.group(1))
+
+
 def fetch_arcgis_geojson(
     query_url: str,
     out_fields: str = "*",
@@ -509,13 +537,20 @@ def load_income(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
 
 
 def load_house_prices(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
+    # Fetch once; if the user pasted the ONS dataset page, follow its download
+    # link to the real file. Then parse by the resolved file's extension.
+    data = _get_bytes(url)
+    resolved = _resolve_data_url(url, data)
+    if resolved:
+        url = resolved
+        data = _get_bytes(url)
     low = url.lower()
     if low.endswith(".xls"):
-        records = _read_xls(_get_bytes(url))
+        records = _read_xls(data)
     elif low.endswith((".xlsx", ".xlsm")):
-        records = _read_xlsx(_get_bytes(url))
+        records = _read_xlsx(data)
     else:
-        records, _ = _read_csv(_get_text(url))
+        records, _ = _read_csv(data.decode("utf-8-sig", "ignore"))
     rows = _house_price_rows(records, area_type)
     return _replace_table(
         pool,

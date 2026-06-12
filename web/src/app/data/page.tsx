@@ -24,14 +24,13 @@ const DEFAULT_AGE = `${NOMIS}ts007.zip`;
 const DEFAULT_HOUSEHOLDS = `${NOMIS}ts003.zip`;
 const DEFAULT_TENURE = `${NOMIS}ts054.zip`;
 
-// ONS Median house prices by MSOA (the current dataset, most recent year). The
-// /current/ path always serves the latest edition; the loader takes the most
-// recent dated column. If ONS renames the file, paste the exact xlsx link from
-// https://www.ons.gov.uk/peoplepopulationandcommunity/housing/datasets/medianhousepricesbymiddlelayersuperoutputarea
+// ONS Median house prices by MSOA, latest edition (year ending Sep 2025). For a
+// newer edition, paste either the new xlsx link or the dataset page itself: the
+// loader follows an ONS dataset page to its download automatically.
 const DEFAULT_HOUSE_PRICES =
   "https://www.ons.gov.uk/file?uri=/peoplepopulationandcommunity/" +
   "housing/datasets/medianhousepricesbymiddlelayersuperoutputarea/" +
-  "current/hpssadataset2medianpricepaidbymsoa.xlsx";
+  "yearendingseptember2025/medianpricepaidmsoa.xlsx";
 
 // ONS small-area income (MSOA, financial year ending 2020). Best-known URL;
 // update here if ONS publishes a newer release.
@@ -123,7 +122,7 @@ const DATASETS: DatasetDef[] = [
       {
         key: "url",
         label: "HPSSA XLSX or CSV URL",
-        placeholder: "https://www.ons.gov.uk/...hpssa...xlsx",
+        placeholder: "ONS median house prices xlsx, or the dataset page URL",
       },
     ],
   },
