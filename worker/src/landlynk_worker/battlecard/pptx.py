@@ -73,13 +73,21 @@ def render_battlecard_pptx(
     map_geometry: dict | None = None,
     logo: bytes | None = None,
     accent: str | None = None,
+    map_image: bytes | None = None,
 ) -> bytes:
     """Render a single Battlecard payload to PPTX bytes (one slide)."""
     prs = Presentation()
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
     _add_card_slide(
-        prs, prs.slide_layouts[6], card, _hex(heading_color), map_geometry, logo, accent
+        prs,
+        prs.slide_layouts[6],
+        card,
+        _hex(heading_color),
+        map_geometry,
+        logo,
+        accent,
+        map_image,
     )
     buffer = io.BytesIO()
     prs.save(buffer)
@@ -113,11 +121,12 @@ def _add_card_slide(
     map_geometry: dict | None = None,
     logo: bytes | None = None,
     accent: str | None = None,
+    map_image: bytes | None = None,
 ) -> None:
     slide = prs.slides.add_slide(blank)
     vs = card.visual_summary
     accent_rgb = _hex(accent) if accent else _GOLD
-    _sidebar(slide, card, navy, map_geometry, logo, accent_rgb)
+    _sidebar(slide, card, navy, map_geometry, logo, accent_rgb, map_image)
     _pillars(slide, vs.header.lifestyle_pillars)
     _messaging_columns(slide, card, navy)
     _charts_row(slide, card, navy)
@@ -238,12 +247,22 @@ def _sidebar(
     map_geometry: dict | None = None,
     logo: bytes | None = None,
     accent: RGBColor = _GOLD,
+    map_image: bytes | None = None,
 ) -> None:
     vs = card.visual_summary
     h = vs.header
     stats = vs.key_statistics
     _rect(slide, 0, 0, Inches(3.4), Inches(7.5), navy)
-    if map_geometry:
+    # Prefer the OSM basemap image for context; fall back to the vector outline.
+    if map_image:
+        try:
+            slide.shapes.add_picture(
+                io.BytesIO(map_image), Inches(0.3), Inches(4.55), width=Inches(2.8)
+            )
+        except Exception:  # decorative; fall back to the silhouette
+            if map_geometry:
+                _map(slide, map_geometry, accent)
+    elif map_geometry:
         _map(slide, map_geometry, accent)
 
     tf = _box(slide, Inches(0.3), Inches(0.4), Inches(2.8), Inches(1.0))

@@ -987,6 +987,25 @@ def _brand_accent(catchment_id: str) -> str | None:
     return ((catchment or {}).get("input", {}).get("config") or {}).get("brandAccent")
 
 
+def _catchment_coord(catchment_id: str) -> tuple[float | None, float | None]:
+    catchment = get_store().get_catchment(catchment_id)
+    coord = (catchment or {}).get("coordinate") or {}
+    return coord.get("lat"), coord.get("lng")
+
+
+def _map_png(geometry: dict | None, catchment_id: str) -> bytes | None:
+    """An OSM basemap with the catchment drawn over it, for the export sidebar.
+
+    Best effort: returns None if tiles cannot be fetched, and the renderer then
+    falls back to the vector silhouette."""
+    if not geometry:
+        return None
+    from .battlecard.staticmap_render import catchment_png
+
+    lat, lng = _catchment_coord(catchment_id)
+    return catchment_png(geometry, lat, lng)
+
+
 def _brand_logo(catchment_id: str) -> bytes | None:
     """The brand logo bytes for the run, fetched from storage for embedding."""
     catchment = get_store().get_catchment(catchment_id)
@@ -1097,6 +1116,7 @@ def combined_pdf(
             _catchment_geometry(catchment_id),
             _brand_logo(catchment_id),
             _brand_accent(catchment_id),
+            _map_png(_catchment_geometry(catchment_id), catchment_id),
         ),
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="landlynk-combined.pdf"'},
@@ -1116,6 +1136,7 @@ def combined_pptx(
             _catchment_geometry(catchment_id),
             _brand_logo(catchment_id),
             _brand_accent(catchment_id),
+            _map_png(_catchment_geometry(catchment_id), catchment_id),
         ),
         media_type=(
             "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -1134,12 +1155,14 @@ def get_battlecard_pdf(
     data = get_store().get_battlecard(catchment_id, area_code)
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
+    area_geom = _area_geometry(catchment_id, area_code)
     pdf = render_battlecard_pdf(
         Battlecard.model_validate(data),
         _heading(catchment_id),
-        _area_geometry(catchment_id, area_code),
+        area_geom,
         _brand_logo(catchment_id),
         _brand_accent(catchment_id),
+        _map_png(area_geom, catchment_id),
     )
     return Response(
         content=pdf,
@@ -1158,12 +1181,14 @@ def get_battlecard_pptx(
     data = get_store().get_battlecard(catchment_id, area_code)
     if data is None:
         raise HTTPException(status_code=404, detail="Battlecard not found")
+    area_geom = _area_geometry(catchment_id, area_code)
     pptx = render_battlecard_pptx(
         Battlecard.model_validate(data),
         _heading(catchment_id),
-        _area_geometry(catchment_id, area_code),
+        area_geom,
         _brand_logo(catchment_id),
         _brand_accent(catchment_id),
+        _map_png(area_geom, catchment_id),
     )
     return Response(
         content=pptx,

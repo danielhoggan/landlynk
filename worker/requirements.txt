@@ -34,6 +34,8 @@ httpx==0.27.0
 openpyxl==3.1.5
 # Reading legacy .xls workbooks (ONS HPSSA house prices). xlrd 2.x reads .xls.
 xlrd==2.0.1
+# Compositing the static catchment map (OSM tiles) for exports.
+Pillow==10.4.0
 
 # Output generation. KML is emitted directly as XML (no native build
 # dependency); PDF via reportlab; PPTX via python-pptx.

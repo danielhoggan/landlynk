@@ -195,10 +195,16 @@ def render_battlecard_pdf(
     map_geometry: dict | None = None,
     logo: bytes | None = None,
     accent: str | None = None,
+    map_image: bytes | None = None,
 ) -> bytes:
     """Render a single Battlecard payload to PDF bytes (one landscape page)."""
     return render_battlecards_pdf(
-        [card], heading_color, [map_geometry], logo=logo, accent=accent
+        [card],
+        heading_color,
+        [map_geometry],
+        logo=logo,
+        accent=accent,
+        map_image=map_image,
     )
 
 
@@ -208,6 +214,7 @@ def render_battlecards_pdf(
     geometries: list[dict | None] | None = None,
     logo: bytes | None = None,
     accent: str | None = None,
+    map_image: bytes | None = None,
 ) -> bytes:
     """Render one or more Battlecards into a single PDF, one page per area.
 
@@ -237,7 +244,7 @@ def render_battlecards_pdf(
         if i > 0:
             story.append(PageBreak())
         geom = geometries[i] if geometries and i < len(geometries) else None
-        story.extend(_card_flowables(card, styles, geom, logo, accent_color))
+        story.extend(_card_flowables(card, styles, geom, logo, accent_color, map_image))
     doc.build(story)
     return buffer.getvalue()
 
@@ -346,6 +353,7 @@ def _card_flowables(
     map_geometry: dict | None = None,
     logo: bytes | None = None,
     accent: colors.Color = _GOLD,
+    map_image: bytes | None = None,
 ) -> list:
     vs = card.visual_summary
     h = vs.header
@@ -388,10 +396,23 @@ def _card_flowables(
         )
     )
     side.append(stat_table)
-    map_drawing = _map_drawing(map_geometry, 54 * mm, 34 * mm, fill=accent)
-    if map_drawing is not None:
-        side.append(Spacer(1, 3 * mm))
-        side.append(map_drawing)
+    # Prefer the OSM basemap image for context; fall back to the vector outline.
+    placed_map = False
+    if map_image:
+        from reportlab.platypus import Image
+
+        try:
+            mimg = Image(io.BytesIO(map_image), width=54 * mm, kind="proportional")
+            side.append(Spacer(1, 3 * mm))
+            side.append(mimg)
+            placed_map = True
+        except Exception:  # fall back to the silhouette
+            placed_map = False
+    if not placed_map:
+        map_drawing = _map_drawing(map_geometry, 54 * mm, 34 * mm, fill=accent)
+        if map_drawing is not None:
+            side.append(Spacer(1, 3 * mm))
+            side.append(map_drawing)
     if logo:
         from reportlab.platypus import Image
 
