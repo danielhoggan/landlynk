@@ -13,6 +13,7 @@ import type {
 import type { Battlecard } from "@/lib/types/battlecard";
 import {
   combinedExport,
+  reportExport,
   getBattlecard,
   getBuilderProfiles,
   pollCatchment,
@@ -276,6 +277,31 @@ export default function HomePage() {
       URL.revokeObjectURL(url);
     } catch {
       setStatus("Could not build the combined Battlecard.");
+    } finally {
+      setCombining(null);
+    }
+  }
+
+  // The full multi-slide report deck (the LA Insight equivalent), for the whole
+  // catchment or the starred selection.
+  async function exportReport(scope: "selection" | "whole") {
+    if (!catchment) return;
+    setCombining(`${scope}-report`);
+    try {
+      const blob = await reportExport(catchment.id, {
+        scope,
+        areaCodes: scope === "selection" ? Array.from(starred) : undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "landlynk-report.pptx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setStatus("Could not build the report deck.");
     } finally {
       setCombining(null);
     }
@@ -809,6 +835,16 @@ export default function HomePage() {
               >
                 <Download size={16} />
                 {combining === "whole-pptx" ? "..." : "Whole catchment"}
+              </button>
+              <button
+                type="button"
+                onClick={() => exportReport("whole")}
+                disabled={combining !== null}
+                title="Full multi-slide report deck for the whole catchment"
+                className="flex items-center gap-2 rounded-card bg-light-accent px-3 py-2 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
+              >
+                <Download size={16} />
+                {combining === "whole-report" ? "..." : "Full report"}
               </button>
               <a
                 href={`/api/catchments/${catchment.id}/kml`}

@@ -29,6 +29,7 @@ from .battlecard import (
     render_battlecard_pptx,
     render_battlecards_pdf,
     render_battlecards_pptx,
+    render_report_pptx,
 )
 from .config import settings
 from .pipeline.isochrone import (
@@ -987,6 +988,12 @@ def _brand_accent(catchment_id: str) -> str | None:
     return ((catchment or {}).get("input", {}).get("config") or {}).get("brandAccent")
 
 
+def _brand_secondary(catchment_id: str) -> str | None:
+    catchment = get_store().get_catchment(catchment_id)
+    cfg = (catchment or {}).get("input", {}).get("config") or {}
+    return cfg.get("brandSecondary")
+
+
 def _catchment_coord(catchment_id: str) -> tuple[float | None, float | None]:
     catchment = get_store().get_catchment(catchment_id)
     coord = (catchment or {}).get("coordinate") or {}
@@ -1120,6 +1127,30 @@ def combined_pdf(
         ),
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="landlynk-combined.pdf"'},
+    )
+
+
+@app.post("/catchments/{catchment_id}/report/pptx")
+def report_pptx(
+    catchment_id: str, request: CombineRequest, user: dict = Depends(current_user)
+) -> Response:
+    """Full multi-slide report deck for the selection or whole catchment."""
+    _require_access(catchment_id, user)
+    card = _combined_card(catchment_id, request)
+    pptx = render_report_pptx(
+        card,
+        _heading(catchment_id),
+        _brand_logo(catchment_id),
+        _brand_accent(catchment_id),
+        _brand_secondary(catchment_id),
+        _map_png(_catchment_geometry(catchment_id), catchment_id),
+    )
+    return Response(
+        content=pptx,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
+        headers={"Content-Disposition": 'attachment; filename="landlynk-report.pptx"'},
     )
 
 

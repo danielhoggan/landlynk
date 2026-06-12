@@ -420,3 +420,13 @@ def test_costs_report_aggregates_ai_spend(client, monkeypatch):
     assert (
         client.get("/admin/costs", headers=_user_headers("u@x.com")).status_code == 403
     )
+
+
+def test_report_pptx_export(client, monkeypatch):
+    # The full multi-slide report deck for the whole catchment.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job_id = _submit(client)
+    res = client.post(f"/catchments/{job_id}/report/pptx", json={"scope": "whole"})
+    assert res.status_code == 200
+    assert res.content[:2] == b"PK"
+    assert len(res.content) > 20000  # a real multi-slide deck

@@ -8,6 +8,7 @@ from .assemble import (
 )
 from .pdf import render_battlecard_pdf, render_battlecards_pdf
 from .pptx import render_battlecard_pptx, render_battlecards_pptx
+from .report_pptx import render_report_pptx
 from .schema import BATTLECARD_SCHEMA_VERSION, Battlecard
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "render_battlecards_pdf",
     "render_battlecard_pptx",
     "render_battlecards_pptx",
+    "render_report_pptx",
 ]
