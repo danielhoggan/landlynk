@@ -24,7 +24,12 @@ from ..battlecard import (
 )
 from ..battlecard.schema import Battlecard
 from ..scoring.profile import ScoringConfig
-from ..scoring.score import ScoreBreakdown, compute_score, relative_band
+from ..scoring.score import (
+    ScoreBreakdown,
+    compute_score,
+    mean_feature_vector,
+    relative_band,
+)
 from .intersect import intersect_catchment
 from .isochrone import IsochroneCache, IsochroneParams, IsochroneProvider, get_isochrone
 from .radius import radius_polygon
@@ -120,6 +125,29 @@ def _catchment_stats(areas: list, references: dict) -> CatchmentStats:
     )
 
 
+def _build_lookalike_reference(
+    deps: PipelineDeps, locations: list[str], area_type: str
+) -> dict[str, float] | None:  # pragma: no cover - geocode + PostGIS, exercised live
+    """Resolve the brand's best locations to a mean feature vector.
+
+    Geocodes each location, finds the area it sits in, and averages those areas'
+    feature vectors. Best effort: locations that do not resolve are skipped.
+    """
+    profiles = []
+    for loc in locations:
+        try:
+            coord = deps.geocode(loc)
+            area_code = deps.reference.area_at(coord.lat, coord.lng, area_type)
+            if not area_code:
+                continue
+            profiles.append(
+                deps.reference.area_reference(area_code, area_type, 1.0).profile
+            )
+        except Exception:
+            _log.warning("Could not resolve lookalike location: %s", loc)
+    return mean_feature_vector(profiles) if profiles else None
+
+
 def run_catchment(
     raw_input: str,
     development: DevelopmentInfo,
@@ -164,6 +192,17 @@ def run_catchment(
         )
         for m in matches
     }
+    # If the brand gave best locations, resolve them to a reference feature vector
+    # so the lookalike signal can favour areas resembling them.
+    if config.lookalike_locations and config.lookalike_reference is None:
+        reference_vector = _build_lookalike_reference(
+            deps, config.lookalike_locations, area_type
+        )
+        if reference_vector:
+            from dataclasses import replace
+
+            config = replace(config, lookalike_reference=reference_vector)
+            _log.info("Lookalike reference built from %s locations", len(matches))
     scored = [
         (m, compute_score(references[m.area_code].profile, config)) for m in matches
     ]

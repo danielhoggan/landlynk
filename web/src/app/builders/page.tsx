@@ -137,6 +137,7 @@ function GroupCard({
   const [secondary, setSecondary] = useState("#1F5A3C");
   const [accent, setAccent] = useState("#C9A24B");
   const [fonts, setFonts] = useState("");
+  const [targetLocations, setTargetLocations] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [brandErr, setBrandErr] = useState("");
   const [cap, setCap] = useState(
@@ -255,6 +256,13 @@ function GroupCard({
                 className="text-xs font-normal text-neutral-500"
               />
             </label>
+            <textarea
+              value={targetLocations}
+              onChange={(e) => setTargetLocations(e.target.value)}
+              placeholder="Best / target locations: postcodes of known-good developments, one per line (optional, used to weight toward similar areas)"
+              rows={2}
+              className="w-full rounded-card border border-neutral-300 px-3 py-1.5 text-xs"
+            />
             <button
               type="button"
               onClick={async () => {
@@ -272,11 +280,16 @@ function GroupCard({
                       .split(",")
                       .map((s) => s.trim())
                       .filter(Boolean),
+                    targetLocations: targetLocations
+                      .split(/[\n,]/)
+                      .map((s) => s.trim())
+                      .filter(Boolean),
                   });
                   const base64 = await fileToBase64(logoFile);
                   await uploadBrandLogo(id, logoFile.name, base64);
                   setName("");
                   setFonts("");
+                  setTargetLocations("");
                   setLogoFile(null);
                   onChange();
                 } catch (e) {

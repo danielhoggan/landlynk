@@ -74,4 +74,5 @@ export const SIGNAL_LABELS: Record<string, string> = {
   schools: "Schools",
   low_crime: "Low crime",
   healthcare_access: "Healthcare access",
+  lookalike: "Similar to best locations",
 };

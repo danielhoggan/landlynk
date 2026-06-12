@@ -41,6 +41,10 @@ class ReferenceData(Protocol):
         """Build the profile and name for one area from the reference tables."""
         ...
 
+    def area_at(self, lat: float, lng: float, area_type: str) -> str | None:
+        """The area code whose boundary contains the point, or None."""
+        ...
+
 
 class PostgresReferenceData:
     """Reads boundaries and reference tables from Postgres with PostGIS.
@@ -95,6 +99,20 @@ class PostgresReferenceData:
             context=context,
         )
         return AreaReference(profile=profile, name=name or area_code)
+
+    def area_at(
+        self, lat: float, lng: float, area_type: str
+    ) -> str | None:  # pragma: no cover - PostGIS point-in-polygon, exercised live
+        """The area whose boundary contains the point, for lookalike targets."""
+        sql = (
+            "SELECT area_code FROM geo_boundaries "
+            "WHERE area_type = %s "
+            "AND ST_Contains(geom, ST_SetSRID(ST_MakePoint(%s, %s), 4326)) "
+            "LIMIT 1"
+        )
+        with self._pool.connection() as conn:
+            row = conn.execute(sql, [area_type, lng, lat]).fetchone()
+        return row[0] if row else None
 
 
 def _one(conn: Any, table: str, area_code: str) -> dict:  # pragma: no cover - needs DB

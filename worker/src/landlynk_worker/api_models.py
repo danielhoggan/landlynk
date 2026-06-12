@@ -38,6 +38,9 @@ class ScoringConfigModel(BaseModel):
     affordability_multiple: float | None = Field(
         default=None, alias="affordabilityMultiple"
     )
+    lookalike_locations: list[str] | None = Field(
+        default=None, alias="lookalikeLocations"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -94,6 +97,7 @@ def to_scoring_config(req: CatchmentJobRequest) -> ScoringConfig:
             if cfg.affordability_multiple is not None
             else base.affordability_multiple
         ),
+        lookalike_locations=cfg.lookalike_locations or [],
     )
     # A chosen objective reweights the signals and frames the commentary. The web
     # sends the objective's weight preset in cfg.weights so the UI stays in sync,

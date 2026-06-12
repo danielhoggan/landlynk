@@ -57,6 +57,7 @@ _SIGNAL_TO_CONTRACT = {
     "schools": "schools",
     "low_crime": "lowCrime",
     "healthcare_access": "healthcareAccess",
+    "lookalike": "lookalike",
 }
 
 _AGE_BANDS = [

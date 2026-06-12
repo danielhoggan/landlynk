@@ -204,6 +204,8 @@ export interface BuilderProfile {
   fonts?: string[];
   groupId?: string;
   groupName?: string;
+  /** The brand's best / target locations (postcodes), for lookalike weighting. */
+  targetLocations?: string[];
 }
 
 export interface BuilderGroup {
@@ -291,6 +293,8 @@ export interface Builder {
   themeAccent?: string | null;
   fonts?: string[];
   logoPath?: string | null;
+  /** Best / target locations (postcodes) for lookalike weighting. */
+  targetLocations?: string[];
 }
 
 export async function uploadBrandLogo(
@@ -349,6 +353,7 @@ export async function createBuilder(body: {
   themeSecondary?: string;
   themeAccent?: string;
   fonts?: string[];
+  targetLocations?: string[];
 }): Promise<{ id: string }> {
   return jsonOrThrow(
     await fetch("/api/admin/builders", {

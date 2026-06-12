@@ -353,6 +353,40 @@ export default function DataPage() {
     return () => clearInterval(id);
   }, [refresh]);
 
+  // Persist the entered source URLs so they survive a reload (datasets without a
+  // pre-filled default, like Postcodes and Crime, otherwise look empty on return).
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(
+        window.localStorage.getItem("landlynk.referenceUrls") || "{}",
+      );
+      if (saved && typeof saved === "object") {
+        setValues((v) => {
+          const merged = { ...v };
+          for (const [k, val] of Object.entries(saved)) {
+            if (val && typeof val === "object") {
+              merged[k] = { ...merged[k], ...(val as Record<string, string>) };
+            }
+          }
+          return merged;
+        });
+      }
+    } catch {
+      // Ignore unreadable storage; defaults stand.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "landlynk.referenceUrls",
+        JSON.stringify(values),
+      );
+    } catch {
+      // Storage may be unavailable (private mode); persistence is best effort.
+    }
+  }, [values]);
+
   const setField = (dataset: string, key: string, val: string) =>
     setValues((v) => ({ ...v, [dataset]: { ...v[dataset], [key]: val } }));
 

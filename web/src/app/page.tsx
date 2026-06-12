@@ -60,6 +60,10 @@ export default function HomePage() {
   // Business objective: what the catchment is for. Reweights the signals and
   // frames the AI commentary. Empty keeps the default home-sales weights.
   const [objective, setObjective] = useState("");
+  // The selected brand's best/target locations, and whether to weight the
+  // ranking toward areas resembling them (lookalike signal).
+  const [brandLocations, setBrandLocations] = useState<string[]>([]);
+  const [useLookalike, setUseLookalike] = useState(false);
   const [profiles, setProfiles] = useState<BuilderProfile[]>([]);
   const [profileId, setProfileId] = useState("");
   const [brandHeading, setBrandHeading] = useState("");
@@ -104,6 +108,18 @@ export default function HomePage() {
     if (obj.segment && !segment) setSegment(obj.segment);
   }
 
+  // Toggle the lookalike signal: add or remove its weight so it shows in the
+  // (dynamic) weights editor and contributes to scoring only when on.
+  function toggleLookalike(on: boolean) {
+    setUseLookalike(on);
+    setWeights((w) => {
+      const next = { ...w };
+      if (on) next.lookalike = next.lookalike ?? "0.25";
+      else delete next.lookalike;
+      return next;
+    });
+  }
+
   // LA area level is opt-in (Settings). MSOA is the default and stays forced
   // off unless enabled, so the form only offers what is supported.
   const [enableLA, setEnableLA] = useState(false);
@@ -137,8 +153,12 @@ export default function HomePage() {
     if (!p) {
       setBrandHeading("");
       setBrandTheme({});
+      setBrandLocations([]);
+      toggleLookalike(false);
       return;
     }
+    setBrandLocations(p.targetLocations ?? []);
+    if (!p.targetLocations?.length) toggleLookalike(false);
     if (p.segment) setSegment(p.segment);
     if (p.bedRange) setBedRange(p.bedRange);
     if (p.priceFrom != null) setPriceFrom(String(p.priceFrom));
@@ -347,6 +367,8 @@ export default function HomePage() {
       if (bedRange) config.bedRange = bedRange;
       if (segment) config.segment = segment;
       if (objective) config.objective = objective;
+      if (useLookalike && brandLocations.length)
+        config.lookalikeLocations = brandLocations;
       if (brandHeading) config.brandHeading = brandHeading;
       if (brandTheme.secondary) config.brandSecondary = brandTheme.secondary;
       if (brandTheme.accent) config.brandAccent = brandTheme.accent;
@@ -551,6 +573,25 @@ export default function HomePage() {
                   using the catchment for. Adjust the weights below to fine tune.
                 </p>
               </div>
+              {brandLocations.length > 0 && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={useLookalike}
+                    onChange={(e) => toggleLookalike(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Weight toward areas similar to this brand&apos;s best
+                    locations
+                    <span className="text-neutral-400">
+                      {" "}
+                      ({brandLocations.length} location
+                      {brandLocations.length === 1 ? "" : "s"})
+                    </span>
+                  </span>
+                </label>
+              )}
               <div>
                 <span className="mb-1.5 block text-xs font-medium text-neutral-500">
                   Target segment

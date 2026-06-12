@@ -129,3 +129,9 @@ class ScoringConfig:
     )
     # Population inside the catchment at which addressable scale saturates to ~0.63.
     scale_saturation: float = 50_000.0
+    # A brand's best / target locations (postcodes), and the mean feature vector
+    # of the areas they fall in. The lookalike signal scores each candidate area
+    # by similarity to this reference, so scoring can favour areas resembling the
+    # brand's known-good places. The reference is resolved at run time.
+    lookalike_locations: list[str] = field(default_factory=list)
+    lookalike_reference: dict[str, float] | None = None

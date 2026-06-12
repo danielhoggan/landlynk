@@ -783,9 +783,17 @@ def load_imd(
 def _lsoa_msoa_lookup(
     pool: ConnectionPool,
 ) -> list[dict]:  # pragma: no cover - needs DB
-    """LSOA to MSOA pairs from the table built during the postcode load."""
-    with pool.connection() as conn:
-        rows = conn.execute("SELECT lsoa, msoa FROM lsoa_msoa").fetchall()
+    """LSOA to MSOA pairs from the table built during the postcode load.
+
+    Returns an empty list if the table is missing (migration not yet applied) or
+    empty, so the caller can give a friendly "load Postcodes first" message
+    rather than surfacing a raw SQL error.
+    """
+    try:
+        with pool.connection() as conn:
+            rows = conn.execute("SELECT lsoa, msoa FROM lsoa_msoa").fetchall()
+    except Exception:
+        return []
     return [{"lsoa": lsoa, "msoa": msoa} for lsoa, msoa in rows]
 
 

@@ -275,6 +275,67 @@ def score_healthcare_access(profile: AreaProfile, config: ScoringConfig) -> Sign
     return SignalScore("healthcare_access", raw, f"About {km:.0f} km to the nearest hospital")
 
 
+def feature_vector(profile: AreaProfile) -> dict[str, float]:
+    """A small, comparable 0..1-ish feature vector for lookalike similarity.
+
+    Only features with data are included, so areas with suppressed cells still
+    compare on what they share. Income is scaled to a sensible ceiling.
+    """
+    v: dict[str, float] = {}
+    income = profile.median_income or profile.mean_income
+    if income is not None:
+        v["income"] = _clamp01(income / 100_000.0)
+    if profile.median_age is not None:
+        v["median_age"] = _clamp01(profile.median_age / 100.0)
+    if profile.family_household_share is not None:
+        v["family"] = _clamp01(profile.family_household_share)
+    if profile.tenure.owns_outright is not None:
+        v["owns_outright"] = _clamp01(profile.tenure.owns_outright)
+    if profile.tenure.private_rented is not None:
+        v["private_rented"] = _clamp01(profile.tenure.private_rented)
+    imd = profile.context.get("imd_decile")
+    if imd is not None:
+        v["imd_decile"] = _clamp01(float(imd) / 10.0)
+    return v
+
+
+def mean_feature_vector(profiles: list[AreaProfile]) -> dict[str, float]:
+    """Mean of per-area feature vectors, averaging each feature over the areas
+    that have it. The reference point for the lookalike signal."""
+    sums: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for p in profiles:
+        for k, val in feature_vector(p).items():
+            sums[k] = sums.get(k, 0.0) + val
+            counts[k] = counts.get(k, 0) + 1
+    return {k: sums[k] / counts[k] for k in sums}
+
+
+def score_lookalike(profile: AreaProfile, config: ScoringConfig) -> SignalScore:
+    """Similarity of this area to the brand's best locations (0..1).
+
+    Compares the area's feature vector to the reference (mean of the brand's
+    target areas) on the features they share, as 1 minus the RMS distance.
+    Neutral 0.0 when there is no reference or no shared feature.
+    """
+    reference = config.lookalike_reference
+    if not reference:
+        return SignalScore("lookalike", 0.0, "No best locations set, no lookalike signal")
+    vector = feature_vector(profile)
+    common = [k for k in reference if k in vector]
+    if not common:
+        return SignalScore("lookalike", 0.0, "No comparable data for a lookalike match")
+    distance = math.sqrt(
+        sum((vector[k] - reference[k]) ** 2 for k in common) / len(common)
+    )
+    raw = _clamp01(1.0 - distance)
+    return SignalScore(
+        "lookalike",
+        raw,
+        f"{raw * 100:.0f}% similar to the brand's best locations",
+    )
+
+
 def band_for_score(total: float) -> str:
     """Map a 0..1 score to a priority band. Thresholds match the UI helper."""
     if total >= 0.66:
@@ -316,6 +377,7 @@ SCORERS = (
     ("schools", score_schools),
     ("low_crime", score_low_crime),
     ("healthcare_access", score_healthcare_access),
+    ("lookalike", score_lookalike),
 )
 
 

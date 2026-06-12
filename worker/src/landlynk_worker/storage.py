@@ -103,6 +103,7 @@ def scoring_config_to_dict(config: ScoringConfig) -> dict:
         "brandAccent": config.brand_accent,
         "brandLogoPath": config.brand_logo_path,
         "affordabilityMultiple": config.affordability_multiple,
+        "lookalikeLocations": config.lookalike_locations,
         "tenurePreference": config.tenure_preference,
         "agePreference": config.age_preference,
         "scaleSaturation": config.scale_saturation,
@@ -1063,12 +1064,14 @@ class PostgresStore:
         with self._pool.connection() as conn:
             conn.execute(
                 "INSERT INTO builder (id, group_id, name, theme_heading, "
-                "theme_secondary, theme_accent, fonts, logo_path) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                "theme_secondary, theme_accent, fonts, logo_path, "
+                "target_locations) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, "
                 "theme_heading = EXCLUDED.theme_heading, "
                 "theme_secondary = EXCLUDED.theme_secondary, "
-                "theme_accent = EXCLUDED.theme_accent, fonts = EXCLUDED.fonts",
+                "theme_accent = EXCLUDED.theme_accent, fonts = EXCLUDED.fonts, "
+                "target_locations = EXCLUDED.target_locations",
                 [
                     builder["id"],
                     builder["groupId"],
@@ -1078,13 +1081,14 @@ class PostgresStore:
                     builder.get("themeAccent"),
                     json.dumps(builder.get("fonts", [])),
                     builder.get("logoPath"),
+                    json.dumps(builder.get("targetLocations", [])),
                 ],
             )
 
     def list_builders(self, group_id: str | None = None) -> list[dict]:
         sql = (
             "SELECT id, group_id, name, theme_heading, theme_secondary, "
-            "theme_accent, fonts, logo_path FROM builder"
+            "theme_accent, fonts, logo_path, target_locations FROM builder"
         )
         params: list = []
         if group_id is not None:
@@ -1103,6 +1107,7 @@ class PostgresStore:
                 "themeAccent": r[5],
                 "fonts": r[6] or [],
                 "logoPath": r[7],
+                "targetLocations": r[8] or [],
             }
             for r in rows
         ]
@@ -1166,7 +1171,8 @@ class PostgresStore:
             "SELECT p.id, p.builder_id, p.name, p.segment, p.bed_range, "
             "p.price_from, p.price_to, p.strapline, p.pillars, p.features, "
             "b.name, b.theme_heading, b.group_id, g.name, "
-            "b.theme_secondary, b.theme_accent, b.logo_path, b.fonts "
+            "b.theme_secondary, b.theme_accent, b.logo_path, b.fonts, "
+            "b.target_locations "
             "FROM builder_profile p JOIN builder b ON p.builder_id = b.id "
             "JOIN builder_group g ON b.group_id = g.id"
         )
@@ -1188,6 +1194,7 @@ class PostgresStore:
                 "themeAccent": r[15],
                 "logoPath": r[16],
                 "fonts": r[17] or [],
+                "targetLocations": r[18] or [],
             }
             for r in rows
         ]

@@ -146,7 +146,8 @@ export interface ScoreContribution {
     | "greenSpace"
     | "schools"
     | "lowCrime"
-    | "healthcareAccess";
+    | "healthcareAccess"
+    | "lookalike";
   weight: number;
   /** Normalised 0 to 1 score for this signal before weighting. */
   rawScore: number;

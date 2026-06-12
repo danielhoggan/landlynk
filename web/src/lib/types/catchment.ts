@@ -62,6 +62,7 @@ export interface StoredConfig {
   radiusKm?: number;
   segment?: string;
   objective?: string;
+  lookalikeLocations?: string[];
   brandHeading?: string;
   brandSecondary?: string;
   brandAccent?: string;

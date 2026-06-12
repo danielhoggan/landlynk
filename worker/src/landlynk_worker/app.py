@@ -620,6 +620,7 @@ class BuilderRequest(BaseModel):
     theme_secondary: str | None = Field(default=None, alias="themeSecondary")
     theme_accent: str | None = Field(default=None, alias="themeAccent")
     fonts: list[str] = []
+    target_locations: list[str] = Field(default_factory=list, alias="targetLocations")
 
     model_config = {"populate_by_name": True}
 
@@ -647,6 +648,7 @@ def admin_create_builder(
             "themeSecondary": request.theme_secondary,
             "themeAccent": request.theme_accent,
             "fonts": request.fonts,
+            "targetLocations": request.target_locations,
         }
     )
     _audit(
