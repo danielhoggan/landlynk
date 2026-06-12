@@ -11,9 +11,22 @@ import type { AreaMetrics, CatchmentArea } from "./types/catchment";
 export interface TagContext {
   /** Family-household share at or above which an area counts as family-skewed. */
   familyShareThreshold: number;
+  /**
+   * Household income at or above which an area counts as high net worth. Derived
+   * from the catchment (top third) so the tag adapts to the local norm; null
+   * when no income is available, falling back to the absolute income index.
+   */
+  highIncomeThreshold: number | null;
 }
 
-const DEFAULT_CONTEXT: TagContext = { familyShareThreshold: 55 };
+const DEFAULT_CONTEXT: TagContext = {
+  familyShareThreshold: 55,
+  highIncomeThreshold: null,
+};
+
+function percentile(values: number[], fraction: number): number {
+  return values[Math.min(values.length - 1, Math.floor(values.length * fraction))];
+}
 
 /** Reference points for relative tags, derived from the whole catchment. */
 export function buildTagContext(areas: CatchmentArea[]): TagContext {
@@ -21,11 +34,21 @@ export function buildTagContext(areas: CatchmentArea[]): TagContext {
     .map((a) => a.metrics?.familyShare)
     .filter((v): v is number => v != null)
     .sort((a, b) => a - b);
-  if (!shares.length) return DEFAULT_CONTEXT;
-  // The catchment median: "family areas" are the upper half, so the filter
-  // always returns a sensible subset and adapts to the local norm.
-  const median = shares[Math.floor(shares.length / 2)];
-  return { familyShareThreshold: median };
+  const incomes = areas
+    .map((a) => a.metrics?.income)
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b);
+  return {
+    // The catchment median: "family areas" are the upper half, so the filter
+    // always returns a sensible subset and adapts to the local norm.
+    familyShareThreshold: shares.length
+      ? shares[Math.floor(shares.length / 2)]
+      : DEFAULT_CONTEXT.familyShareThreshold,
+    // Top third by income marks the high-net-worth areas, relative to the
+    // catchment. An absolute income-index bar matched nothing in tighter,
+    // uniformly-priced catchments.
+    highIncomeThreshold: incomes.length ? percentile(incomes, 2 / 3) : null,
+  };
 }
 
 export interface SignalTag {
@@ -51,8 +74,12 @@ export const SIGNAL_TAGS: SignalTag[] = [
   {
     id: "high_net_worth",
     label: "High net worth",
-    // Income well above the catchment average.
-    match: (m) => (m.incomeIndex ?? 0) >= 120,
+    // The wealthiest areas relative to the catchment (top third by income);
+    // falls back to the absolute income index when income is unavailable.
+    match: (m, ctx) =>
+      ctx.highIncomeThreshold != null && m.income != null
+        ? m.income >= ctx.highIncomeThreshold
+        : (m.incomeIndex ?? 0) >= 120,
   },
   {
     id: "family",

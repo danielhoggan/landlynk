@@ -514,9 +514,9 @@ export default function HomePage() {
               )}
               {profiles.length === 0 && isAdmin && (
                 <p className="text-xs text-neutral-400">
-                  No builder profiles yet.{" "}
+                  No brand profiles yet.{" "}
                   <a href="/builders" className="text-light-accent underline">
-                    Create one in Builders
+                    Create one in Brands
                   </a>{" "}
                   to fill the brief and theme exports in one click.
                 </p>

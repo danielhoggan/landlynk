@@ -318,20 +318,20 @@ def _pricing_rationale(profile: AreaProfile, config: ScoringConfig) -> PricingRa
         )
     elif price_from <= implied:
         positioning = (
-            f"An {income_label} of {income:,.0f} supports about {implied:,.0f} at "
-            f"{mult:g}x income. With homes from {price_from:,.0f} the entry price is "
+            f"An {income_label} of £{income:,.0f} supports about £{implied:,.0f} at "
+            f"{mult:g}x income. With homes from £{price_from:,.0f} the entry price is "
             "within local reach, so lead on attainability and first-time buyer support."
         )
     elif price_from <= implied * 1.2:
         positioning = (
-            f"An {income_label} of {income:,.0f} supports about {implied:,.0f} at "
-            f"{mult:g}x income. Homes from {price_from:,.0f} are a modest stretch, so "
+            f"An {income_label} of £{income:,.0f} supports about £{implied:,.0f} at "
+            f"{mult:g}x income. Homes from £{price_from:,.0f} are a modest stretch, so "
             "emphasise value, specification and purchase incentives."
         )
     else:
         positioning = (
-            f"An {income_label} of {income:,.0f} supports about {implied:,.0f} at "
-            f"{mult:g}x income. Homes from {price_from:,.0f} sit above local means, so "
+            f"An {income_label} of £{income:,.0f} supports about £{implied:,.0f} at "
+            f"{mult:g}x income. Homes from £{price_from:,.0f} sit above local means, so "
             "target equity-rich movers and in-migration rather than local first buyers."
         )
 
@@ -340,14 +340,14 @@ def _pricing_rationale(profile: AreaProfile, config: ScoringConfig) -> PricingRa
     if hp:
         if price_from <= hp:
             positioning += (
-                f" Local homes sell for around {hp:,.0f}, so a price from "
-                f"{price_from:,.0f} is at or below prevailing values."
+                f" Local homes sell for around £{hp:,.0f}, so a price from "
+                f"£{price_from:,.0f} is at or below prevailing values."
             )
         else:
             premium = (price_from / hp - 1) * 100
             positioning += (
-                f" Local homes sell for around {hp:,.0f}, so a price from "
-                f"{price_from:,.0f} is a {premium:.0f}% new-build premium to confirm "
+                f" Local homes sell for around £{hp:,.0f}, so a price from "
+                f"£{price_from:,.0f} is a {premium:.0f}% new-build premium to confirm "
                 "against the specification and local comparables."
             )
 

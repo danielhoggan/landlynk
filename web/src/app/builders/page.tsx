@@ -81,7 +81,7 @@ export default function BuildersPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-5 p-4">
       <h1 className="flex items-center gap-2 text-lg font-semibold">
-        <Building2 size={20} /> Builders
+        <Building2 size={20} /> Brands
       </h1>
       <p className="text-sm text-neutral-500">
         Groups own brands, brands own targeting profiles. Pin external users to a
@@ -246,12 +246,15 @@ function GroupCard({
               placeholder="Web fonts (comma separated)"
               className="flex-1 rounded-card border border-neutral-300 px-3 py-1.5 text-xs"
             />
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
-              className="text-xs"
-            />
+            <label className="flex items-center gap-2 text-xs font-medium text-neutral-600">
+              Brand logo (required)
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                className="text-xs font-normal text-neutral-500"
+              />
+            </label>
             <button
               type="button"
               onClick={async () => {
