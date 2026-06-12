@@ -1044,7 +1044,11 @@ def _fetch_ods_organisations(url: str) -> list[dict]:
     limit = int(base.get("Limit", "1000"))
     results: list[dict] = []
     offset = 0
-    with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as client:
+    # The ODS ORD API returns 406 unless an explicit JSON Accept header is sent.
+    headers = {"Accept": "application/json"}
+    with httpx.Client(
+        timeout=_TIMEOUT, follow_redirects=True, headers=headers
+    ) as client:
         for _ in range(10_000):  # safety bound
             params = {**base, "Limit": str(limit), "Offset": str(offset)}
             u = urlunparse(parts._replace(query=urlencode(params)))
