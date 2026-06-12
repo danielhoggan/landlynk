@@ -184,7 +184,12 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
         elif dataset == "imd":
             n = loaders.load_imd(pool, params["url"], params["lookupUrl"], area_type)
         elif dataset == "schools":
-            n = loaders.load_schools(pool, params["url"], area_type)
+            n = loaders.load_schools(
+                pool,
+                params["url"],
+                params.get("ratingsUrl") or None,
+                area_type,
+            )
         elif dataset == "crime":
             n = loaders.load_crime(pool, params["url"], area_type)
         elif dataset == "hospitals":

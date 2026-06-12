@@ -32,7 +32,19 @@ _TIMEOUT = httpx.Timeout(120.0)
 # --- HTTP download -----------------------------------------------------------
 
 
+def _require_url(url: str) -> str:
+    """Reject a blank URL up front with a clear message.
+
+    Several datasets have no stable default and must be pasted; without this the
+    underlying client raises an opaque "missing protocol" error.
+    """
+    if not url or not url.strip():
+        raise ValueError("No URL provided. Paste the source URL and press Load.")
+    return url.strip()
+
+
 def _get_text(url: str) -> str:
+    url = _require_url(url)
     with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as client:
         resp = client.get(url)
         resp.raise_for_status()
@@ -40,6 +52,7 @@ def _get_text(url: str) -> str:
 
 
 def _get_bytes(url: str) -> bytes:
+    url = _require_url(url)
     with httpx.Client(timeout=_TIMEOUT, follow_redirects=True) as client:
         resp = client.get(url)
         resp.raise_for_status()
@@ -86,7 +99,7 @@ def fetch_arcgis_geojson(
     parameters are merged over any already present so a pasted URL still works.
     The client is injectable for testing.
     """
-    parts = urlparse(query_url)
+    parts = urlparse(_require_url(query_url))
     base_params = dict(parse_qsl(parts.query))
     owned = client is None
     client = client or httpx.Client(timeout=_TIMEOUT, follow_redirects=True)
@@ -212,6 +225,45 @@ def _read_xlsx(content: bytes) -> list[dict]:
     it = ws.iter_rows(values_only=True)
     header = [str(c) if c is not None else "" for c in next(it)]
     return [dict(zip(header, v, strict=False)) for v in it]
+
+
+def _read_xlsx_sheets(content: bytes) -> list[list[dict]]:
+    """Every worksheet as a record list, for workbooks whose right sheet must be
+    discovered by its columns (e.g. the ONS green space file has separate sheets
+    per geography and per measure). Only sheets with a recognisable data header
+    are returned, so callers can try each until the columns they need appear.
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    out: list[list[dict]] = []
+    for ws in wb.worksheets:
+        rows = list(ws.iter_rows(values_only=True))
+        for i, row in enumerate(rows[:40]):
+            cells = [str(c).strip() if c is not None else "" for c in row]
+            if _looks_like_header(cells):
+                records = [dict(zip(cells, r, strict=False)) for r in rows[i + 1 :]]
+                records = [r for r in records if any(v is not None for v in r.values())]
+                if records:
+                    out.append(records)
+                break
+    return out
+
+
+def _load_tabular_sheets(url: str) -> list[list[dict]]:
+    """Load a file as one record list per sheet (CSV/XLS yield a single sheet),
+    following an ONS dataset page link if a page URL was pasted."""
+    data = _get_bytes(url)
+    resolved = _resolve_data_url(url, data)
+    if resolved:
+        url = resolved
+        data = _get_bytes(url)
+    low = url.lower()
+    if low.endswith(".xls"):
+        return [_read_xls(data)]
+    if low.endswith((".xlsx", ".xlsm")):
+        return _read_xlsx_sheets(data)
+    return [_csv_rows(data.decode("utf-8-sig", "ignore"))]
 
 
 def _read_xls(content: bytes) -> list[dict]:
@@ -509,12 +561,17 @@ def _green_space_rows(records: list[dict], area_type: str) -> list[dict]:
         (
             "average distance to nearest park",
             "average distance to nearest publicly",
+            "distance to nearest park",
+            "distance to nearest green",
+            "distance to nearest public",
             "distance to nearest",
             "average distance",
         ),
     )
+    # Return empty when this sheet is not the MSOA distance sheet, so a caller
+    # scanning a multi-sheet workbook can move on to the next sheet.
     if code_col is None or dist_col is None:
-        raise ValueError(f"No MSOA code / distance column found in {fields}")
+        return []
     rows: list[dict] = []
     for r in records:
         code = str(r.get(code_col) or "").strip()
@@ -626,7 +683,19 @@ def _replace_metric(
 
 
 def load_green_space(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
-    rows = _green_space_rows(_load_records(url), area_type)
+    # The ONS green space workbook has many sheets (per geography and measure);
+    # scan them for the one carrying an MSOA code and a distance column.
+    rows: list[dict] = []
+    for records in _load_tabular_sheets(url):
+        rows = _green_space_rows(records, area_type)
+        if rows:
+            break
+    if not rows:
+        raise ValueError(
+            "No MSOA distance-to-green-space sheet found in that file. Open the "
+            "ONS green space dataset and paste the workbook (xlsx) or its dataset "
+            "page; it must include an MSOA-level distance to nearest green space."
+        )
     return _replace_metric(pool, ["greenspace_minutes"], rows)
 
 
@@ -653,40 +722,107 @@ def _bng_to_wgs(easting: float, northing: float) -> tuple[float, float]:
 
 
 _GOOD_RATINGS = {"outstanding", "good"}
+_POOR_RATINGS = {
+    "requires improvement",
+    "inadequate",
+    "serious weaknesses",
+    "special measures",
+}
 
 
-def _school_points(records: list[dict]) -> list[dict]:
-    """Open schools as {lng, lat, good} from a GIAS extract (easting/northing).
+def _ofsted_good_by_urn(records: list[dict]) -> dict[str, bool]:
+    """Map school URN to a Good-or-Outstanding flag from an Ofsted outcomes file.
 
-    GIAS carries both the location and the Ofsted rating, so one file suffices.
-    Only open schools with a location and a rating are kept.
+    Ofsted ratings are published separately from GIAS, keyed by URN. The outcome
+    is sometimes text (Good) and sometimes a code (1 Outstanding, 2 Good).
+    """
+    if not records:
+        return {}
+    f = list(records[0].keys())
+    urn_c = t.find_column(f, ("urn",))
+    rate_c = t.find_column(
+        f,
+        (
+            "overall effectiveness",
+            "ofsted rating",
+            "ofstedrating",
+            "outcome",
+        ),
+    )
+    if urn_c is None or rate_c is None:
+        raise ValueError(f"Ofsted file needs URN and an outcome/rating column, got {f}")
+    out: dict[str, bool] = {}
+    for r in records:
+        urn = str(r.get(urn_c) or "").strip()
+        if not urn:
+            continue
+        raw = str(r.get(rate_c) or "").strip().lower()
+        good: bool | None = None
+        if raw in _GOOD_RATINGS:
+            good = True
+        elif raw in _POOR_RATINGS:
+            good = False
+        else:
+            num = t.parse_number(raw)
+            if num is not None:
+                good = int(num) in (1, 2)  # 1 Outstanding, 2 Good
+        if good is not None:
+            out[urn] = good
+    return out
+
+
+def _school_points(
+    records: list[dict], good_by_urn: dict[str, bool] | None = None
+) -> list[dict]:
+    """Open schools as {lng, lat, good} from a GIAS extract.
+
+    The standard GIAS extract carries the location (easting/northing, or
+    lat/long) but not the Ofsted rating, so ``good`` is taken from a separate
+    Ofsted file by URN when supplied and is None otherwise. Only open schools
+    with a location are kept; rating is optional.
     """
     if not records:
         return []
     f = list(records[0].keys())
     east_c = t.find_column(f, ("easting",))
     north_c = t.find_column(f, ("northing",))
+    lat_c = t.find_column(f, ("latitude", "lat"))
+    lng_c = t.find_column(f, ("longitude", "long", "lng"))
+    urn_c = t.find_column(f, ("urn",))
     rating_c = t.find_column(
         f, ("ofstedrating (name)", "ofsted rating", "ofstedrating")
     )
     status_c = t.find_column(f, ("establishmentstatus (name)", "establishmentstatus"))
-    if east_c is None or north_c is None or rating_c is None:
-        raise ValueError(f"GIAS needs easting, northing and Ofsted rating, got {f}")
+    if (east_c is None or north_c is None) and (lat_c is None or lng_c is None):
+        raise ValueError(
+            f"Schools file needs easting/northing or latitude/longitude, got {f}"
+        )
     points: list[dict] = []
     for r in records:
         if status_c and not str(r.get(status_c) or "").strip().lower().startswith(
             "open"
         ):
             continue
-        rating = str(r.get(rating_c) or "").strip().lower()
-        if not rating or rating in ("not applicable", "", "none"):
+        lat = lng = None
+        if lat_c and lng_c:
+            lat = t.parse_number(r.get(lat_c))
+            lng = t.parse_number(r.get(lng_c))
+        if (lat is None or lng is None) and east_c and north_c:
+            easting = t.parse_number(r.get(east_c))
+            northing = t.parse_number(r.get(north_c))
+            if easting and northing:
+                lng, lat = _bng_to_wgs(easting, northing)
+        if lat is None or lng is None or (lat == 0 and lng == 0):
             continue
-        easting = t.parse_number(r.get(east_c))
-        northing = t.parse_number(r.get(north_c))
-        if easting is None or northing is None or easting == 0:
-            continue
-        lng, lat = _bng_to_wgs(easting, northing)
-        points.append({"lng": lng, "lat": lat, "good": rating in _GOOD_RATINGS})
+        good: bool | None = None
+        urn = str(r.get(urn_c) or "").strip() if urn_c else ""
+        if good_by_urn and urn in good_by_urn:
+            good = good_by_urn[urn]
+        elif rating_c:
+            rating = str(r.get(rating_c) or "").strip().lower()
+            if rating and rating not in ("not applicable", "", "none"):
+                good = rating in _GOOD_RATINGS
+        points.append({"lng": lng, "lat": lat, "good": good})
     return points
 
 
@@ -722,9 +858,15 @@ def _read_point_records(url: str) -> list[dict]:
 
 
 def load_schools(
-    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+    pool: ConnectionPool,
+    url: str,
+    ratings_url: str | None = None,
+    area_type: str = "MSOA",
 ) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
-    points = _school_points(_load_records_dated(url))
+    good_by_urn = (
+        _ofsted_good_by_urn(_load_records(ratings_url)) if ratings_url else {}
+    )
+    points = _school_points(_load_records_dated(url), good_by_urn)
     if not points:
         return 0
     with pool.connection() as conn, conn.transaction():
@@ -750,14 +892,20 @@ def load_schools(
             "GROUP BY b.area_code",
             [area_type, area_type],
         )
+        # Good-or-Outstanding share, only where ratings are known: count rated
+        # schools as the denominator and skip areas with none rated, so the
+        # metric is absent rather than misleadingly zero when no Ofsted file
+        # was supplied.
         conn.execute(
             "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
             "SELECT b.area_code, %s, 'schools_good_pct', "
-            "round(100.0 * count(*) FILTER (WHERE s.good) / NULLIF(count(*), 0)) "
+            "round(100.0 * count(*) FILTER (WHERE s.good) "
+            "/ NULLIF(count(*) FILTER (WHERE s.good IS NOT NULL), 0)) "
             "FROM _sch s JOIN geo_boundaries b "
             "ON b.area_type = %s AND ST_Contains("
             "b.geom, ST_SetSRID(ST_MakePoint(s.lng, s.lat), 4326)) "
-            "GROUP BY b.area_code",
+            "GROUP BY b.area_code "
+            "HAVING count(*) FILTER (WHERE s.good IS NOT NULL) > 0",
             [area_type, area_type],
         )
         n = conn.execute(

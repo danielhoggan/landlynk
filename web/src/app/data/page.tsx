@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Database, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  Database,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+} from "lucide-react";
 import {
   getReferenceStatus,
   getReferenceHealth,
@@ -73,6 +79,9 @@ interface DatasetDef {
   title: string;
   essential?: boolean;
   blurb: string;
+  // Official page to get the data from, for the ones that are not auto-loaded.
+  source?: string;
+  sourceLabel?: string;
   fields: FieldDef[];
 }
 
@@ -83,6 +92,8 @@ const DATASETS: DatasetDef[] = [
     essential: true,
     blurb:
       "Required for areas to appear. From the ONS Open Geography Portal ArcGIS service (the layer's /query URL). The default is MSOA December 2021 (BGC); for LA level, select LA above and paste the LAD boundaries query URL.",
+    source: "https://geoportal.statistics.gov.uk/",
+    sourceLabel: "ONS Open Geography Portal",
     fields: [
       {
         key: "url",
@@ -96,6 +107,8 @@ const DATASETS: DatasetDef[] = [
     title: "Census demographics (age and households)",
     blurb:
       "Population, age bands, median age and family household share. Two NOMIS bulk CSVs: age by single year (TS007) and household composition (TS003).",
+    source: "https://www.nomisweb.co.uk/sources/census_2021_bulk",
+    sourceLabel: "NOMIS Census 2021 bulk",
     fields: [
       {
         key: "ageUrl",
@@ -114,6 +127,8 @@ const DATASETS: DatasetDef[] = [
     title: "Census tenure",
     blurb:
       "Owns outright, owns with mortgage, social and private rented. NOMIS bulk CSV (TS054).",
+    source: "https://www.nomisweb.co.uk/sources/census_2021_bulk",
+    sourceLabel: "NOMIS Census 2021 bulk",
     fields: [
       {
         key: "url",
@@ -127,6 +142,11 @@ const DATASETS: DatasetDef[] = [
     title: "Income estimates",
     blurb:
       "Mean and median net annual household income by MSOA. ONS small-area income spreadsheet (XLSX) or a CSV.",
+    source:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/" +
+      "earningsandworkinghours/datasets/" +
+      "smallareaincomeestimatesformiddlelayersuperoutputareasenglandandwales",
+    sourceLabel: "ONS small area income",
     fields: [
       {
         key: "url",
@@ -140,6 +160,10 @@ const DATASETS: DatasetDef[] = [
     title: "House prices",
     blurb:
       "Local median house price by MSOA, for site appraisal and scheme pricing. ONS House Price Statistics for Small Areas (HPSSA), median price paid (XLSX).",
+    source:
+      "https://www.ons.gov.uk/peoplepopulationandcommunity/housing/datasets/" +
+      "medianhousepricesbymiddlelayersuperoutputarea",
+    sourceLabel: "ONS HPSSA median price",
     fields: [
       {
         key: "url",
@@ -152,7 +176,11 @@ const DATASETS: DatasetDef[] = [
     id: "green_space",
     title: "Green space",
     blurb:
-      "Walk time to the nearest green space by MSOA, shown as local context. ONS access to gardens and public green space (XLSX), MSOA sheet.",
+      "Walk time to the nearest green space by MSOA, shown as local context. ONS access to gardens and public green space (XLSX); the loader scans the workbook for the MSOA distance sheet, so the xlsx or the dataset page both work.",
+    source:
+      "https://www.ons.gov.uk/economy/environmentalaccounts/datasets/" +
+      "accesstogardensandpublicgreenspaceingreatbritain",
+    sourceLabel: "ONS green space",
     fields: [
       {
         key: "url",
@@ -165,7 +193,9 @@ const DATASETS: DatasetDef[] = [
     id: "imd",
     title: "Deprivation (IMD)",
     blurb:
-      "Index of Multiple Deprivation, aggregated from LSOA to MSOA, as local context. Needs the IMD file plus an LSOA-to-MSOA lookup (both CSV or XLSX).",
+      "Index of Multiple Deprivation, aggregated from LSOA to MSOA, as local context. Needs the IMD file (File 7, pre-filled) plus an LSOA-to-MSOA lookup CSV from the Open Geography Portal (paste its CSV export URL).",
+    source: "https://www.gov.uk/government/statistics/english-indices-of-deprivation-2019",
+    sourceLabel: "MHCLG IoD2019",
     fields: [
       {
         key: "url",
@@ -183,12 +213,20 @@ const DATASETS: DatasetDef[] = [
     id: "schools",
     title: "Schools (Ofsted)",
     blurb:
-      "Count of schools and the share rated Good or Outstanding per MSOA, as local context. Get Information About Schools (GIAS) full extract (CSV), which carries the location and the Ofsted rating.",
+      "Count of schools per MSOA from the GIAS extract (its date-stamped daily file auto-loads). GIAS carries the location but not the Ofsted rating, so add the optional Ofsted outcomes file (keyed by URN) to also get the share rated Good or Outstanding.",
+    source: "https://get-information-schools.service.gov.uk/Downloads",
+    sourceLabel: "GIAS downloads",
     fields: [
       {
         key: "url",
         label: "GIAS edubasealldata CSV URL",
         placeholder: "get-information-schools.service.gov.uk/Downloads, edubasealldata CSV",
+      },
+      {
+        key: "ratingsUrl",
+        label: "Ofsted outcomes file URL (optional, for Good/Outstanding %)",
+        placeholder:
+          "Ofsted state-funded schools inspections management information (CSV/XLSX with URN + outcome)",
       },
     ],
   },
@@ -197,6 +235,8 @@ const DATASETS: DatasetDef[] = [
     title: "Crime",
     blurb:
       "Recorded crime per 1,000 residents per MSOA, as local context. data.police.uk street-level CSV or archive zip (lat/long per incident).",
+    source: "https://data.police.uk/data/",
+    sourceLabel: "data.police.uk",
     fields: [
       {
         key: "url",
@@ -210,6 +250,9 @@ const DATASETS: DatasetDef[] = [
     title: "Hospitals",
     blurb:
       "Distance to the nearest hospital per MSOA, plus the points used for the nearest-A&E context on reports. NHS hospital sites CSV (lat/long or easting/northing, with an org code for waiting times).",
+    source:
+      "https://digital.nhs.uk/services/organisation-data-service/export-data-files/csv-downloads/other-nhs-organisations",
+    sourceLabel: "NHS ODS hospital sites",
     fields: [
       {
         key: "url",
@@ -223,6 +266,9 @@ const DATASETS: DatasetDef[] = [
     title: "NHS waiting times",
     blurb:
       "Per-provider A&E four-hour performance and RTT median wait, shown as nearest-A&E context on the report deck. NHS England A&E or RTT provider CSV (keyed by organisation code).",
+    source:
+      "https://www.england.nhs.uk/statistics/statistical-work-areas/ae-waiting-times-and-activity/",
+    sourceLabel: "NHS England A&E waiting times",
     fields: [
       {
         key: "url",
@@ -247,7 +293,7 @@ export default function DataPage() {
     house_prices: { url: DEFAULT_HOUSE_PRICES },
     green_space: { url: DEFAULT_GREEN_SPACE },
     imd: { url: DEFAULT_IMD, lookupUrl: "" },
-    schools: { url: DEFAULT_SCHOOLS },
+    schools: { url: DEFAULT_SCHOOLS, ratingsUrl: "" },
     crime: { url: "" },
     hospitals: { url: "" },
     nhs_waiting: { url: "" },
@@ -353,6 +399,17 @@ export default function DataPage() {
                   )}
                 </h2>
                 <p className="mt-1 text-xs text-neutral-500">{d.blurb}</p>
+                {d.source && (
+                  <a
+                    href={d.source}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-light-accent hover:underline"
+                  >
+                    <ExternalLink size={12} />
+                    Get the data{d.sourceLabel ? `: ${d.sourceLabel}` : ""}
+                  </a>
+                )}
               </div>
               <StatusBadge status={s} />
             </div>
