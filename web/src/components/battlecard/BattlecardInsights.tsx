@@ -25,25 +25,52 @@ export function BattlecardInsights({
   context,
   confidence,
   contextMetrics,
+  objectiveLabel,
 }: {
   pricing?: PricingRationale;
   segments?: AddressableSegments;
   context?: CatchmentContext;
   confidence?: DataConfidence;
   contextMetrics?: ContextMetric[];
+  objectiveLabel?: string | null;
 }) {
   // Older stored Battlecards predate these sections. Render what is present and
   // skip the rest rather than crashing the drawer on a partial payload.
+  // Objective focus metrics first, so the data points that matter for the
+  // chosen business focus lead.
+  const metrics = contextMetrics
+    ? [...contextMetrics].sort(
+        (a, b) => Number(b.highlight ?? false) - Number(a.highlight ?? false),
+      )
+    : [];
   return (
     <div className="space-y-4">
-      {contextMetrics && contextMetrics.length > 0 && (
+      {metrics.length > 0 && (
         <section className="rounded-card border border-neutral-200 p-4">
-          <h3 className="mb-3 text-sm font-semibold">Local context</h3>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold">Local context</h3>
+            {objectiveLabel && (
+              <span className="rounded-full bg-light-accent/10 px-2 py-0.5 text-[11px] font-semibold text-light-accent">
+                Focus: {objectiveLabel}
+              </span>
+            )}
+          </div>
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {contextMetrics.map((m) => (
-              <div key={m.key}>
+            {metrics.map((m) => (
+              <div
+                key={m.key}
+                className={
+                  m.highlight
+                    ? "rounded-card bg-light-accent/5 p-2 ring-1 ring-light-accent/30"
+                    : ""
+                }
+              >
                 <dt className="text-xs text-neutral-500">{m.label}</dt>
-                <dd className="text-sm font-semibold tabular-nums">
+                <dd
+                  className={`text-sm font-semibold tabular-nums ${
+                    m.highlight ? "text-light-accent" : ""
+                  }`}
+                >
                   {m.value}
                   <span className="ml-1 text-xs font-normal text-neutral-400">
                     {m.unit}

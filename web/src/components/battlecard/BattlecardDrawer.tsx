@@ -99,6 +99,7 @@ export function BattlecardDrawer({
             context={battlecard.catchmentContext}
             confidence={battlecard.dataConfidence}
             contextMetrics={battlecard.contextMetrics}
+            objectiveLabel={battlecard.objectiveLabel}
           />
 
           {battlecard.visualSummary?.charts && (

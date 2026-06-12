@@ -221,6 +221,9 @@ class ContextMetric(BaseModel):
     value: float
     unit: str
     direction: str = ""
+    # True when this metric is a focus of the chosen objective, so outputs can
+    # emphasise the data points that matter for the user's business focus.
+    highlight: bool = False
 
 
 class Amenity(BaseModel):
@@ -265,5 +268,9 @@ class Battlecard(BaseModel):
     context_metrics: list[ContextMetric] = Field(
         default_factory=list, alias="contextMetrics"
     )
+    # The business objective this card was scored for, for an objective-focus
+    # callout on the outputs. None for a default home-sales run.
+    objective: str | None = None
+    objective_label: str | None = Field(default=None, alias="objectiveLabel")
 
     model_config = {"populate_by_name": True}

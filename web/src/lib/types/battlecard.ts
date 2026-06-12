@@ -215,6 +215,9 @@ export interface Battlecard {
   dataConfidence: DataConfidence;
   /** Additional public data points (green space, deprivation, crime) for context. */
   contextMetrics?: ContextMetric[];
+  /** The business objective this card was scored for, if not default home sales. */
+  objective?: string | null;
+  objectiveLabel?: string | null;
 }
 
 export interface ContextMetric {
@@ -223,6 +226,8 @@ export interface ContextMetric {
   value: number;
   unit: string;
   direction?: string;
+  /** True when this metric is a focus of the chosen objective. */
+  highlight?: boolean;
 }
 
 /** Current Battlecard schema version. Bump on any breaking shape change. */

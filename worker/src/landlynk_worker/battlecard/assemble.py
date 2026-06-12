@@ -472,6 +472,8 @@ def assemble_battlecard(
         mean_income=None, total_population_inside=None
     )
     messages = _audience_messages(profile)
+    objective_id = config.objective
+    objective_label, highlight_keys = _objective_meta(objective_id)
     visual_summary = VisualSummary(
         header=BattlecardHeader(
             development_name=development.development_name,
@@ -511,6 +513,35 @@ def assemble_battlecard(
         catchment_context=_catchment_context(profile, catchment_stats),
         data_confidence=_data_confidence(profile),
         context_metrics=[
-            ContextMetric(**row) for row in build_context_metrics(profile.context)
+            ContextMetric(**row, highlight=row["key"] in highlight_keys)
+            for row in build_context_metrics(profile.context)
         ],
+        objective=objective_id,
+        objective_label=objective_label,
     )
+
+
+# Objective highlight signal keys to the context-metric keys they map to, so the
+# objective's focus data points can be emphasised on the card.
+_SIGNAL_TO_CONTEXT_KEY = {
+    "low_deprivation": "imd_decile",
+    "low_crime": "crime_per_1k",
+    "green_space": "greenspace_minutes",
+    "schools": "schools_good_pct",
+    "healthcare_access": "hospital_km",
+}
+
+
+def _objective_meta(objective_id: str | None) -> tuple[str | None, set[str]]:
+    """The objective's label and the context-metric keys it highlights."""
+    if not objective_id:
+        return None, set()
+    from ..scoring.objectives import OBJECTIVES
+
+    obj = OBJECTIVES.get(objective_id)
+    if obj is None:
+        return None, set()
+    keys = {
+        _SIGNAL_TO_CONTEXT_KEY[s] for s in obj.highlight if s in _SIGNAL_TO_CONTEXT_KEY
+    }
+    return obj.label, keys
