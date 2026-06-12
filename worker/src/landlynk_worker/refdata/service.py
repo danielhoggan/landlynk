@@ -203,3 +203,25 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
         _set(dataset, "failed", pool=pool, error=f"Missing source URL: {exc}")
     except Exception as exc:  # capture download/parse/DB errors for the UI
         _set(dataset, "failed", pool=pool, error=str(exc))
+
+
+# Datasets that accept a manually downloaded file uploaded from the browser,
+# rather than a URL the worker fetches. data.police.uk only offers custom-built
+# downloads (no stable URL), so crime is loaded this way.
+UPLOAD_DATASETS = ("crime",)
+
+
+def run_upload(
+    pool: ConnectionPool, dataset: str, filename: str, data: bytes, params: dict
+) -> None:
+    """Load one dataset from an uploaded file. Records status; never raises."""
+    area_type = params.get("areaType", "MSOA")
+    _set(dataset, "running", pool=pool, area_type=area_type)
+    try:
+        if dataset == "crime":
+            n = loaders.load_crime_bytes(pool, filename, data, area_type)
+        else:
+            raise ValueError(f"Dataset does not support upload: {dataset}")
+        _set(dataset, "loaded", pool=pool, rows=n, area_type=area_type)
+    except Exception as exc:  # capture parse/DB errors for the UI
+        _set(dataset, "failed", pool=pool, error=str(exc))

@@ -7,11 +7,13 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  Upload,
 } from "lucide-react";
 import {
   getReferenceStatus,
   getReferenceHealth,
   loadReference,
+  uploadReference,
   type ReferenceStatus,
 } from "@/lib/client";
 import { useUser } from "@/lib/userContext";
@@ -82,6 +84,9 @@ interface DatasetDef {
   // Official page to get the data from, for the ones that are not auto-loaded.
   source?: string;
   sourceLabel?: string;
+  // Sources with no stable URL (e.g. data.police.uk custom downloads): the admin
+  // builds and downloads the file, then uploads it here.
+  upload?: boolean;
   fields: FieldDef[];
 }
 
@@ -234,14 +239,15 @@ const DATASETS: DatasetDef[] = [
     id: "crime",
     title: "Crime",
     blurb:
-      "Recorded crime per 1,000 residents per MSOA, as local context. data.police.uk street-level CSV or archive zip (lat/long per incident).",
+      "Recorded crime per 1,000 residents per MSOA, as local context. data.police.uk only offers custom-built downloads, so build the period and forces you want, download the archive, then upload it here (a zip of monthly CSVs, or a single CSV).",
     source: "https://data.police.uk/data/",
-    sourceLabel: "data.police.uk",
+    sourceLabel: "data.police.uk (build your download)",
+    upload: true,
     fields: [
       {
         key: "url",
-        label: "data.police.uk CSV or zip URL",
-        placeholder: "data.police.uk/data: generate a CSV/zip for your month or force",
+        label: "Or paste a CSV or zip URL (optional)",
+        placeholder: "data.police.uk/data: build a CSV/zip, or upload the file below",
       },
     ],
   },
@@ -301,6 +307,8 @@ export default function DataPage() {
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [stale, setStale] = useState<string[]>([]);
+  const [files, setFiles] = useState<Record<string, File | null>>({});
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
 
   const refresh = useCallback(() => {
     getReferenceStatus()
@@ -330,6 +338,24 @@ export default function DataPage() {
         ...e,
         [d.id]: err instanceof Error ? err.message : "Failed",
       }));
+    }
+  }
+
+  async function onUpload(d: DatasetDef) {
+    const file = files[d.id];
+    if (!file) return;
+    setErrors((e) => ({ ...e, [d.id]: "" }));
+    setUploading((u) => ({ ...u, [d.id]: true }));
+    try {
+      await uploadReference(d.id, file, { areaType });
+      refresh();
+    } catch (err) {
+      setErrors((e) => ({
+        ...e,
+        [d.id]: err instanceof Error ? err.message : "Upload failed",
+      }));
+    } finally {
+      setUploading((u) => ({ ...u, [d.id]: false }));
     }
   }
 
@@ -428,6 +454,40 @@ export default function DataPage() {
               </label>
             ))}
 
+            {d.upload && (
+              <div className="rounded-card border border-dashed border-neutral-300 p-3">
+                <span className="mb-1.5 block text-xs font-medium text-neutral-600">
+                  Upload the downloaded file (CSV, or a .zip of monthly CSVs)
+                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="file"
+                    accept=".csv,.zip"
+                    onChange={(e) =>
+                      setFiles((m) => ({
+                        ...m,
+                        [d.id]: e.target.files?.[0] ?? null,
+                      }))
+                    }
+                    className="text-xs text-neutral-600 file:mr-3 file:rounded-card file:border-0 file:bg-neutral-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onUpload(d)}
+                    disabled={!files[d.id] || uploading[d.id]}
+                    className="inline-flex items-center gap-1.5 rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {uploading[d.id] ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Upload size={14} />
+                    )}
+                    {uploading[d.id] ? "Uploading..." : "Upload and load"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -435,7 +495,11 @@ export default function DataPage() {
                 disabled={s?.status === "running"}
                 className="rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {s?.status === "running" ? "Loading..." : "Load"}
+                {s?.status === "running"
+                  ? "Loading..."
+                  : d.upload
+                    ? "Load from URL"
+                    : "Load"}
               </button>
               {errors[d.id] && (
                 <span className="text-xs text-priority-low">

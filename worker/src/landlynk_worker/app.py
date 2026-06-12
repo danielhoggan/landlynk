@@ -18,7 +18,17 @@ import uuid
 from typing import TYPE_CHECKING
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Response
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Response,
+    UploadFile,
+)
 from pydantic import BaseModel, Field
 
 from . import refdata
@@ -292,6 +302,36 @@ def load_reference(
     if dataset not in refdata.DATASETS:
         raise HTTPException(status_code=404, detail=f"Unknown dataset: {dataset}")
     background.add_task(refdata.run_load, get_pool(), dataset, params or {})
+    return {"status": "started", "dataset": dataset}
+
+
+@app.post("/admin/reference/{dataset}/upload", status_code=202)
+async def upload_reference(
+    dataset: str,
+    background: BackgroundTasks,
+    file: UploadFile = File(...),
+    area_type: str = Form("MSOA"),
+    x_admin_token: str | None = Header(default=None),
+) -> dict[str, str]:
+    """Load one reference dataset from an uploaded file (e.g. a data.police.uk
+    crime archive), for sources with no stable URL to fetch."""
+    _check_admin(x_admin_token)
+    if dataset not in refdata.UPLOAD_DATASETS:
+        raise HTTPException(
+            status_code=404, detail=f"Dataset does not support upload: {dataset}"
+        )
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    filename = file.filename or "upload.csv"
+    background.add_task(
+        refdata.run_upload,
+        get_pool(),
+        dataset,
+        filename,
+        data,
+        {"areaType": area_type},
+    )
     return {"status": "started", "dataset": dataset}
 
 

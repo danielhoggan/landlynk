@@ -844,17 +844,30 @@ def _crime_points(records: list[dict]) -> list[tuple[float, float]]:
     return out
 
 
+def _point_records_from_bytes(name: str, data: bytes) -> list[dict]:
+    """Tabular records from raw bytes, by file extension: every CSV inside a zip
+    (a data.police.uk archive), or a single CSV/XLSX/XLS. Used by the uploaded
+    file path so a manually downloaded file loads the same as a URL."""
+    low = name.lower()
+    if low.endswith(".zip"):
+        rows: list[dict] = []
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            for member in zf.namelist():
+                if member.lower().endswith(".csv"):
+                    rows.extend(_csv_rows(zf.read(member).decode("utf-8-sig", "ignore")))
+        return rows
+    if low.endswith((".xlsx", ".xlsm")):
+        return _read_xlsx(data)
+    if low.endswith(".xls"):
+        return _read_xls(data)
+    return _csv_rows(data.decode("utf-8-sig", "ignore"))
+
+
 def _read_point_records(url: str) -> list[dict]:
     """Records from a CSV/XLSX, or every CSV inside a zip (data.police.uk archive)."""
     if not url.lower().endswith(".zip"):
         return _load_records(url)
-    content = _get_bytes(url)
-    rows: list[dict] = []
-    with zipfile.ZipFile(io.BytesIO(content)) as zf:
-        for name in zf.namelist():
-            if name.lower().endswith(".csv"):
-                rows.extend(_csv_rows(zf.read(name).decode("utf-8-sig", "ignore")))
-    return rows
+    return _point_records_from_bytes(url, _get_bytes(url))
 
 
 def load_schools(
@@ -1069,7 +1082,23 @@ def load_nhs_waiting(
 def load_crime(
     pool: ConnectionPool, url: str, area_type: str = "MSOA"
 ) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
-    points = _crime_points(_read_point_records(url))
+    return _load_crime_points(
+        pool, _crime_points(_read_point_records(url)), area_type
+    )
+
+
+def load_crime_bytes(
+    pool: ConnectionPool, name: str, data: bytes, area_type: str = "MSOA"
+) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
+    """Load crime from an uploaded file (CSV or a data.police.uk archive zip)."""
+    return _load_crime_points(
+        pool, _crime_points(_point_records_from_bytes(name, data)), area_type
+    )
+
+
+def _load_crime_points(
+    pool: ConnectionPool, points: list[tuple[float, float]], area_type: str
+) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
     if not points:
         return 0
     with pool.connection() as conn, conn.transaction():

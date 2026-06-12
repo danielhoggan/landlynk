@@ -516,6 +516,30 @@ export async function loadReference(
   }
 }
 
+export async function uploadReference(
+  dataset: string,
+  file: File,
+  params: Record<string, string>,
+): Promise<void> {
+  const form = new FormData();
+  form.append("file", file);
+  for (const [k, v] of Object.entries(params)) {
+    // The worker reads the area level from a form field named area_type.
+    form.append(k === "areaType" ? "area_type" : k, v);
+  }
+  const res = await fetch(`/api/admin/reference/${dataset}/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const detail = await res
+      .json()
+      .then((b) => b?.detail ?? b?.error)
+      .catch(() => null);
+    throw new Error(detail ?? `Upload failed (${res.status})`);
+  }
+}
+
 export async function getBattlecard(
   id: string,
   areaCode: string,

@@ -36,6 +36,8 @@ extend-immutable-calls = [
     "fastapi.Depends",
     "fastapi.Header",
     "fastapi.Query",
+    "fastapi.File",
+    "fastapi.Form",
 ]
 
 [tool.pytest.ini_options]
