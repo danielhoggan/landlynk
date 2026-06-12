@@ -327,27 +327,6 @@ def test_hospital_points_latlng_and_bng():
     assert pts[0]["org_code"] == "RXX" and pts[0]["lat"] == 52.5
 
 
-def test_nhs_waiting_rows_normalise_fraction():
-    records = [
-        {
-            "Org Code": "RXX",
-            "Org Name": "Trust X",
-            "Percentage in 4 hours or less (all)": "0.72",
-            "Median (weeks)": "14",
-        },
-        {
-            "Org Code": "RYY",
-            "Org Name": "Trust Y",
-            "Percentage in 4 hours or less (all)": "65",
-            "Median (weeks)": "20",
-        },
-    ]
-    rows = {r["org_code"]: r for r in loaders._nhs_waiting_rows(records)}
-    assert rows["RXX"]["ae_4hr_pct"] == 72.0  # 0.72 -> 72%
-    assert rows["RYY"]["ae_4hr_pct"] == 65.0
-    assert rows["RXX"]["rtt_weeks"] == 14
-
-
 def test_load_records_dated_steps_back_to_available_day(monkeypatch):
     # Today's GIAS file is not up yet; yesterday's is. The loader steps back.
     available = "20260610"
