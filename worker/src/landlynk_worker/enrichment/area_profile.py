@@ -28,11 +28,14 @@ AMENITY_CATEGORIES = (
 )
 
 _PROMPT = (
-    "You are a UK residential property and lifestyle analyst. I need a Local "
-    "Area Profile for: {areas}. Write 4 to 5 flowing sentences about what it "
-    "feels like to live there: character, connectivity, green space, dining, "
-    "culture and any regeneration. Be specific with place names. Also list 8 to "
-    "12 local amenities with categories. Respond ONLY with valid JSON: "
+    "You are a UK residential property and lifestyle analyst. Profile the area "
+    "of a new residential development located at: {location}. Anchor everything "
+    "on this exact location. Write 4 to 5 flowing sentences about what it feels "
+    "like to live there: character, connectivity, green space, dining, culture "
+    "and any regeneration. Be specific with real place names in and immediately "
+    "around {location}. Also list 8 to 12 real local amenities near {location} "
+    "with categories. If unsure of the town, use the postcode to place it "
+    "correctly. Respond ONLY with valid JSON: "
     '{{"description": "...", "amenities": [{{"name": "...", "category": '
     '"Transport"}}]}}. Valid categories: Transport, Retail, Leisure, Education, '
     "Healthcare, Other. Do not use em dashes or Oxford commas."
@@ -135,19 +138,21 @@ def _parse(text: str) -> dict:
 
 
 def generate_area_profile(
-    area_names: list[str],
+    location: str,
     model: str,
     transport: Transport | None = None,
 ) -> dict:
-    """Generate {description, amenities} for the given areas with the model.
+    """Generate {description, amenities} for a development location with the model.
 
-    Raises ValueError for an unknown model. The transport is injectable for tests.
+    location anchors the profile (e.g. "Montgomery Place, TF9 3RP"); the postcode
+    keeps the model on the right town. Raises ValueError for an unknown model.
+    The transport is injectable for tests.
     """
     provider = model_provider(model)
     if provider is None:
         raise ValueError(f"Unknown model: {model}")
     call = transport or _TRANSPORTS[provider]
-    prompt = _PROMPT.format(areas=", ".join(area_names[:20]))
+    prompt = _PROMPT.format(location=location)
     text, usage = call(model, prompt)
     total = (usage.get("input", 0) or 0) + (usage.get("output", 0) or 0)
     return {**_parse(text), "usage": {**usage, "total": total}}

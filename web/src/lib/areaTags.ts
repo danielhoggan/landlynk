@@ -4,11 +4,35 @@ import type { AreaMetrics, CatchmentArea } from "./types/catchment";
 // results and labelling areas. Thresholds are deliberately simple and
 // explainable; tune here if the business definition changes.
 
+// Some signals are best judged relative to the catchment, not an absolute bar:
+// "family" share varies hugely between, say, a student city and a commuter belt,
+// so a fixed threshold either matches everything or (as reported) nothing. The
+// context carries catchment-derived reference points for those tags.
+export interface TagContext {
+  /** Family-household share at or above which an area counts as family-skewed. */
+  familyShareThreshold: number;
+}
+
+const DEFAULT_CONTEXT: TagContext = { familyShareThreshold: 55 };
+
+/** Reference points for relative tags, derived from the whole catchment. */
+export function buildTagContext(areas: CatchmentArea[]): TagContext {
+  const shares = areas
+    .map((a) => a.metrics?.familyShare)
+    .filter((v): v is number => v != null)
+    .sort((a, b) => a - b);
+  if (!shares.length) return DEFAULT_CONTEXT;
+  // The catchment median: "family areas" are the upper half, so the filter
+  // always returns a sensible subset and adapts to the local norm.
+  const median = shares[Math.floor(shares.length / 2)];
+  return { familyShareThreshold: median };
+}
+
 export interface SignalTag {
   id: string;
   label: string;
-  /** True if the area's metrics qualify for this tag. */
-  match: (m: AreaMetrics) => boolean;
+  /** True if the area's metrics qualify for this tag, given the catchment. */
+  match: (m: AreaMetrics, ctx: TagContext) => boolean;
 }
 
 export const SIGNAL_TAGS: SignalTag[] = [
@@ -33,23 +57,30 @@ export const SIGNAL_TAGS: SignalTag[] = [
   {
     id: "family",
     label: "Family",
-    match: (m) => (m.familyShare ?? 0) >= 60,
+    // Relative to the catchment: family-skewed areas (upper half by family
+    // household share), so the filter never empties and suits the local mix.
+    match: (m, ctx) =>
+      m.familyShare != null && m.familyShare >= ctx.familyShareThreshold,
   },
 ];
 
-/** The tags an area qualifies for. */
-export function tagsForArea(area: CatchmentArea): SignalTag[] {
+/** The tags an area qualifies for, given the catchment context. */
+export function tagsForArea(
+  area: CatchmentArea,
+  ctx: TagContext = DEFAULT_CONTEXT,
+): SignalTag[] {
   if (!area.metrics) return [];
-  return SIGNAL_TAGS.filter((t) => t.match(area.metrics as AreaMetrics));
+  return SIGNAL_TAGS.filter((t) => t.match(area.metrics as AreaMetrics, ctx));
 }
 
 /** Whether an area matches the selected tag filter (any of the selected tags). */
 export function areaMatchesTags(
   area: CatchmentArea,
   selected: Set<string>,
+  ctx: TagContext = DEFAULT_CONTEXT,
 ): boolean {
   if (selected.size === 0) return true;
-  const ids = new Set(tagsForArea(area).map((t) => t.id));
+  const ids = new Set(tagsForArea(area, ctx).map((t) => t.id));
   for (const id of selected) {
     if (ids.has(id)) return true;
   }
@@ -90,8 +121,9 @@ export function areaMatchesFilters(
   area: CatchmentArea,
   tags: Set<string>,
   ranges: MetricRanges,
+  ctx?: TagContext,
 ): boolean {
-  if (!areaMatchesTags(area, tags)) return false;
+  if (!areaMatchesTags(area, tags, ctx)) return false;
   for (const [key, range] of Object.entries(ranges)) {
     if (!range || (range.min == null && range.max == null)) continue;
     const val = area.metrics ? area.metrics[key as MetricKey] : null;

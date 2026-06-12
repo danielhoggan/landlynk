@@ -3,7 +3,7 @@
 import { Star } from "lucide-react";
 import type { CatchmentArea } from "@/lib/types/catchment";
 import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/lib/priority";
-import { tagsForArea } from "@/lib/areaTags";
+import { tagsForArea, type TagContext } from "@/lib/areaTags";
 
 interface RankingListProps {
   areas: CatchmentArea[];
@@ -11,6 +11,7 @@ interface RankingListProps {
   selectedAreaCode?: string;
   starredCodes?: Set<string>;
   onToggleStar?: (areaCode: string) => void;
+  tagContext?: TagContext;
 }
 
 // The shortlist: areas ordered by priority so the user sees where to focus, not
@@ -22,6 +23,7 @@ export function RankingList({
   selectedAreaCode,
   starredCodes,
   onToggleStar,
+  tagContext,
 }: RankingListProps) {
   if (areas.length === 0) return null;
   return (
@@ -54,9 +56,9 @@ export function RankingList({
                 <span className="block text-xs text-neutral-500">
                   {PRIORITY_LABELS[area.band]}
                 </span>
-                {tagsForArea(area).length > 0 && (
+                {tagsForArea(area, tagContext).length > 0 && (
                   <span className="mt-1 flex flex-wrap gap-1">
-                    {tagsForArea(area).map((t) => (
+                    {tagsForArea(area, tagContext).map((t) => (
                       <span
                         key={t.id}
                         className="rounded-full bg-light-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-light-accent"

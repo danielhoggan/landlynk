@@ -28,12 +28,13 @@ def test_generate_parses_json_and_filters_categories():
         )
         return text, {"input": 400, "output": 600}
 
-    out = generate_area_profile(["Ipswich", "Babergh"], "gpt-4o", transport=fake)
+    out = generate_area_profile("Montgomery Place, TF9 3RP", "gpt-4o", transport=fake)
     assert out["description"].startswith("A leafy")
     assert out["amenities"][0] == {"name": "Station", "category": "Transport"}
     # Unknown categories collapse to Other.
     assert out["amenities"][1]["category"] == "Other"
-    assert "Ipswich, Babergh" in captured["prompt"]
+    # The prompt is anchored on the development location, postcode included.
+    assert "TF9 3RP" in captured["prompt"]
     assert captured["model"] == "gpt-4o"
     # Token usage is surfaced for costing.
     assert out["usage"] == {"input": 400, "output": 600, "total": 1000}

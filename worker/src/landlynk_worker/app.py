@@ -831,9 +831,21 @@ def area_profile(
     # monthly allowance (pooled per builder group); internal users are unmetered.
     _enforce_llm_quota(user)
 
-    names = [by_code[c] for c in codes]
+    # Anchor the prompt on the development's own location, not the list of
+    # catchment area names. A 30-minute catchment spans several local
+    # authorities, so a name list made the model place the scheme in the wrong
+    # town. The postcode keeps it precise.
+    inp = catchment.get("input") or {}
+    dev_name = inp.get("developmentName") or "the development"
+    postcode = inp.get("value") if inp.get("kind") == "postcode" else None
+    if postcode:
+        location = f"{dev_name}, {postcode}"
+    else:
+        # No postcode (grid reference): fall back to the development's home area.
+        home = by_code.get(codes[0], codes[0])
+        location = f"{dev_name}, {home}"
     try:
-        payload = generate_area_profile(names, model)
+        payload = generate_area_profile(location, model)
     except Exception as exc:
         _log.exception("Area profile generation failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc

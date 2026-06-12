@@ -23,6 +23,7 @@ import {
   SIGNAL_TAGS,
   METRIC_FILTERS,
   areaMatchesFilters,
+  buildTagContext,
   type MetricKey,
   type MetricRanges,
 } from "@/lib/areaTags";
@@ -185,8 +186,9 @@ export default function HomePage() {
     }
   }
   const activeFilterCount = filter.size + Object.keys(ranges).length;
+  const tagContext = buildTagContext(areas);
   const filteredAreas = areas.filter((a) =>
-    areaMatchesFilters(a, filter, ranges),
+    areaMatchesFilters(a, filter, ranges, tagContext),
   );
   const matchedCodes =
     activeFilterCount === 0
@@ -858,6 +860,7 @@ export default function HomePage() {
           onSelectArea={onSelectArea}
           selectedAreaCode={selectedCode}
           matchedCodes={matchedCodes}
+          tagContext={tagContext}
         />
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-neutral-500">
@@ -885,6 +888,7 @@ export default function HomePage() {
               selectedAreaCode={selectedCode}
               starredCodes={starred}
               onToggleStar={toggleStar}
+              tagContext={tagContext}
             />
           )}
         </div>

@@ -9,7 +9,7 @@ import type {
   GeoJsonGeometry,
 } from "@/lib/types/catchment";
 import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/lib/priority";
-import { tagsForArea } from "@/lib/areaTags";
+import { tagsForArea, type TagContext } from "@/lib/areaTags";
 
 interface CatchmentMapProps {
   areas: CatchmentArea[];
@@ -19,6 +19,8 @@ interface CatchmentMapProps {
   selectedAreaCode?: string;
   /** Area codes passing the active filter; others are dimmed. null = no filter. */
   matchedCodes?: Set<string> | null;
+  /** Catchment-derived context for relative signal tags. */
+  tagContext?: TagContext;
 }
 
 // Open vector base map. OpenFreeMap is free, OSM-based and needs no API key, so
@@ -36,6 +38,7 @@ const fmtPct = (v: number | null | undefined) =>
 function areasToFeatures(
   areas: CatchmentArea[],
   matchedCodes: Set<string> | null | undefined,
+  tagContext?: TagContext,
 ): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
@@ -53,7 +56,7 @@ function areasToFeatures(
           income: a.metrics?.income ?? null,
           housePrice: a.metrics?.housePrice ?? null,
           ownerOccupied: a.metrics?.ownerOccupied ?? null,
-          tags: tagsForArea(a)
+          tags: tagsForArea(a, tagContext)
             .map((t) => t.label)
             .join(", "),
           match: matchedCodes ? (matchedCodes.has(a.areaCode) ? 1 : 0) : 1,
@@ -73,6 +76,7 @@ export function CatchmentMap({
   onSelectArea,
   selectedAreaCode,
   matchedCodes,
+  tagContext,
 }: CatchmentMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -82,6 +86,8 @@ export function CatchmentMap({
   onSelectRef.current = onSelectArea;
   const areasRef = useRef(areas);
   areasRef.current = areas;
+  const tagContextRef = useRef(tagContext);
+  tagContextRef.current = tagContext;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -197,7 +203,7 @@ export function CatchmentMap({
     const areaSource = map.getSource("areas") as
       | maplibregl.GeoJSONSource
       | undefined;
-    areaSource?.setData(areasToFeatures(areas, matchedCodes));
+    areaSource?.setData(areasToFeatures(areas, matchedCodes, tagContextRef.current));
 
     const isoSource = map.getSource("isochrone") as
       | maplibregl.GeoJSONSource

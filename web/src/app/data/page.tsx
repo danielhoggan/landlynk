@@ -24,13 +24,14 @@ const DEFAULT_AGE = `${NOMIS}ts007.zip`;
 const DEFAULT_HOUSEHOLDS = `${NOMIS}ts003.zip`;
 const DEFAULT_TENURE = `${NOMIS}ts054.zip`;
 
-// ONS House Price Statistics for Small Areas: median price paid by MSOA. Best
-// known URL; update if ONS publishes a newer release.
+// ONS Median house prices by MSOA (the current dataset, most recent year). The
+// /current/ path always serves the latest edition; the loader takes the most
+// recent dated column. If ONS renames the file, paste the exact xlsx link from
+// https://www.ons.gov.uk/peoplepopulationandcommunity/housing/datasets/medianhousepricesbymiddlelayersuperoutputarea
 const DEFAULT_HOUSE_PRICES =
   "https://www.ons.gov.uk/file?uri=/peoplepopulationandcommunity/" +
-  "housing/datasets/" +
-  "hpssadataset2medianhousepricebymsoaquarterlyrollingyear/current/" +
-  "hpssadataset2medianpricepaidbymsoa.xls";
+  "housing/datasets/medianhousepricesbymiddlelayersuperoutputarea/" +
+  "current/hpssadataset2medianpricepaidbymsoa.xlsx";
 
 // ONS small-area income (MSOA, financial year ending 2020). Best-known URL;
 // update here if ONS publishes a newer release.
