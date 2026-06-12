@@ -184,7 +184,9 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
         elif dataset == "green_space":
             n = loaders.load_green_space(pool, params["url"], area_type)
         elif dataset == "imd":
-            n = loaders.load_imd(pool, params["url"], params["lookupUrl"], area_type)
+            n = loaders.load_imd(
+                pool, params["url"], params.get("lookupUrl"), area_type
+            )
         elif dataset == "schools":
             n = loaders.load_schools(
                 pool,

@@ -27,6 +27,7 @@ def test_migrations_dir_ships_with_the_package():
         "0011_area_metrics.sql",
         "0012_hospitals.sql",
         "0013_postcodes.sql",
+        "0014_lsoa_msoa.sql",
     ]
 
 

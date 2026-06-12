@@ -210,7 +210,7 @@ const DATASETS: DatasetDef[] = [
     id: "imd",
     title: "Deprivation (IMD)",
     blurb:
-      "Index of Multiple Deprivation, aggregated from LSOA to MSOA, as local context. Needs the IMD file (File 7, pre-filled) plus an LSOA-to-MSOA lookup CSV from the Open Geography Portal (paste its CSV export URL).",
+      "Index of Multiple Deprivation, aggregated from LSOA to MSOA, as local context. The IMD file (File 7) is pre-filled. Leave the lookup blank to use the LSOA-to-MSOA lookup built from the Postcodes dataset (load Postcodes first), or paste an LSOA-to-MSOA lookup CSV to override.",
     source: "https://www.gov.uk/government/statistics/english-indices-of-deprivation-2019",
     sourceLabel: "MHCLG IoD2019",
     fields: [

@@ -760,10 +760,33 @@ def _load_green_space_sheets(
 
 
 def load_imd(
-    pool: ConnectionPool, url: str, lookup_url: str, area_type: str = "MSOA"
+    pool: ConnectionPool,
+    url: str,
+    lookup_url: str | None = None,
+    area_type: str = "MSOA",
 ) -> int:
-    rows = _imd_rows(_load_records(url), _load_records(lookup_url), area_type)
+    # The IMD file is LSOA-level; map to MSOA with a pasted lookup, or fall back
+    # to the lookup built from the postcode directory when Postcodes is loaded.
+    if lookup_url and lookup_url.strip():
+        lookup = _load_records(lookup_url)
+    else:
+        lookup = _lsoa_msoa_lookup(pool)
+        if not lookup:
+            raise ValueError(
+                "No LSOA to MSOA lookup available. Load the Postcodes dataset "
+                "first (it builds the lookup), or paste a lookup CSV URL."
+            )
+    rows = _imd_rows(_load_records(url), lookup, area_type)
     return _replace_metric(pool, ["imd_score", "imd_decile"], rows)
+
+
+def _lsoa_msoa_lookup(
+    pool: ConnectionPool,
+) -> list[dict]:  # pragma: no cover - needs DB
+    """LSOA to MSOA pairs from the table built during the postcode load."""
+    with pool.connection() as conn:
+        rows = conn.execute("SELECT lsoa, msoa FROM lsoa_msoa").fetchall()
+    return [{"lsoa": lsoa, "msoa": msoa} for lsoa, msoa in rows]
 
 
 # --- point datasets (schools, crime): point-in-MSOA via PostGIS ---------------
@@ -1059,6 +1082,7 @@ def load_postcodes(
 
     path = _download_to_temp(url, suffix=".zip")
     n = 0
+    lsoa_msoa: dict[str, str] = {}
     try:
         with (
             zipfile.ZipFile(path) as zf,
@@ -1075,15 +1099,40 @@ def load_postcodes(
                     "COPY postcode_centroid (postcode, lat, lng) FROM STDIN"
                 ) as copy,
             ):
-                for row in csv.DictReader(text):
+                reader = csv.DictReader(text)
+                lsoa_c, msoa_c = _lsoa_msoa_columns(reader.fieldnames or [])
+                for row in reader:
                     parsed = _postcode_centroid(row)
-                    if parsed is None:
-                        continue
-                    copy.write_row(parsed)
-                    n += 1
+                    if parsed is not None:
+                        copy.write_row(parsed)
+                        n += 1
+                    # Build the LSOA to MSOA lookup as a side effect: the ONSPD
+                    # carries both codes per postcode, so IMD can aggregate to
+                    # MSOA without a separate lookup file.
+                    if lsoa_c and msoa_c:
+                        lsoa = str(row.get(lsoa_c) or "").strip()
+                        msoa = str(row.get(msoa_c) or "").strip()
+                        if lsoa and msoa:
+                            lsoa_msoa.setdefault(lsoa, msoa)
+            if lsoa_msoa:
+                conn.execute("TRUNCATE lsoa_msoa")
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        "INSERT INTO lsoa_msoa (lsoa, msoa) VALUES (%s, %s) "
+                        "ON CONFLICT (lsoa) DO NOTHING",
+                        list(lsoa_msoa.items()),
+                    )
     finally:
         os.unlink(path)
     return n
+
+
+def _lsoa_msoa_columns(fieldnames: list[str]) -> tuple[str | None, str | None]:
+    """Find the LSOA and MSOA (2011) code columns in an ONSPD/NSPL header."""
+    return (
+        t.find_column(fieldnames, ("lsoa11", "lsoa11cd", "lsoa")),
+        t.find_column(fieldnames, ("msoa11", "msoa11cd", "msoa")),
+    )
 
 
 def _is_ods_url(url: str) -> bool:
