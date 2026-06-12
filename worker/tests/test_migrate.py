@@ -24,6 +24,7 @@ def test_migrations_dir_ships_with_the_package():
         "0008_llm_usage.sql",
         "0009_audit_log.sql",
         "0010_brand_theme.sql",
+        "0011_area_metrics.sql",
     ]
 
 

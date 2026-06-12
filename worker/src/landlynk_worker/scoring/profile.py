@@ -53,6 +53,9 @@ class AreaProfile:
     proportion_inside: float
     # Local median house price (ONS HPSSA). Optional; for the builder use case.
     median_house_price: float | None = None
+    # Additional public data points (green space, deprivation, crime), keyed by
+    # metric_key. Shown as Local context on the Battlecard, not yet scored.
+    context: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

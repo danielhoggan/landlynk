@@ -83,6 +83,7 @@ class PostgresReferenceData:
             income = _one(conn, "income_estimates", area_code)
             house_prices = _one(conn, "house_prices", area_code)
             name = _area_name(conn, area_code)
+            context = _metrics(conn, area_code)
         profile = build_area_profile(
             area_code=area_code,
             area_type=area_type,
@@ -91,6 +92,7 @@ class PostgresReferenceData:
             tenure_row=tenure,
             income_row=income,
             house_price_row=house_prices,
+            context=context,
         )
         return AreaReference(profile=profile, name=name or area_code)
 
@@ -108,3 +110,15 @@ def _area_name(conn: Any, area_code: str) -> str | None:  # pragma: no cover - n
         "SELECT area_name FROM geo_boundaries WHERE area_code = %s", [area_code]
     ).fetchone()
     return row[0] if row else None
+
+
+def _metrics(conn: Any, area_code: str) -> dict:  # pragma: no cover - needs DB
+    """Additional context metrics for the area, keyed by metric_key."""
+    try:
+        rows = conn.execute(
+            "SELECT metric_key, value FROM area_metric WHERE area_code = %s",
+            [area_code],
+        ).fetchall()
+    except Exception:
+        return {}
+    return {k: float(v) for k, v in rows if v is not None}

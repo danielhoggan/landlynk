@@ -202,6 +202,16 @@ class DataConfidence(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ContextMetric(BaseModel):
+    """An additional public data point shown as Local context (green space etc.)."""
+
+    key: str
+    label: str
+    value: float
+    unit: str
+    direction: str = ""
+
+
 class Amenity(BaseModel):
     name: str
     category: str
@@ -238,6 +248,11 @@ class Battlecard(BaseModel):
     # Optional AI enrichment, attached on export when a profile was generated.
     local_area_profile: LocalAreaProfile | None = Field(
         default=None, alias="localAreaProfile"
+    )
+    # Additional public data points (green space, deprivation, crime), shown as
+    # Local context. Empty until the relevant reference datasets are loaded.
+    context_metrics: list[ContextMetric] = Field(
+        default_factory=list, alias="contextMetrics"
     )
 
     model_config = {"populate_by_name": True}

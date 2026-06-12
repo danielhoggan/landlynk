@@ -3,6 +3,7 @@
 import type {
   AddressableSegments,
   CatchmentContext,
+  ContextMetric,
   DataConfidence,
   PricingRationale,
 } from "@/lib/types/battlecard";
@@ -23,16 +24,36 @@ export function BattlecardInsights({
   segments,
   context,
   confidence,
+  contextMetrics,
 }: {
   pricing?: PricingRationale;
   segments?: AddressableSegments;
   context?: CatchmentContext;
   confidence?: DataConfidence;
+  contextMetrics?: ContextMetric[];
 }) {
   // Older stored Battlecards predate these sections. Render what is present and
   // skip the rest rather than crashing the drawer on a partial payload.
   return (
     <div className="space-y-4">
+      {contextMetrics && contextMetrics.length > 0 && (
+        <section className="rounded-card border border-neutral-200 p-4">
+          <h3 className="mb-3 text-sm font-semibold">Local context</h3>
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {contextMetrics.map((m) => (
+              <div key={m.key}>
+                <dt className="text-xs text-neutral-500">{m.label}</dt>
+                <dd className="text-sm font-semibold tabular-nums">
+                  {m.value}
+                  <span className="ml-1 text-xs font-normal text-neutral-400">
+                    {m.unit}
+                  </span>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       {pricing && (
         <section className="rounded-card border border-neutral-200 p-4">
           <div className="mb-2 flex items-center justify-between">

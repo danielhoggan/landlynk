@@ -46,6 +46,7 @@ def build_area_profile(
     tenure_row: dict,
     income_row: dict,
     house_price_row: dict | None = None,
+    context: dict[str, float] | None = None,
 ) -> AreaProfile:
     """Map reference rows to an AreaProfile, preserving suppression as None.
 
@@ -88,4 +89,5 @@ def build_area_profile(
         family_household_share=_f(demographics_row.get("family_household_share")),
         proportion_inside=proportion_inside,
         median_house_price=_f((house_price_row or {}).get("median_price")),
+        context=context or {},
     )

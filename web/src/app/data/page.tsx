@@ -126,6 +126,37 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
+  {
+    id: "green_space",
+    title: "Green space",
+    blurb:
+      "Walk time to the nearest green space by MSOA, shown as local context. ONS access to gardens and public green space (XLSX), MSOA sheet.",
+    fields: [
+      {
+        key: "url",
+        label: "Green space XLSX or CSV URL",
+        placeholder: "ONS green space xlsx, or the dataset page URL",
+      },
+    ],
+  },
+  {
+    id: "imd",
+    title: "Deprivation (IMD)",
+    blurb:
+      "Index of Multiple Deprivation, aggregated from LSOA to MSOA, as local context. Needs the IMD file plus an LSOA-to-MSOA lookup (both CSV or XLSX).",
+    fields: [
+      {
+        key: "url",
+        label: "IMD (LSOA) CSV or XLSX URL",
+        placeholder: "MHCLG IMD LSOA file",
+      },
+      {
+        key: "lookupUrl",
+        label: "LSOA to MSOA lookup CSV URL",
+        placeholder: "ONS LSOA-to-MSOA lookup",
+      },
+    ],
+  },
 ];
 
 export default function DataPage() {
@@ -140,6 +171,8 @@ export default function DataPage() {
     census_tenure: { url: DEFAULT_TENURE },
     income_estimates: { url: DEFAULT_INCOME },
     house_prices: { url: DEFAULT_HOUSE_PRICES },
+    green_space: { url: "" },
+    imd: { url: "", lookupUrl: "" },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});

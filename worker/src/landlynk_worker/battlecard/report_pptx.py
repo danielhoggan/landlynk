@@ -348,6 +348,11 @@ def _area_profile(
             )
         except Exception:
             pass
+    if card.context_metrics:
+        lines: list[tuple] = [("LOCAL CONTEXT", 11, _GOLD, True, False)]
+        for m in card.context_metrics:
+            lines.append((f"{m.label}: {m.value:g} {m.unit}", 11, _INK, False, False))
+        _text(slide, Inches(8.2), Inches(4.7), Inches(4.5), Inches(2.4), lines)
 
 
 def _age(slide: Slide, card: Battlecard, theme: dict) -> None:

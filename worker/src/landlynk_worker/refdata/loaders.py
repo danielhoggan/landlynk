@@ -431,6 +431,171 @@ def _house_price_rows(records: list[dict], area_type: str) -> list[dict]:
 # --- DB write ----------------------------------------------------------------
 
 
+def _load_records(url: str) -> list[dict]:
+    """Fetch a tabular file (xlsx/xls/csv), following an ONS page link if pasted."""
+    data = _get_bytes(url)
+    resolved = _resolve_data_url(url, data)
+    if resolved:
+        url = resolved
+        data = _get_bytes(url)
+    low = url.lower()
+    if low.endswith(".xls"):
+        return _read_xls(data)
+    if low.endswith((".xlsx", ".xlsm")):
+        return _read_xlsx(data)
+    return _read_csv(data.decode("utf-8-sig", "ignore"))[0]
+
+
+def _is_msoa(code: str) -> bool:
+    return code[:3] in ("E02", "W02")
+
+
+def _green_space_rows(records: list[dict], area_type: str) -> list[dict]:
+    """ONS access to green space, as minutes walk to the nearest green space.
+
+    Distance (metres) to the nearest publicly accessible green space is converted
+    to a walk time at ~80 m/min. Keeps MSOA rows only, so the file can carry
+    several geography levels.
+    """
+    if not records:
+        return []
+    fields = list(records[0].keys())
+    code_col = t.find_column(
+        fields, ("msoa code", "msoa11cd", "msoa21cd", "area code", "geography code")
+    )
+    dist_col = t.find_column(
+        fields,
+        (
+            "average distance to nearest park",
+            "average distance to nearest publicly",
+            "distance to nearest",
+            "average distance",
+        ),
+    )
+    if code_col is None or dist_col is None:
+        raise ValueError(f"No MSOA code / distance column found in {fields}")
+    rows: list[dict] = []
+    for r in records:
+        code = str(r.get(code_col) or "").strip()
+        if not _is_msoa(code):
+            continue
+        metres = t.parse_number(r.get(dist_col))
+        if metres is None:
+            continue
+        rows.append(
+            {
+                "area_code": code,
+                "area_type": area_type,
+                "metric_key": "greenspace_minutes",
+                "value": round(metres / 80.0, 1),
+            }
+        )
+    return rows
+
+
+def _imd_rows(records: list[dict], lookup: list[dict], area_type: str) -> list[dict]:
+    """Index of Multiple Deprivation, aggregated from LSOA to MSOA.
+
+    IMD is published at LSOA, so we map LSOA to MSOA with the supplied lookup and
+    take the mean score and mean decile per MSOA (an indicative area summary).
+    """
+    if not records or not lookup:
+        return []
+    lf = list(lookup[0].keys())
+    lsoa_l = t.find_column(lf, ("lsoa code", "lsoa11cd", "lsoa21cd", "lsoa"))
+    msoa_l = t.find_column(lf, ("msoa code", "msoa11cd", "msoa21cd", "msoa"))
+    if lsoa_l is None or msoa_l is None:
+        raise ValueError(f"Lookup needs LSOA and MSOA code columns, got {lf}")
+    to_msoa = {
+        str(r.get(lsoa_l) or "").strip(): str(r.get(msoa_l) or "").strip()
+        for r in lookup
+    }
+
+    rf = list(records[0].keys())
+    lsoa_c = t.find_column(rf, ("lsoa code", "lsoa11cd", "lsoa21cd", "lsoa"))
+    score_c = t.find_column(
+        rf,
+        (
+            "index of multiple deprivation (imd) score",
+            "index of multiple deprivation score",
+            "imd score",
+        ),
+    )
+    decile_c = t.find_column(rf, ("decile",))
+    if lsoa_c is None or (score_c is None and decile_c is None):
+        raise ValueError(f"No LSOA code / IMD score column found in {rf}")
+
+    scores: dict[str, list[float]] = {}
+    deciles: dict[str, list[float]] = {}
+    for r in records:
+        msoa = to_msoa.get(str(r.get(lsoa_c) or "").strip())
+        if not _is_msoa(msoa or ""):
+            continue
+        if score_c:
+            s = t.parse_number(r.get(score_c))
+            if s is not None:
+                scores.setdefault(msoa, []).append(s)
+        if decile_c:
+            d = t.parse_number(r.get(decile_c))
+            if d is not None:
+                deciles.setdefault(msoa, []).append(d)
+
+    rows: list[dict] = []
+    for msoa in set(scores) | set(deciles):
+        if scores.get(msoa):
+            rows.append(_metric_row(msoa, area_type, "imd_score", _mean(scores[msoa])))
+        if deciles.get(msoa):
+            rows.append(
+                _metric_row(msoa, area_type, "imd_decile", round(_mean(deciles[msoa])))
+            )
+    return rows
+
+
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values)
+
+
+def _metric_row(code: str, area_type: str, key: str, value: float) -> dict:
+    return {
+        "area_code": code,
+        "area_type": area_type,
+        "metric_key": key,
+        "value": value,
+    }
+
+
+def _replace_metric(
+    pool: ConnectionPool, metric_keys: list[str], rows: list[dict]
+) -> int:
+    """Replace all rows for the given metric_keys with the supplied rows."""
+    with pool.connection() as conn, conn.transaction():
+        conn.execute(
+            "DELETE FROM area_metric WHERE metric_key = ANY(%s)", [list(metric_keys)]
+        )
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
+                "VALUES (%s, %s, %s, %s)",
+                [
+                    (r["area_code"], r["area_type"], r["metric_key"], r["value"])
+                    for r in rows
+                ],
+            )
+    return len(rows)
+
+
+def load_green_space(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
+    rows = _green_space_rows(_load_records(url), area_type)
+    return _replace_metric(pool, ["greenspace_minutes"], rows)
+
+
+def load_imd(
+    pool: ConnectionPool, url: str, lookup_url: str, area_type: str = "MSOA"
+) -> int:
+    rows = _imd_rows(_load_records(url), _load_records(lookup_url), area_type)
+    return _replace_metric(pool, ["imd_score", "imd_decile"], rows)
+
+
 def _replace_table(
     pool: ConnectionPool,
     table: str,

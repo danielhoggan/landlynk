@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..context_metrics import build_context_metrics
 from ..scoring.profile import AreaProfile, ScoringConfig
 from ..scoring.score import ScoreBreakdown
 from .schema import (
@@ -28,6 +29,7 @@ from .schema import (
     BattlecardHeader,
     CatchmentContext,
     CohortCommentary,
+    ContextMetric,
     DataConfidence,
     DataValue,
     IncomeAndTenure,
@@ -496,4 +498,7 @@ def assemble_battlecard(
         addressable_segments=_addressable_segments(profile),
         catchment_context=_catchment_context(profile, catchment_stats),
         data_confidence=_data_confidence(profile),
+        context_metrics=[
+            ContextMetric(**row) for row in build_context_metrics(profile.context)
+        ],
     )

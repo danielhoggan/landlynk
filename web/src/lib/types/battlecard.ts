@@ -206,6 +206,16 @@ export interface Battlecard {
   addressableSegments: AddressableSegments;
   catchmentContext: CatchmentContext;
   dataConfidence: DataConfidence;
+  /** Additional public data points (green space, deprivation, crime) for context. */
+  contextMetrics?: ContextMetric[];
+}
+
+export interface ContextMetric {
+  key: string;
+  label: string;
+  value: number;
+  unit: string;
+  direction?: string;
 }
 
 /** Current Battlecard schema version. Bump on any breaking shape change. */

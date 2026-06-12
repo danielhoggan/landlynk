@@ -172,3 +172,44 @@ def test_resolve_data_url_errors_on_page_without_link():
         loaders._resolve_data_url(
             "http://x", b"<html><head></head><body>no file</body></html>"
         )
+
+
+def test_green_space_rows_to_minutes_msoa_only():
+    records = [
+        {"MSOA code": "E02000001", "Average distance to nearest park (m)": "400"},
+        {
+            "MSOA code": "E01000001",
+            "Average distance to nearest park (m)": "240",
+        },  # LSOA, skip
+        {"MSOA code": "W02000001", "Average distance to nearest park (m)": "800"},
+    ]
+    rows = loaders._green_space_rows(records, "MSOA")
+    keyed = {r["area_code"]: r for r in rows}
+    assert set(keyed) == {"E02000001", "W02000001"}
+    assert keyed["E02000001"]["metric_key"] == "greenspace_minutes"
+    assert keyed["E02000001"]["value"] == 5.0  # 400m / 80
+    assert keyed["W02000001"]["value"] == 10.0
+
+
+def test_imd_rows_aggregate_lsoa_to_msoa():
+    lookup = [
+        {"LSOA code": "E01000001", "MSOA code": "E02000001"},
+        {"LSOA code": "E01000002", "MSOA code": "E02000001"},
+    ]
+    records = [
+        {
+            "LSOA code": "E01000001",
+            "Index of Multiple Deprivation (IMD) Score": "20",
+            "Decile": "3",
+        },
+        {
+            "LSOA code": "E01000002",
+            "Index of Multiple Deprivation (IMD) Score": "30",
+            "Decile": "5",
+        },
+    ]
+    rows = loaders._imd_rows(records, lookup, "MSOA")
+    by_key = {r["metric_key"]: r for r in rows}
+    assert by_key["imd_score"]["area_code"] == "E02000001"
+    assert by_key["imd_score"]["value"] == 25.0  # mean(20,30)
+    assert by_key["imd_decile"]["value"] == 4  # round(mean(3,5))
