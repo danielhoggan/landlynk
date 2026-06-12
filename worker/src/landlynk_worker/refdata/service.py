@@ -211,8 +211,9 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
 
 # Datasets that accept a manually downloaded file uploaded from the browser,
 # rather than a URL the worker fetches. data.police.uk only offers custom-built
-# downloads (no stable URL), so crime is loaded this way.
-UPLOAD_DATASETS = ("crime",)
+# downloads (no stable URL), and the ONS green space workbook is easier to grab
+# by hand than to resolve from the dataset page, so both can be uploaded.
+UPLOAD_DATASETS = ("crime", "green_space")
 
 
 def run_upload(
@@ -224,6 +225,8 @@ def run_upload(
     try:
         if dataset == "crime":
             n = loaders.load_crime_bytes(pool, filename, data, area_type)
+        elif dataset == "green_space":
+            n = loaders.load_green_space_bytes(pool, filename, data, area_type)
         else:
             raise ValueError(f"Dataset does not support upload: {dataset}")
         _set(dataset, "loaded", pool=pool, rows=n, area_type=area_type)

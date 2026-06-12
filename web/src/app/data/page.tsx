@@ -49,11 +49,14 @@ const DEFAULT_INCOME =
   "smallareaincomeestimatesformiddlelayersuperoutputareasenglandandwales/" +
   "financialyearending2020/saiefy1920finalqaddownload280923.xlsx";
 
-// ONS access to gardens and public green space (the dataset page; the loader
-// follows it to the current xlsx). Pick the MSOA sheet of distance to green space.
+// ONS public green space reference tables (April 2020). Published at LSOA with
+// an MSOA code on each row; the loader averages distance to MSOA. This is the
+// public green space file, not the private outdoor space (gardens) one.
 const DEFAULT_GREEN_SPACE =
-  "https://www.ons.gov.uk/economy/environmentalaccounts/datasets/" +
-  "accesstogardensandpublicgreenspaceingreatbritain";
+  "https://www.ons.gov.uk/file?uri=/economy/environmentalaccounts/datasets/" +
+  "accesstogardensandpublicgreenspaceingreatbritain/" +
+  "accesstopublicparksandplayingfieldsgreatbritainapril2020/" +
+  "ospublicgreenspacereferencetables.xlsx";
 
 // MHCLG English Indices of Deprivation 2019, File 7 (all scores, ranks, deciles)
 // at LSOA. Aggregated to MSOA with the lookup below.
@@ -189,11 +192,12 @@ const DATASETS: DatasetDef[] = [
     id: "green_space",
     title: "Green space",
     blurb:
-      "Walk time to the nearest green space by MSOA, shown as local context. ONS access to gardens and public green space (XLSX); the loader scans the workbook for the MSOA distance sheet, so the xlsx or the dataset page both work.",
+      "Walk time to the nearest green space by MSOA, shown as local context. Use the ONS public green space reference tables (the 'OS public green space' xlsx, not the private outdoor space one). It is published at LSOA; the loader averages to MSOA. Easiest to download the xlsx and upload it below.",
     source:
       "https://www.ons.gov.uk/economy/environmentalaccounts/datasets/" +
       "accesstogardensandpublicgreenspaceingreatbritain",
-    sourceLabel: "ONS green space",
+    sourceLabel: "ONS public green space",
+    upload: true,
     fields: [
       {
         key: "url",
@@ -481,12 +485,12 @@ export default function DataPage() {
             {d.upload && (
               <div className="rounded-card border border-dashed border-neutral-300 p-3">
                 <span className="mb-1.5 block text-xs font-medium text-neutral-600">
-                  Upload the downloaded file (CSV, or a .zip of monthly CSVs)
+                  Upload the downloaded file (CSV, XLSX, or a .zip)
                 </span>
                 <div className="flex flex-wrap items-center gap-3">
                   <input
                     type="file"
-                    accept=".csv,.zip"
+                    accept=".csv,.zip,.xlsx,.xlsm,.xls"
                     onChange={(e) =>
                       setFiles((m) => ({
                         ...m,

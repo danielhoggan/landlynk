@@ -191,6 +191,27 @@ def test_green_space_rows_to_minutes_msoa_only():
     assert keyed["W02000001"]["value"] == 10.0
 
 
+def test_green_space_rows_average_lsoa_to_msoa():
+    # The ONS public green space tables are LSOA rows carrying an MSOA code; the
+    # distance is meaned over the LSOAs in each MSOA, then converted to minutes.
+    records = [
+        {
+            "MSOA code": "E02000001",
+            "LSOA code": "E01000001",
+            "Average distance to nearest Park, Public Garden or Playing Field (m)": "400",
+        },
+        {
+            "MSOA code": "E02000001",
+            "LSOA code": "E01000002",
+            "Average distance to nearest Park, Public Garden or Playing Field (m)": "800",
+        },
+    ]
+    rows = loaders._green_space_rows(records, "MSOA")
+    assert len(rows) == 1
+    assert rows[0]["area_code"] == "E02000001"
+    assert rows[0]["value"] == 7.5  # mean(400, 800) / 80
+
+
 def test_imd_rows_aggregate_lsoa_to_msoa():
     lookup = [
         {"LSOA code": "E01000001", "MSOA code": "E02000001"},

@@ -242,12 +242,43 @@ def _read_xlsx_sheets(content: bytes) -> list[list[dict]]:
         for i, row in enumerate(rows[:40]):
             cells = [str(c).strip() if c is not None else "" for c in row]
             if _looks_like_header(cells):
-                records = [dict(zip(cells, r, strict=False)) for r in rows[i + 1 :]]
+                header, data_start = _resolve_header(cells, rows, i)
+                records = [
+                    dict(zip(header, r, strict=False)) for r in rows[data_start:]
+                ]
                 records = [r for r in records if any(v is not None for v in r.values())]
                 if records:
                     out.append(records)
                 break
     return out
+
+
+def _resolve_header(
+    cells: list[str], rows: list, i: int
+) -> tuple[list[str], int]:
+    """Resolve a possibly two-row header into one label list and the data start.
+
+    ONS reference tables put geography codes on the header row and the measure
+    names on the row beneath (the geography cells there are blank). When that
+    layout is detected, the two rows are merged so the measure columns get their
+    names; otherwise the single header row is used.
+    """
+    code_idx = next(
+        (j for j, c in enumerate(cells) if "code" in c.lower()), 0
+    )
+    if i + 1 < len(rows):
+        nxt = [str(c).strip() if c is not None else "" for c in rows[i + 1]]
+        # A sub-header row leaves the area-code column blank but names later
+        # (measure) columns; a real data row fills the area-code column.
+        code_blank = code_idx >= len(nxt) or not nxt[code_idx]
+        names_later = any(nxt[j] for j in range(code_idx + 1, len(nxt)))
+        if code_blank and names_later:
+            merged = [
+                (nxt[j] if j < len(nxt) and nxt[j] else (cells[j] if j < len(cells) else ""))
+                for j in range(max(len(cells), len(nxt)))
+            ]
+            return merged, i + 2
+    return cells, i + 1
 
 
 def _load_tabular_sheets(url: str) -> list[list[dict]]:
@@ -258,7 +289,13 @@ def _load_tabular_sheets(url: str) -> list[list[dict]]:
     if resolved:
         url = resolved
         data = _get_bytes(url)
-    low = url.lower()
+    return _tabular_sheets_from_bytes(url, data)
+
+
+def _tabular_sheets_from_bytes(name: str, data: bytes) -> list[list[dict]]:
+    """One record list per sheet from raw bytes, by file extension. xlsx yields
+    every sheet (for workbooks whose right sheet is found by its columns)."""
+    low = name.lower()
     if low.endswith(".xls"):
         return [_read_xls(data)]
     if low.endswith((".xlsx", ".xlsm")):
@@ -546,16 +583,18 @@ def _is_msoa(code: str) -> bool:
 def _green_space_rows(records: list[dict], area_type: str) -> list[dict]:
     """ONS access to green space, as minutes walk to the nearest green space.
 
-    Distance (metres) to the nearest publicly accessible green space is converted
-    to a walk time at ~80 m/min. Keeps MSOA rows only, so the file can carry
-    several geography levels.
+    The ONS public green space tables are published at LSOA, but each row carries
+    its MSOA code, so we mean the distance over the LSOAs in each MSOA. Distance
+    (metres) to the nearest park or public green space is converted to a walk
+    time at ~80 m/min. A file that is already MSOA-level (one row per MSOA) falls
+    out of the same mean. Non-MSOA rows are ignored.
     """
     if not records:
         return []
     fields = list(records[0].keys())
-    code_col = t.find_column(
-        fields, ("msoa code", "msoa11cd", "msoa21cd", "area code", "geography code")
-    )
+    code_col = t.find_column(fields, ("msoa code", "msoa11cd", "msoa21cd"))
+    if code_col is None:
+        code_col = t.find_column(fields, ("area code", "geography code"))
     dist_col = t.find_column(
         fields,
         (
@@ -568,11 +607,11 @@ def _green_space_rows(records: list[dict], area_type: str) -> list[dict]:
             "average distance",
         ),
     )
-    # Return empty when this sheet is not the MSOA distance sheet, so a caller
-    # scanning a multi-sheet workbook can move on to the next sheet.
+    # Return empty when this sheet has no distance column, so a caller scanning a
+    # multi-sheet workbook can move on to the next sheet.
     if code_col is None or dist_col is None:
         return []
-    rows: list[dict] = []
+    by_msoa: dict[str, list[float]] = {}
     for r in records:
         code = str(r.get(code_col) or "").strip()
         if not _is_msoa(code):
@@ -580,15 +619,16 @@ def _green_space_rows(records: list[dict], area_type: str) -> list[dict]:
         metres = t.parse_number(r.get(dist_col))
         if metres is None:
             continue
-        rows.append(
-            {
-                "area_code": code,
-                "area_type": area_type,
-                "metric_key": "greenspace_minutes",
-                "value": round(metres / 80.0, 1),
-            }
-        )
-    return rows
+        by_msoa.setdefault(code, []).append(metres)
+    return [
+        {
+            "area_code": code,
+            "area_type": area_type,
+            "metric_key": "greenspace_minutes",
+            "value": round(_mean(metres_list) / 80.0, 1),
+        }
+        for code, metres_list in by_msoa.items()
+    ]
 
 
 def _imd_rows(records: list[dict], lookup: list[dict], area_type: str) -> list[dict]:
@@ -683,18 +723,38 @@ def _replace_metric(
 
 
 def load_green_space(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
+    return _load_green_space_sheets(pool, _load_tabular_sheets(url), area_type)
+
+
+def load_green_space_bytes(
+    pool: ConnectionPool, name: str, data: bytes, area_type: str = "MSOA"
+) -> int:
+    """Load green space from an uploaded workbook (the ONS public green space
+    reference tables)."""
+    resolved = _resolve_data_url(name, data)
+    if resolved:
+        data = _get_bytes(resolved)
+        name = resolved
+    return _load_green_space_sheets(
+        pool, _tabular_sheets_from_bytes(name, data), area_type
+    )
+
+
+def _load_green_space_sheets(
+    pool: ConnectionPool, sheets: list[list[dict]], area_type: str
+) -> int:
     # The ONS green space workbook has many sheets (per geography and measure);
     # scan them for the one carrying an MSOA code and a distance column.
     rows: list[dict] = []
-    for records in _load_tabular_sheets(url):
+    for records in sheets:
         rows = _green_space_rows(records, area_type)
         if rows:
             break
     if not rows:
         raise ValueError(
-            "No MSOA distance-to-green-space sheet found in that file. Open the "
-            "ONS green space dataset and paste the workbook (xlsx) or its dataset "
-            "page; it must include an MSOA-level distance to nearest green space."
+            "No MSOA distance-to-green-space sheet found. This looks like the "
+            "private outdoor space (gardens) file, which has no green space "
+            "distance. Use the ONS public green space reference tables instead."
         )
     return _replace_metric(pool, ["greenspace_minutes"], rows)
 
@@ -1044,11 +1104,14 @@ def _fetch_ods_organisations(url: str) -> list[dict]:
     limit = int(base.get("Limit", "1000"))
     results: list[dict] = []
     offset = 0
-    # The ODS ORD API returns 406 unless an explicit JSON Accept header is sent,
-    # and some gateways also reject the default client User-Agent.
+    # The ODS API gateway does content negotiation and rejects a non-browser
+    # client: send a JSON Accept and a browser User-Agent, or it returns 406.
     headers = {
         "Accept": "application/json",
-        "User-Agent": "LandLynk/1.0 (reference data loader)",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
     }
     with httpx.Client(
         timeout=_TIMEOUT, follow_redirects=True, headers=headers
@@ -1057,7 +1120,12 @@ def _fetch_ods_organisations(url: str) -> list[dict]:
             params = {**base, "Limit": str(limit), "Offset": str(offset)}
             u = urlunparse(parts._replace(query=urlencode(params)))
             resp = client.get(u)
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                # Surface the server's own message so a remaining failure is
+                # diagnosable from the dataset status.
+                raise ValueError(
+                    f"ODS API returned {resp.status_code}. {resp.text[:300]}"
+                )
             orgs = resp.json().get("Organisations") or []
             if not orgs:
                 break
