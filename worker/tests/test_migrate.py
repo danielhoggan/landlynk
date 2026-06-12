@@ -25,6 +25,7 @@ def test_migrations_dir_ships_with_the_package():
         "0009_audit_log.sql",
         "0010_brand_theme.sql",
         "0011_area_metrics.sql",
+        "0012_hospitals.sql",
     ]
 
 

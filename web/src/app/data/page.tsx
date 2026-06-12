@@ -183,6 +183,32 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
+  {
+    id: "hospitals",
+    title: "Hospitals",
+    blurb:
+      "Distance to the nearest hospital per MSOA, plus the points used for the nearest-A&E context on reports. NHS hospital sites CSV (lat/long or easting/northing, with an org code for waiting times).",
+    fields: [
+      {
+        key: "url",
+        label: "NHS hospital sites CSV URL",
+        placeholder: "NHS hospitals CSV",
+      },
+    ],
+  },
+  {
+    id: "nhs_waiting",
+    title: "NHS waiting times",
+    blurb:
+      "Per-provider A&E four-hour performance and RTT median wait, shown as nearest-A&E context on the report deck. NHS England A&E or RTT provider CSV (keyed by organisation code).",
+    fields: [
+      {
+        key: "url",
+        label: "NHS England waiting times CSV URL",
+        placeholder: "A&E or RTT provider CSV",
+      },
+    ],
+  },
 ];
 
 export default function DataPage() {
@@ -201,6 +227,8 @@ export default function DataPage() {
     imd: { url: "", lookupUrl: "" },
     schools: { url: "" },
     crime: { url: "" },
+    hospitals: { url: "" },
+    nhs_waiting: { url: "" },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});

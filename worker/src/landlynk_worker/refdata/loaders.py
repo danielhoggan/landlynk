@@ -725,6 +725,158 @@ def load_schools(
     return int(n)
 
 
+def _hospital_points(records: list[dict]) -> list[dict]:
+    """Hospitals as {name, org_code, lng, lat} from an NHS sites file.
+
+    Accepts lat/long columns directly, or easting/northing (BNG) which we
+    reproject. Org code (parent/trust ODS code) is kept for the waiting-times
+    join when present.
+    """
+    if not records:
+        return []
+    f = list(records[0].keys())
+    lat_c = t.find_column(f, ("latitude", "lat"))
+    lng_c = t.find_column(f, ("longitude", "long", "lng"))
+    east_c = t.find_column(f, ("easting",))
+    north_c = t.find_column(f, ("northing",))
+    name_c = t.find_column(
+        f, ("organisationname", "hospital name", "name", "site name")
+    )
+    org_c = t.find_column(
+        f,
+        (
+            "parentodscode",
+            "parent organisation code",
+            "trust code",
+            "organisationcode",
+            "org code",
+        ),
+    )
+    points: list[dict] = []
+    for r in records:
+        lat = lng = None
+        if lat_c and lng_c:
+            lat = t.parse_number(r.get(lat_c))
+            lng = t.parse_number(r.get(lng_c))
+        elif east_c and north_c:
+            e = t.parse_number(r.get(east_c))
+            n = t.parse_number(r.get(north_c))
+            if e and n:
+                lng, lat = _bng_to_wgs(e, n)
+        if lat is None or lng is None or (lat == 0 and lng == 0):
+            continue
+        points.append(
+            {
+                "name": str(r.get(name_c) or "").strip() if name_c else None,
+                "org_code": str(r.get(org_c) or "").strip() if org_c else None,
+                "lat": lat,
+                "lng": lng,
+            }
+        )
+    return points
+
+
+def load_hospitals(
+    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
+    points = _hospital_points(_load_records(url))
+    if not points:
+        return 0
+    with pool.connection() as conn, conn.transaction():
+        conn.execute("TRUNCATE hospital")
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO hospital (name, org_code, lat, lng, geom) "
+                "VALUES (%s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+                [
+                    (p["name"], p["org_code"], p["lat"], p["lng"], p["lng"], p["lat"])
+                    for p in points
+                ],
+            )
+        # Per-MSOA distance to the nearest hospital, in km (great-circle).
+        conn.execute("DELETE FROM area_metric WHERE metric_key = 'hospital_km'")
+        conn.execute(
+            "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
+            "SELECT b.area_code, %s, 'hospital_km', round((("
+            "  SELECT ST_Distance(ST_Centroid(b.geom)::geography, h.geom::geography) "
+            "  FROM hospital h ORDER BY ST_Centroid(b.geom) <-> h.geom LIMIT 1"
+            ") / 1000.0)::numeric, 1) "
+            "FROM geo_boundaries b WHERE b.area_type = %s",
+            [area_type, area_type],
+        )
+    return len(points)
+
+
+def _nhs_waiting_rows(records: list[dict]) -> list[dict]:
+    """Per-provider NHS waiting metrics from an A&E/RTT CSV.
+
+    Flexible to the published column names: an organisation code, optional name,
+    a four-hour A&E performance percentage and an RTT median wait in weeks.
+    """
+    if not records:
+        return []
+    f = list(records[0].keys())
+    org_c = t.find_column(
+        f, ("org code", "organisation code", "provider org code", "code")
+    )
+    name_c = t.find_column(
+        f, ("org name", "organisation name", "provider name", "name")
+    )
+    ae_c = t.find_column(
+        f,
+        (
+            "percentage in 4 hours or less (all)",
+            "4 hours or less",
+            "four hour performance",
+            "a&e 4 hours",
+        ),
+    )
+    rtt_c = t.find_column(
+        f, ("median (weeks)", "median wait (weeks)", "rtt median", "median weeks")
+    )
+    if org_c is None or (ae_c is None and rtt_c is None):
+        raise ValueError(f"NHS waiting file needs an org code and a metric, got {f}")
+    rows: list[dict] = []
+    for r in records:
+        code = str(r.get(org_c) or "").strip()
+        if not code:
+            continue
+        ae = t.parse_number(r.get(ae_c)) if ae_c else None
+        # A&E performance is sometimes a 0..1 fraction; normalise to a percentage.
+        if ae is not None and ae <= 1:
+            ae *= 100
+        rows.append(
+            {
+                "org_code": code,
+                "provider_name": str(r.get(name_c) or "").strip() if name_c else None,
+                "ae_4hr_pct": ae,
+                "rtt_weeks": t.parse_number(r.get(rtt_c)) if rtt_c else None,
+            }
+        )
+    return rows
+
+
+def load_nhs_waiting(
+    pool: ConnectionPool, url: str
+) -> int:  # pragma: no cover - needs DB
+    rows = _nhs_waiting_rows(_load_records(url))
+    with pool.connection() as conn, conn.transaction():
+        conn.execute("TRUNCATE nhs_waiting")
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO nhs_waiting "
+                "(org_code, provider_name, ae_4hr_pct, rtt_weeks) "
+                "VALUES (%s, %s, %s, %s) ON CONFLICT (org_code) DO UPDATE SET "
+                "provider_name = EXCLUDED.provider_name, "
+                "ae_4hr_pct = EXCLUDED.ae_4hr_pct, rtt_weeks = EXCLUDED.rtt_weeks",
+                [
+                    (r["org_code"], r["provider_name"], r["ae_4hr_pct"], r["rtt_weeks"])
+                    for r in rows
+                ],
+            )
+    return len(rows)
+
+
 def load_crime(
     pool: ConnectionPool, url: str, area_type: str = "MSOA"
 ) -> int:  # pragma: no cover - PostGIS spatial join, exercised live

@@ -28,6 +28,8 @@ DATASETS = (
     "imd",
     "schools",
     "crime",
+    "hospitals",
+    "nhs_waiting",
 )
 
 # dataset -> {status, rows, error, areaType, updatedAt}. Mirror of the table for
@@ -148,6 +150,10 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
             n = loaders.load_schools(pool, params["url"], area_type)
         elif dataset == "crime":
             n = loaders.load_crime(pool, params["url"], area_type)
+        elif dataset == "hospitals":
+            n = loaders.load_hospitals(pool, params["url"], area_type)
+        elif dataset == "nhs_waiting":
+            n = loaders.load_nhs_waiting(pool, params["url"])
         else:
             raise ValueError(f"Unknown dataset: {dataset}")
         _set(dataset, "loaded", pool=pool, rows=n, area_type=area_type)

@@ -1000,6 +1000,34 @@ def _catchment_coord(catchment_id: str) -> tuple[float | None, float | None]:
     return coord.get("lat"), coord.get("lng")
 
 
+def _development_context(catchment_id: str) -> dict | None:
+    """Nearest hospital to the development and that provider's NHS waits, if
+    loaded. Best effort: returns None without a coordinate, hospitals or DB."""
+    lat, lng = _catchment_coord(catchment_id)
+    if lat is None or lng is None:
+        return None
+    try:
+        with get_pool().connection() as conn:
+            row = conn.execute(
+                "SELECT h.name, ST_Distance("
+                "  h.geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography"
+                ") / 1000.0, w.ae_4hr_pct, w.rtt_weeks "
+                "FROM hospital h LEFT JOIN nhs_waiting w ON w.org_code = h.org_code "
+                "ORDER BY h.geom <-> ST_SetSRID(ST_MakePoint(%s, %s), 4326) LIMIT 1",
+                [lng, lat, lng, lat],
+            ).fetchone()
+    except Exception:  # no DB, no hospitals, or PostGIS missing
+        return None
+    if not row:
+        return None
+    return {
+        "hospital": row[0],
+        "km": round(row[1], 1) if row[1] is not None else None,
+        "ae4hr": row[2],
+        "rttWeeks": row[3],
+    }
+
+
 def _map_png(geometry: dict | None, catchment_id: str) -> bytes | None:
     """An OSM basemap with the catchment drawn over it, for the export sidebar.
 
@@ -1144,6 +1172,7 @@ def report_pptx(
         _brand_accent(catchment_id),
         _brand_secondary(catchment_id),
         _map_png(_catchment_geometry(catchment_id), catchment_id),
+        _development_context(catchment_id),
     )
     return Response(
         content=pptx,

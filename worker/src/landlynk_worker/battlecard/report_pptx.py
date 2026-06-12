@@ -65,6 +65,7 @@ def render_report_pptx(
     accent: str | None = None,
     secondary: str | None = None,
     map_image: bytes | None = None,
+    development_context: dict | None = None,
 ) -> bytes:
     """Render the full report deck for one Battlecard payload."""
     navy = _hex(heading_color)
@@ -77,7 +78,7 @@ def render_report_pptx(
 
     theme = {"navy": navy, "accent": accent_rgb, "secondary": secondary_rgb}
     _cover(prs.slides.add_slide(blank), card, theme, logo)
-    _overview(prs.slides.add_slide(blank), card, theme)
+    _overview(prs.slides.add_slide(blank), card, theme, development_context)
     _area_profile(prs.slides.add_slide(blank), card, theme, map_image)
     _age(prs.slides.add_slide(blank), card, theme)
     _income(prs.slides.add_slide(blank), card, theme)
@@ -270,9 +271,27 @@ def _cover(slide: Slide, card: Battlecard, theme: dict, logo: bytes | None) -> N
             pass
 
 
-def _overview(slide: Slide, card: Battlecard, theme: dict) -> None:
+def _overview(
+    slide: Slide, card: Battlecard, theme: dict, dev: dict | None = None
+) -> None:
     ks = card.visual_summary.key_statistics
     _section(slide, "Overview", "Key statistics at a glance", theme["navy"])
+    if dev and dev.get("hospital"):
+        bits = [f"Nearest hospital: {dev['hospital']}"]
+        if dev.get("km") is not None:
+            bits.append(f"{dev['km']:g} km")
+        if dev.get("ae4hr") is not None:
+            bits.append(f"A&E 4-hour: {dev['ae4hr']:.0f}%")
+        if dev.get("rttWeeks") is not None:
+            bits.append(f"RTT median: {dev['rttWeeks']:.0f} wks")
+        _text(
+            slide,
+            Inches(0.6),
+            Inches(6.4),
+            Inches(12),
+            Inches(0.5),
+            [("  ·  ".join(bits), 12, _INK, False, False)],
+        )
     tiles = [
         (_fmt_int(ks.population_catchment), "POPULATION"),
         (_fmt_int(ks.median_age, suffix=""), "MEDIAN AGE"),
