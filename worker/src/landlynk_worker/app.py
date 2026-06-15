@@ -22,12 +22,10 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     FastAPI,
-    File,
-    Form,
     Header,
     HTTPException,
+    Request,
     Response,
-    UploadFile,
 )
 from pydantic import BaseModel, Field
 
@@ -313,48 +311,58 @@ def load_reference(
     return {"status": "started", "dataset": dataset}
 
 
-@app.post("/admin/reference/{dataset}/upload", status_code=202)
-async def upload_reference(
+@app.post("/admin/reference/{dataset}/upload-chunk", status_code=202)
+async def upload_reference_chunk(
     dataset: str,
+    request: Request,
     background: BackgroundTasks,
-    file: UploadFile = File(...),
-    area_type: str = Form("MSOA"),
+    x_upload_id: str = Header(...),
+    x_chunk_index: int = Header(...),
+    x_total_chunks: int = Header(...),
+    x_filename: str = Header("upload.dat"),
+    x_area_type: str = Header("MSOA"),
     x_admin_token: str | None = Header(default=None),
-) -> dict[str, str]:
-    """Load one reference dataset from an uploaded file (e.g. a data.police.uk
-    crime archive), for sources with no stable URL to fetch."""
+) -> dict[str, str | int]:
+    """Receive one chunk of an uploaded reference file (e.g. a data.police.uk
+    crime archive) and append it to a temp file on disk. Chunking lets an admin
+    upload a multi-GB file straight from the browser without hitting platform
+    request size or timeout limits, and without any external storage. When the
+    last chunk arrives the background load streams the assembled file from disk
+    and deletes it. The browser sends chunks strictly in order."""
+    import os
+    import re
+    import tempfile
+    from urllib.parse import unquote
+
     _check_admin(x_admin_token)
     if dataset not in refdata.UPLOAD_DATASETS:
         raise HTTPException(
             status_code=404, detail=f"Dataset does not support upload: {dataset}"
         )
-    # Stream the upload to a temp file in chunks so a large archive (e.g. a
-    # 1.6GB crime zip) is never held in memory. The background load streams it
-    # from disk and deletes it afterwards.
-    import os
-    import tempfile
-
-    filename = file.filename or "upload.dat"
+    if x_total_chunks < 1 or not 0 <= x_chunk_index < x_total_chunks:
+        raise HTTPException(status_code=400, detail="Bad chunk index")
+    safe_id = re.sub(r"[^A-Za-z0-9_-]", "", x_upload_id)[:64]
+    if not safe_id:
+        raise HTTPException(status_code=400, detail="Bad upload id")
+    filename = os.path.basename(unquote(x_filename)) or "upload.dat"
     suffix = os.path.splitext(filename)[1] or ".dat"
-    fd, path = tempfile.mkstemp(suffix=suffix)
-    size = 0
-    with os.fdopen(fd, "wb") as out:
-        while True:
-            chunk = await file.read(1024 * 1024)
-            if not chunk:
-                break
+    path = os.path.join(tempfile.gettempdir(), f"landlynk-upload-{safe_id}{suffix}")
+    # First chunk truncates; later chunks append. A later chunk with no file
+    # means an earlier one was lost, so the upload must restart.
+    if x_chunk_index > 0 and not os.path.exists(path):
+        raise HTTPException(status_code=409, detail="Missing earlier chunk; restart")
+    with open(path, "wb" if x_chunk_index == 0 else "ab") as out:
+        async for chunk in request.stream():
             out.write(chunk)
-            size += len(chunk)
-    if size == 0:
-        os.unlink(path)
-        raise HTTPException(status_code=400, detail="Empty file")
+    if x_chunk_index + 1 < x_total_chunks:
+        return {"status": "received", "chunk": x_chunk_index}
     background.add_task(
         refdata.run_upload_file,
         get_pool(),
         dataset,
         filename,
         path,
-        {"areaType": area_type},
+        {"areaType": x_area_type},
     )
     return {"status": "started", "dataset": dataset}
 

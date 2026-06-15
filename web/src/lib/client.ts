@@ -521,27 +521,44 @@ export async function loadReference(
   }
 }
 
+// Upload a reference file to the worker in chunks. Slicing the file into parts
+// lets an admin upload a multi-GB archive (e.g. a 1.6GB data.police.uk crime
+// zip) straight from the browser without hitting request size or timeout
+// limits, and with no external storage. Chunks are sent strictly in order; the
+// worker reassembles them on disk and loads the file once the last chunk lands.
+// onProgress reports completion as a 0..1 fraction.
 export async function uploadReference(
   dataset: string,
   file: File,
   params: Record<string, string>,
+  onProgress?: (fraction: number) => void,
 ): Promise<void> {
-  const form = new FormData();
-  form.append("file", file);
-  for (const [k, v] of Object.entries(params)) {
-    // The worker reads the area level from a form field named area_type.
-    form.append(k === "areaType" ? "area_type" : k, v);
-  }
-  const res = await fetch(`/api/admin/reference/${dataset}/upload`, {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) {
-    const detail = await res
-      .json()
-      .then((b) => b?.detail ?? b?.error)
-      .catch(() => null);
-    throw new Error(detail ?? `Upload failed (${res.status})`);
+  const CHUNK_SIZE = 8 * 1024 * 1024;
+  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+  const uploadId = crypto.randomUUID();
+  const areaType = params.areaType ?? "MSOA";
+  for (let i = 0; i < totalChunks; i++) {
+    const blob = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+    const res = await fetch(`/api/admin/reference/${dataset}/upload-chunk`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-upload-id": uploadId,
+        "x-chunk-index": String(i),
+        "x-total-chunks": String(totalChunks),
+        "x-filename": encodeURIComponent(file.name),
+        "x-area-type": areaType,
+      },
+      body: blob,
+    });
+    if (!res.ok) {
+      const detail = await res
+        .json()
+        .then((b) => b?.detail ?? b?.error)
+        .catch(() => null);
+      throw new Error(detail ?? `Upload failed (${res.status})`);
+    }
+    onProgress?.((i + 1) / totalChunks);
   }
 }
 

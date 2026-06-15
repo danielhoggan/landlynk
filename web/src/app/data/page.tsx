@@ -320,6 +320,7 @@ export default function DataPage() {
   const [stale, setStale] = useState<string[]>([]);
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const [progress, setProgress] = useState<Record<string, number>>({});
 
   const refresh = useCallback(() => {
     getReferenceStatus()
@@ -391,8 +392,11 @@ export default function DataPage() {
     if (!file) return;
     setErrors((e) => ({ ...e, [d.id]: "" }));
     setUploading((u) => ({ ...u, [d.id]: true }));
+    setProgress((p) => ({ ...p, [d.id]: 0 }));
     try {
-      await uploadReference(d.id, file, { areaType });
+      await uploadReference(d.id, file, { areaType }, (f) =>
+        setProgress((p) => ({ ...p, [d.id]: f })),
+      );
       refresh();
     } catch (err) {
       setErrors((e) => ({
@@ -527,9 +531,23 @@ export default function DataPage() {
                     ) : (
                       <Upload size={14} />
                     )}
-                    {uploading[d.id] ? "Uploading..." : "Upload and load"}
+                    {uploading[d.id]
+                      ? `Uploading ${Math.round((progress[d.id] ?? 0) * 100)}%`
+                      : "Upload and load"}
                   </button>
                 </div>
+                {uploading[d.id] && (
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                    <div
+                      className="h-full bg-light-accent transition-all"
+                      style={{ width: `${Math.round((progress[d.id] ?? 0) * 100)}%` }}
+                    />
+                  </div>
+                )}
+                <p className="mt-2 text-xs text-neutral-500">
+                  Large files (a national crime archive is over 1GB) upload in
+                  the background here. Keep this tab open until it reaches 100%.
+                </p>
               </div>
             )}
 

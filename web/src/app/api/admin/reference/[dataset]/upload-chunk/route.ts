@@ -4,10 +4,12 @@ import { requireSession } from "@/lib/requireSession";
 const WORKER_BASE_URL = process.env.WORKER_BASE_URL ?? "http://localhost:8000";
 const ADMIN_TOKEN = process.env.WORKER_ADMIN_TOKEN ?? "";
 
-// POST /api/admin/reference/:dataset/upload. Forward a multipart file upload to
-// the worker, which parses and loads it into PostGIS. Used for sources with no
-// stable URL to fetch (e.g. a data.police.uk crime archive the admin builds and
-// downloads). The body is streamed through so large archives are not buffered.
+// POST /api/admin/reference/:dataset/upload-chunk. Forward one chunk of a file
+// upload to the worker, which appends it to a temp file and, on the last chunk,
+// loads it into PostGIS. Chunking lets an admin upload a multi-GB archive (e.g.
+// a data.police.uk crime zip) straight from the browser without hitting request
+// size or timeout limits, and with no external storage. The chunk body is
+// streamed through, so nothing is buffered here.
 export async function POST(
   request: Request,
   { params }: { params: { dataset: string } },
@@ -16,12 +18,18 @@ export async function POST(
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const h = request.headers;
   const res = await fetch(
-    `${WORKER_BASE_URL}/admin/reference/${params.dataset}/upload`,
+    `${WORKER_BASE_URL}/admin/reference/${params.dataset}/upload-chunk`,
     {
       method: "POST",
       headers: {
-        "content-type": request.headers.get("content-type") ?? "",
+        "content-type": h.get("content-type") ?? "application/octet-stream",
+        "x-upload-id": h.get("x-upload-id") ?? "",
+        "x-chunk-index": h.get("x-chunk-index") ?? "",
+        "x-total-chunks": h.get("x-total-chunks") ?? "",
+        "x-filename": h.get("x-filename") ?? "",
+        "x-area-type": h.get("x-area-type") ?? "MSOA",
         ...(ADMIN_TOKEN ? { "x-admin-token": ADMIN_TOKEN } : {}),
       },
       body: request.body,
