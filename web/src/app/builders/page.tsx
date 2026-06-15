@@ -20,6 +20,7 @@ import {
   type BuilderProfile,
 } from "@/lib/client";
 import { SEGMENTS } from "@/lib/segments";
+import { INDUSTRIES } from "@/lib/industries";
 import { useUser } from "@/lib/userContext";
 
 function fileToBase64(file: File): Promise<string> {
@@ -40,6 +41,7 @@ export default function BuildersPage() {
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [profiles, setProfiles] = useState<BuilderProfile[]>([]);
   const [newGroup, setNewGroup] = useState("");
+  const [newIndustry, setNewIndustry] = useState("");
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
@@ -74,8 +76,9 @@ export default function BuildersPage() {
 
   async function addGroup() {
     if (!newGroup.trim()) return;
-    await createGroup(newGroup.trim());
+    await createGroup(newGroup.trim(), newIndustry || null);
     setNewGroup("");
+    setNewIndustry("");
     refresh();
   }
 
@@ -90,13 +93,26 @@ export default function BuildersPage() {
       </p>
       {error && <p className="text-sm text-priority-low">{error}</p>}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <input
           value={newGroup}
           onChange={(e) => setNewGroup(e.target.value)}
           placeholder="New group (e.g. Bellway plc)"
-          className="flex-1 rounded-card border border-neutral-300 px-3 py-2 text-sm"
+          className="min-w-[12rem] flex-1 rounded-card border border-neutral-300 px-3 py-2 text-sm"
         />
+        <select
+          value={newIndustry}
+          onChange={(e) => setNewIndustry(e.target.value)}
+          title="Industry (tailors How it works for this client)"
+          className="rounded-card border border-neutral-300 px-2 py-2 text-sm text-neutral-600"
+        >
+          <option value="">Industry (optional)</option>
+          {INDUSTRIES.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.label}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           onClick={addGroup}
@@ -144,13 +160,30 @@ function GroupCard({
   const [cap, setCap] = useState(
     group.monthlyCap == null ? "" : String(group.monthlyCap),
   );
+  const [industry, setIndustry] = useState(group.industry ?? "");
   const [savingCap, setSavingCap] = useState(false);
 
   return (
     <div className="rounded-card border border-neutral-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{group.name}</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+            Industry
+            <select
+              value={industry}
+              onChange={(e) => setIndustry(e.target.value)}
+              title="Tailors How it works for this client"
+              className="rounded-card border border-neutral-300 px-2 py-1 text-xs text-neutral-600"
+            >
+              <option value="">None</option>
+              {INDUSTRIES.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-center gap-1.5 text-xs text-neutral-500">
             Monthly AI cap
             <input
@@ -171,6 +204,7 @@ function GroupCard({
                 await updateGroup(group.id, {
                   name: group.name,
                   monthlyCap: cap === "" ? null : Number(cap),
+                  industry: industry || null,
                 });
                 onChange();
               } finally {

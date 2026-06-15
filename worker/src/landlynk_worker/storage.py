@@ -57,6 +57,21 @@ def _profile_row(row: tuple) -> dict:
     }
 
 
+def _empty_brand() -> dict:
+    """Brand shape for a group with no brand yet: no logo or colours, so the
+    interface keeps the default theme, but company/industry can still be set by
+    the caller for tailoring (e.g. the How it works page)."""
+    return {
+        "builderId": None,
+        "name": None,
+        "themeHeading": None,
+        "themeSecondary": None,
+        "themeAccent": None,
+        "fonts": [],
+        "hasLogo": False,
+    }
+
+
 def _builder_brand(builder: dict) -> dict:
     """The interface brand drawn from a builder: colours, fonts and whether a
     logo exists (the bytes are served separately by builder id). Used to
@@ -213,10 +228,18 @@ class Storage(Protocol):
 
     # Builder org model: groups, brands and saved targeting profiles.
     def create_builder_group(
-        self, group_id: str, name: str, monthly_cap: int | None = None
+        self,
+        group_id: str,
+        name: str,
+        monthly_cap: int | None = None,
+        industry: str | None = None,
     ) -> None: ...
     def update_builder_group(
-        self, group_id: str, name: str | None, monthly_cap: int | None
+        self,
+        group_id: str,
+        name: str | None,
+        monthly_cap: int | None,
+        industry: str | None = None,
     ) -> bool: ...
     def list_builder_groups(self) -> list[dict]: ...
     def delete_builder_group(self, group_id: str) -> bool: ...
@@ -436,16 +459,25 @@ class InMemoryStore:
 
     # --- builder org model ---
     def create_builder_group(
-        self, group_id: str, name: str, monthly_cap: int | None = None
+        self,
+        group_id: str,
+        name: str,
+        monthly_cap: int | None = None,
+        industry: str | None = None,
     ) -> None:
         self._groups[group_id] = {
             "id": group_id,
             "name": name,
             "monthlyCap": monthly_cap,
+            "industry": industry,
         }
 
     def update_builder_group(
-        self, group_id: str, name: str | None, monthly_cap: int | None
+        self,
+        group_id: str,
+        name: str | None,
+        monthly_cap: int | None,
+        industry: str | None = None,
     ) -> bool:
         group = self._groups.get(group_id)
         if group is None:
@@ -453,6 +485,7 @@ class InMemoryStore:
         if name is not None:
             group["name"] = name
         group["monthlyCap"] = monthly_cap
+        group["industry"] = industry
         return True
 
     def list_builder_groups(self) -> list[dict]:
@@ -551,14 +584,21 @@ class InMemoryStore:
         return sorted(builders, key=lambda b: b["name"])
 
     def get_group_brand(self, group_id: str) -> dict | None:
+        group = self._groups.get(group_id)
+        if group is None:
+            return None
         builders = sorted(
             (b for b in self._builders.values() if b["groupId"] == group_id),
             key=lambda b: b["name"],
         )
-        if not builders:
-            return None
-        chosen = next((b for b in builders if b.get("isDefault")), builders[0])
-        return _builder_brand(chosen)
+        chosen = next(
+            (b for b in builders if b.get("isDefault")),
+            builders[0] if builders else None,
+        )
+        brand = _builder_brand(chosen) if chosen else _empty_brand()
+        brand["companyName"] = group.get("name")
+        brand["industry"] = group.get("industry")
+        return brand
 
     def set_builder_default(self, builder_id: str) -> bool:
         target = self._builders.get(builder_id)
@@ -963,33 +1003,46 @@ class PostgresStore:
             return cur.rowcount > 0
 
     def create_builder_group(
-        self, group_id: str, name: str, monthly_cap: int | None = None
+        self,
+        group_id: str,
+        name: str,
+        monthly_cap: int | None = None,
+        industry: str | None = None,
     ) -> None:
         with self._pool.connection() as conn:
             conn.execute(
-                "INSERT INTO builder_group (id, name, monthly_llm_cap) "
-                "VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE SET "
-                "name = EXCLUDED.name, monthly_llm_cap = EXCLUDED.monthly_llm_cap",
-                [group_id, name, monthly_cap],
+                "INSERT INTO builder_group (id, name, monthly_llm_cap, industry) "
+                "VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET "
+                "name = EXCLUDED.name, monthly_llm_cap = EXCLUDED.monthly_llm_cap, "
+                "industry = EXCLUDED.industry",
+                [group_id, name, monthly_cap, industry],
             )
 
     def update_builder_group(
-        self, group_id: str, name: str | None, monthly_cap: int | None
+        self,
+        group_id: str,
+        name: str | None,
+        monthly_cap: int | None,
+        industry: str | None = None,
     ) -> bool:
         with self._pool.connection() as conn:
             cur = conn.execute(
-                "UPDATE builder_group SET "
-                "name = COALESCE(%s, name), monthly_llm_cap = %s WHERE id = %s",
-                [name, monthly_cap, group_id],
+                "UPDATE builder_group SET name = COALESCE(%s, name), "
+                "monthly_llm_cap = %s, industry = %s WHERE id = %s",
+                [name, monthly_cap, industry, group_id],
             )
             return cur.rowcount > 0
 
     def list_builder_groups(self) -> list[dict]:
         with self._pool.connection() as conn:
             rows = conn.execute(
-                "SELECT id, name, monthly_llm_cap FROM builder_group ORDER BY name"
+                "SELECT id, name, monthly_llm_cap, industry FROM builder_group "
+                "ORDER BY name"
             ).fetchall()
-        return [{"id": r[0], "name": r[1], "monthlyCap": r[2]} for r in rows]
+        return [
+            {"id": r[0], "name": r[1], "monthlyCap": r[2], "industry": r[3]}
+            for r in rows
+        ]
 
     def delete_builder_group(self, group_id: str) -> bool:
         with self._pool.connection() as conn:
@@ -1156,8 +1209,16 @@ class PostgresStore:
         ]
 
     def get_group_brand(self, group_id: str) -> dict | None:
-        # The group's flagged default brand, else the first by name.
+        # The group's flagged default brand, else the first by name. Company name
+        # and industry come from the group itself, so they are present even when
+        # the group has no brand yet (for tailoring like the How it works page).
         with self._pool.connection() as conn:
+            grp = conn.execute(
+                "SELECT name, industry FROM builder_group WHERE id = %s",
+                [group_id],
+            ).fetchone()
+            if grp is None:
+                return None
             row = conn.execute(
                 "SELECT id, name, theme_heading, theme_secondary, theme_accent, "
                 "fonts, logo_path FROM builder WHERE group_id = %s "
@@ -1165,18 +1226,22 @@ class PostgresStore:
                 [group_id],
             ).fetchone()
         if row is None:
-            return None
-        return _builder_brand(
-            {
-                "id": row[0],
-                "name": row[1],
-                "themeHeading": row[2],
-                "themeSecondary": row[3],
-                "themeAccent": row[4],
-                "fonts": row[5] or [],
-                "logoPath": row[6],
-            }
-        )
+            brand = _empty_brand()
+        else:
+            brand = _builder_brand(
+                {
+                    "id": row[0],
+                    "name": row[1],
+                    "themeHeading": row[2],
+                    "themeSecondary": row[3],
+                    "themeAccent": row[4],
+                    "fonts": row[5] or [],
+                    "logoPath": row[6],
+                }
+            )
+        brand["companyName"] = grp[0]
+        brand["industry"] = grp[1]
+        return brand
 
     def set_builder_default(self, builder_id: str) -> bool:
         with self._pool.connection() as conn, conn.transaction():

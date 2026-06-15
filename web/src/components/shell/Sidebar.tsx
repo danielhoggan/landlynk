@@ -6,6 +6,7 @@ import { LogOut } from "lucide-react";
 import { Logo } from "./Logo";
 import { NAV_ITEMS, isActive } from "./navItems";
 import { ReferenceStatusDot } from "./ReferenceStatusDot";
+import { AllowanceBadge } from "./AllowanceBadge";
 import { useUser } from "@/lib/userContext";
 
 // Persistent, fixed sidebar for desktop. Hidden on mobile, where the burger
@@ -54,6 +55,7 @@ export function Sidebar() {
         )}
       </nav>
       <div className="mt-auto space-y-3">
+        <AllowanceBadge />
         <ReferenceStatusDot />
         <button
           type="button"

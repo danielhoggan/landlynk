@@ -159,6 +159,34 @@ def test_set_default_unknown_brand_404(client):
     assert client.post("/admin/builders/nope/default").status_code == 404
 
 
+def test_group_industry_in_me_brand_and_usage_reset(client):
+    # A group carries an industry; an external user's /me brand exposes the
+    # company and industry (even before a brand is added) for tailored copy, and
+    # the usage summary reports when the allowance resets.
+    g = client.post(
+        "/admin/builders/groups", json={"name": "Acme", "industry": "retail"}
+    ).json()["id"]
+    assert any(
+        gr["id"] == g and gr["industry"] == "retail"
+        for gr in client.get("/admin/builders/groups").json()
+    )
+
+    client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "X", "developmentName": "D"},
+        headers=_h("ext@x.com"),
+    )
+    client.put("/admin/users/ext@x.com/group", json={"groupId": g})
+
+    brand = client.get("/me", headers=_h("ext@x.com")).json()["brand"]
+    assert brand["companyName"] == "Acme"
+    assert brand["industry"] == "retail"
+    assert brand["hasLogo"] is False and brand["builderId"] is None
+
+    usage = client.get("/builders/usage", headers=_h("ext@x.com")).json()
+    assert usage["resetsOn"].endswith("-01")
+
+
 def test_cached_area_profile_is_read_only(client, monkeypatch):
     # GET returns a snapshot only after one is generated, and never generates
     # itself (so a historic run can auto-show without spending the allowance).

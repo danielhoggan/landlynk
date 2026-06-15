@@ -523,6 +523,15 @@ def _usage_period() -> str:
     return datetime.now(UTC).strftime("%Y-%m")
 
 
+def _next_reset_date() -> str:
+    """ISO date the monthly AI allowance resets: the 1st of next month, UTC."""
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    year, month = (now.year + 1, 1) if now.month == 12 else (now.year, now.month + 1)
+    return f"{year:04d}-{month:02d}-01"
+
+
 def _group_cap(group_id: str) -> int | None:
     for g in get_store().list_builder_groups():
         if g["id"] == group_id:
@@ -550,6 +559,7 @@ def _llm_usage_summary(user: dict) -> dict:
             "used": 0,
             "model": model,
             "estCost": est_cost,
+            "resetsOn": _next_reset_date(),
         }
     cap = _group_cap(group_id)
     used = get_store().llm_usage_count(group_id, period)
@@ -562,6 +572,7 @@ def _llm_usage_summary(user: dict) -> dict:
         "remaining": remaining,
         "model": model,
         "estCost": est_cost,
+        "resetsOn": _next_reset_date(),
     }
 
 
@@ -597,6 +608,7 @@ def list_profiles(user: dict = Depends(current_user)) -> list[dict]:
 class GroupRequest(BaseModel):
     name: str | None = None
     monthly_cap: int | None = Field(default=None, alias="monthlyCap")
+    industry: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -613,7 +625,9 @@ def admin_create_group(
 ) -> dict:
     _require_admin(user)
     group_id = str(uuid.uuid4())
-    get_store().create_builder_group(group_id, request.name or "", request.monthly_cap)
+    get_store().create_builder_group(
+        group_id, request.name or "", request.monthly_cap, request.industry
+    )
     _audit(
         user,
         "builder.group.create",
@@ -629,7 +643,9 @@ def admin_update_group(
     group_id: str, request: GroupRequest, user: dict = Depends(current_user)
 ) -> Response:
     _require_admin(user)
-    get_store().update_builder_group(group_id, request.name, request.monthly_cap)
+    get_store().update_builder_group(
+        group_id, request.name, request.monthly_cap, request.industry
+    )
     return Response(status_code=204)
 
 

@@ -30,6 +30,7 @@ def test_migrations_dir_ships_with_the_package():
         "0014_lsoa_msoa.sql",
         "0015_builder_locations.sql",
         "0016_builder_default.sql",
+        "0017_group_industry.sql",
     ]
 
 

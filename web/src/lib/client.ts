@@ -223,6 +223,8 @@ export interface BuilderGroup {
   id: string;
   name: string;
   monthlyCap?: number | null;
+  /** The client's sector, used to tailor explanatory content (How it works). */
+  industry?: string | null;
 }
 
 export interface LlmUsage {
@@ -233,6 +235,8 @@ export interface LlmUsage {
   remaining?: number | null;
   model?: string | null;
   estCost?: number;
+  /** ISO date the monthly allowance resets (the 1st of next month). */
+  resetsOn?: string;
 }
 
 export interface CostRow {
@@ -285,7 +289,7 @@ export async function getUsage(): Promise<LlmUsage> {
 
 export async function updateGroup(
   id: string,
-  body: { name?: string; monthlyCap?: number | null },
+  body: { name?: string; monthlyCap?: number | null; industry?: string | null },
 ): Promise<void> {
   const res = await fetch(`/api/admin/builders/groups/${id}`, {
     method: "PUT",
@@ -350,12 +354,15 @@ export async function listGroups(): Promise<BuilderGroup[]> {
   return jsonOrThrow(await fetch("/api/admin/builders/groups"), "Could not load groups");
 }
 
-export async function createGroup(name: string): Promise<BuilderGroup> {
+export async function createGroup(
+  name: string,
+  industry?: string | null,
+): Promise<BuilderGroup> {
   return jsonOrThrow(
     await fetch("/api/admin/builders/groups", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, industry: industry ?? null }),
     }),
     "Could not create group",
   );
@@ -466,13 +473,16 @@ export async function getReferenceHealth(): Promise<ReferenceHealth> {
 // The interface brand for the signed-in user, drawn from their group's brand.
 // The logo bytes are served separately at /api/builders/:builderId/logo.
 export interface Brand {
-  builderId: string;
-  name: string;
+  builderId: string | null;
+  name: string | null;
   themeHeading?: string | null;
   themeSecondary?: string | null;
   themeAccent?: string | null;
   fonts?: string[];
   hasLogo?: boolean;
+  /** The client company and its sector, for white-labelled / tailored copy. */
+  companyName?: string | null;
+  industry?: string | null;
 }
 
 export interface AppUser {
