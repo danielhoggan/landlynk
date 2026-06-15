@@ -16,6 +16,7 @@ import io
 import json
 import re
 import zipfile
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -935,32 +936,6 @@ def _crime_points(records: list[dict]) -> list[tuple[float, float]]:
     return out
 
 
-def _point_records_from_bytes(name: str, data: bytes) -> list[dict]:
-    """Tabular records from raw bytes, by file extension: every CSV inside a zip
-    (a data.police.uk archive), or a single CSV/XLSX/XLS. Used by the uploaded
-    file path so a manually downloaded file loads the same as a URL."""
-    low = name.lower()
-    if low.endswith(".zip"):
-        rows: list[dict] = []
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            for member in zf.namelist():
-                if member.lower().endswith(".csv"):
-                    rows.extend(_csv_rows(zf.read(member).decode("utf-8-sig", "ignore")))
-        return rows
-    if low.endswith((".xlsx", ".xlsm")):
-        return _read_xlsx(data)
-    if low.endswith(".xls"):
-        return _read_xls(data)
-    return _csv_rows(data.decode("utf-8-sig", "ignore"))
-
-
-def _read_point_records(url: str) -> list[dict]:
-    """Records from a CSV/XLSX, or every CSV inside a zip (data.police.uk archive)."""
-    if not url.lower().endswith(".zip"):
-        return _load_records(url)
-    return _point_records_from_bytes(url, _get_bytes(url))
-
-
 def load_schools(
     pool: ConnectionPool,
     url: str,
@@ -1319,32 +1294,62 @@ def load_hospitals(
     return len(points)
 
 
-def load_crime(
-    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+def _crime_points_stream(
+    text: object,
+) -> Iterator[tuple[float, float]]:  # pragma: no cover - exercised live
+    """Yield (lng, lat) from a crime CSV stream, skipping members without coords."""
+    reader = csv.DictReader(text)  # type: ignore[arg-type]
+    fields = reader.fieldnames or []
+    lng_c = t.find_column(fields, ("longitude", "long", "lng"))
+    lat_c = t.find_column(fields, ("latitude", "lat"))
+    if lng_c is None or lat_c is None:
+        return
+    for r in reader:
+        lng = t.parse_number(r.get(lng_c))
+        lat = t.parse_number(r.get(lat_c))
+        if lng is not None and lat is not None:
+            yield (lng, lat)
+
+
+def _iter_crime_points_from_path(
+    path: str, name: str
+) -> Iterator[tuple[float, float]]:  # pragma: no cover - live
+    """Stream (lng, lat) from a crime file on disk: every CSV in a zip (the
+    data.police.uk archive), or a single CSV. Streaming keeps a multi-GB national
+    archive off the heap."""
+    if name.lower().endswith(".zip"):
+        with zipfile.ZipFile(path) as zf:
+            for member in zf.namelist():
+                if not member.lower().endswith(".csv"):
+                    continue
+                with (
+                    zf.open(member) as raw,
+                    io.TextIOWrapper(raw, encoding="utf-8-sig", errors="ignore") as text,
+                ):
+                    yield from _crime_points_stream(text)
+    else:
+        with open(path, encoding="utf-8-sig", errors="ignore") as text:
+            yield from _crime_points_stream(text)
+
+
+def _load_crime_from_path(
+    pool: ConnectionPool, path: str, name: str, area_type: str
 ) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
-    return _load_crime_points(
-        pool, _crime_points(_read_point_records(url)), area_type
-    )
-
-
-def load_crime_bytes(
-    pool: ConnectionPool, name: str, data: bytes, area_type: str = "MSOA"
-) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
-    """Load crime from an uploaded file (CSV or a data.police.uk archive zip)."""
-    return _load_crime_points(
-        pool, _crime_points(_point_records_from_bytes(name, data)), area_type
-    )
-
-
-def _load_crime_points(
-    pool: ConnectionPool, points: list[tuple[float, float]], area_type: str
-) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
-    if not points:
-        return 0
+    """Stream crime points from a file into a staging table, then aggregate to
+    crime per 1,000 residents per area in PostGIS. Existing crime is replaced
+    only when the file yields points, so a bad file does not wipe the metric."""
     with pool.connection() as conn, conn.transaction():
         conn.execute("CREATE TEMP TABLE _crime (lng float8, lat float8) ON COMMIT DROP")
-        with conn.cursor() as cur:
-            cur.executemany("INSERT INTO _crime VALUES (%s, %s)", points)
+        n_points = 0
+        with (
+            conn.cursor() as cur,
+            cur.copy("COPY _crime (lng, lat) FROM STDIN") as copy,
+        ):
+            for lng, lat in _iter_crime_points_from_path(path, name):
+                copy.write_row((lng, lat))
+                n_points += 1
+        if n_points == 0:
+            return 0
         conn.execute("DELETE FROM area_metric WHERE metric_key = 'crime_per_1k'")
         conn.execute(
             "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
@@ -1362,6 +1367,26 @@ def _load_crime_points(
             "SELECT count(*) FROM area_metric WHERE metric_key = 'crime_per_1k'"
         ).fetchone()[0]
     return int(n)
+
+
+def load_crime(
+    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
+    import os
+
+    suffix = ".zip" if url.lower().endswith(".zip") else ".csv"
+    path = _download_to_temp(url, suffix=suffix)
+    try:
+        return _load_crime_from_path(pool, path, url, area_type)
+    finally:
+        os.unlink(path)
+
+
+def load_crime_file(
+    pool: ConnectionPool, path: str, name: str, area_type: str = "MSOA"
+) -> int:  # pragma: no cover - PostGIS spatial join, exercised live
+    """Load crime from an uploaded file on disk (CSV or data.police.uk zip)."""
+    return _load_crime_from_path(pool, path, name, area_type)
 
 
 def _replace_table(

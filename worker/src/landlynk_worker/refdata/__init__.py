@@ -6,7 +6,7 @@ from .service import (
     get_health,
     get_status,
     run_load,
-    run_upload,
+    run_upload_file,
 )
 
 __all__ = [
@@ -15,5 +15,5 @@ __all__ = [
     "get_health",
     "get_status",
     "run_load",
-    "run_upload",
+    "run_upload_file",
 ]

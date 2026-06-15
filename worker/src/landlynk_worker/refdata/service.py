@@ -214,19 +214,31 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
 UPLOAD_DATASETS = ("crime", "green_space")
 
 
-def run_upload(
-    pool: ConnectionPool, dataset: str, filename: str, data: bytes, params: dict
+def run_upload_file(
+    pool: ConnectionPool, dataset: str, filename: str, path: str, params: dict
 ) -> None:
-    """Load one dataset from an uploaded file. Records status; never raises."""
+    """Load one dataset from an uploaded file on disk, deleting the temp file
+    afterwards. The file is streamed from disk (never wholly in memory), so a
+    multi-GB crime archive loads without exhausting the worker. Records status;
+    never raises."""
+    import os
+
     area_type = params.get("areaType", "MSOA")
     _set(dataset, "running", pool=pool, area_type=area_type)
     try:
         if dataset == "crime":
-            n = loaders.load_crime_bytes(pool, filename, data, area_type)
+            n = loaders.load_crime_file(pool, path, filename, area_type)
         elif dataset == "green_space":
+            with open(path, "rb") as f:
+                data = f.read()
             n = loaders.load_green_space_bytes(pool, filename, data, area_type)
         else:
             raise ValueError(f"Dataset does not support upload: {dataset}")
         _set(dataset, "loaded", pool=pool, rows=n, area_type=area_type)
     except Exception as exc:  # capture parse/DB errors for the UI
         _set(dataset, "failed", pool=pool, error=str(exc))
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass

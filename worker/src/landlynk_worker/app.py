@@ -328,16 +328,32 @@ async def upload_reference(
         raise HTTPException(
             status_code=404, detail=f"Dataset does not support upload: {dataset}"
         )
-    data = await file.read()
-    if not data:
+    # Stream the upload to a temp file in chunks so a large archive (e.g. a
+    # 1.6GB crime zip) is never held in memory. The background load streams it
+    # from disk and deletes it afterwards.
+    import os
+    import tempfile
+
+    filename = file.filename or "upload.dat"
+    suffix = os.path.splitext(filename)[1] or ".dat"
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    size = 0
+    with os.fdopen(fd, "wb") as out:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+            size += len(chunk)
+    if size == 0:
+        os.unlink(path)
         raise HTTPException(status_code=400, detail="Empty file")
-    filename = file.filename or "upload.csv"
     background.add_task(
-        refdata.run_upload,
+        refdata.run_upload_file,
         get_pool(),
         dataset,
         filename,
-        data,
+        path,
         {"areaType": area_type},
     )
     return {"status": "started", "dataset": dataset}
