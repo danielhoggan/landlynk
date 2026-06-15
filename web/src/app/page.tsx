@@ -31,7 +31,7 @@ import {
 import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
 import { AreaProfilePanel } from "@/components/AreaProfilePanel";
-import { SEGMENTS } from "@/lib/segments";
+import { segmentsForIndustry } from "@/lib/segments";
 import { OBJECTIVES, SIGNAL_LABELS } from "@/lib/objectives";
 import { useUser } from "@/lib/userContext";
 
@@ -39,7 +39,8 @@ import { useUser } from "@/lib/userContext";
 // catchment, and the interactive map with ranked clickable areas renders here
 // (SCOPING.md Section 3.2).
 export default function HomePage() {
-  const { isAdmin } = useUser();
+  const { isAdmin, activeBrand } = useUser();
+  const segmentOptions = segmentsForIndustry(activeBrand?.industry);
   const [kind, setKind] = useState<InputKind>("postcode");
   const [value, setValue] = useState("");
   const [developmentName, setDevelopmentName] = useState("");
@@ -602,7 +603,7 @@ export default function HomePage() {
                   className="w-full rounded-card border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-light-accent focus:outline-none"
                 >
                   <option value="">Balanced (no segment)</option>
-                  {SEGMENTS.map((s) => (
+                  {segmentOptions.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.label} — {s.description}
                     </option>

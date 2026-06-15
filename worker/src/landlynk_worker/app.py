@@ -138,11 +138,12 @@ def health() -> dict[str, str]:
 
 
 @app.get("/segments")
-def list_segments_endpoint() -> list[dict]:
-    """The predefined audience segments for segment-first targeting."""
+def list_segments_endpoint(industry: str | None = None) -> list[dict]:
+    """The predefined audience segments for segment-first targeting, filtered to
+    an industry when given (the active brand's sector), else all sectors."""
     from .scoring.segments import list_segments
 
-    return list_segments()
+    return list_segments(industry)
 
 
 @app.get("/objectives")
@@ -740,6 +741,32 @@ class LogoRequest(BaseModel):
 
     filename: str = "logo.png"
     content: str  # base64
+
+
+class BuilderUpdateRequest(BaseModel):
+    name: str | None = None
+    theme_heading: str | None = Field(default=None, alias="themeHeading")
+    theme_secondary: str | None = Field(default=None, alias="themeSecondary")
+    theme_accent: str | None = Field(default=None, alias="themeAccent")
+    fonts: list[str] | None = None
+    target_locations: list[str] | None = Field(default=None, alias="targetLocations")
+    industry: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+@app.put("/admin/builders/{builder_id}", status_code=204)
+def admin_update_builder(
+    builder_id: str, request: BuilderUpdateRequest, user: dict = Depends(current_user)
+) -> Response:
+    """Edit a saved brand's name, colours, fonts, target locations or industry.
+    Only the fields sent are changed; the logo is managed separately."""
+    _require_admin(user)
+    fields = request.model_dump(by_alias=True, exclude_unset=True)
+    if not get_store().update_builder(builder_id, fields):
+        raise HTTPException(status_code=404, detail="Brand not found")
+    _audit(user, "builder.brand.update", target_type="brand", target_id=builder_id)
+    return Response(status_code=204)
 
 
 @app.post("/admin/builders/{builder_id}/logo")

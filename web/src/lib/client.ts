@@ -419,6 +419,28 @@ export async function createBuilder(body: {
   );
 }
 
+// Edit a saved brand's name, palette, fonts, target locations or industry. Only
+// the fields provided are changed; the logo is managed separately.
+export async function updateBuilder(
+  id: string,
+  body: {
+    name?: string;
+    themeHeading?: string;
+    themeSecondary?: string | null;
+    themeAccent?: string | null;
+    fonts?: string[];
+    targetLocations?: string[];
+    industry?: string | null;
+  },
+): Promise<void> {
+  const res = await fetch(`/api/admin/builders/${id}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Could not update brand (${res.status})`);
+}
+
 export async function deleteBuilder(id: string): Promise<void> {
   await fetch(`/api/admin/builders/${id}`, { method: "DELETE" });
 }

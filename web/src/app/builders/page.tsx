@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Plus, Trash2 } from "lucide-react";
+import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   listGroups,
   listBuilders,
@@ -10,6 +10,7 @@ import {
   deleteGroup,
   createBuilder,
   deleteBuilder,
+  updateBuilder,
   saveProfile,
   deleteProfile,
   updateGroup,
@@ -18,7 +19,7 @@ import {
   type Builder,
   type BuilderProfile,
 } from "@/lib/client";
-import { SEGMENTS } from "@/lib/segments";
+import { segmentsForIndustry } from "@/lib/segments";
 import { INDUSTRIES, industryLabel } from "@/lib/industries";
 import { useUser } from "@/lib/userContext";
 
@@ -338,6 +339,7 @@ function BrandCard({
   profiles: BuilderProfile[];
   onChange: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: "",
     segment: "",
@@ -382,16 +384,35 @@ function BrandCard({
         )}
         <button
           type="button"
+          onClick={() => setEditing((e) => !e)}
+          className="ml-auto text-neutral-400 hover:text-light-accent"
+          aria-label="Edit brand"
+          title="Edit brand colours, fonts and industry"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          type="button"
           onClick={async () => {
             await deleteBuilder(brand.id);
             onChange();
           }}
-          className="ml-auto text-neutral-400 hover:text-priority-low"
+          className="text-neutral-400 hover:text-priority-low"
           aria-label="Delete brand"
         >
           <Trash2 size={14} />
         </button>
       </div>
+
+      {editing && (
+        <BrandEditPanel
+          brand={brand}
+          onSaved={() => {
+            setEditing(false);
+            onChange();
+          }}
+        />
+      )}
 
       <ul className="mt-2 space-y-1">
         {profiles.map((p) => (
@@ -432,7 +453,7 @@ function BrandCard({
           className="rounded-card border border-neutral-300 px-2 py-1.5 text-xs"
         >
           <option value="">Segment (optional)</option>
-          {SEGMENTS.map((s) => (
+          {segmentsForIndustry(brand.industry).map((s) => (
             <option key={s.id} value={s.id}>
               {s.label}
             </option>
@@ -492,6 +513,118 @@ function BrandCard({
       >
         <Plus size={14} /> Add profile
       </button>
+    </div>
+  );
+}
+
+// Edit a saved brand's palette, fonts and industry. Seeded from the brand; the
+// logo is changed separately. Colours fall back to sensible defaults if unset.
+function BrandEditPanel({
+  brand,
+  onSaved,
+}: {
+  brand: Builder;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(brand.name);
+  const [heading, setHeading] = useState(brand.themeHeading || "#0A1F44");
+  const [secondary, setSecondary] = useState(brand.themeSecondary || "#1F5A3C");
+  const [accent, setAccent] = useState(brand.themeAccent || "#C9A24B");
+  const [fonts, setFonts] = useState((brand.fonts ?? []).join(", "));
+  const [industry, setIndustry] = useState(brand.industry ?? "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setErr("");
+    try {
+      await updateBuilder(brand.id, {
+        name: name.trim() || brand.name,
+        themeHeading: heading,
+        themeSecondary: secondary,
+        themeAccent: accent,
+        fonts: fonts
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        industry: industry || null,
+      });
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-card border border-neutral-200 bg-neutral-50 p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Brand name"
+          className="flex-1 rounded-card border border-neutral-300 px-2 py-1.5 text-xs"
+        />
+        <label className="flex items-center gap-1 text-xs text-neutral-500">
+          Primary
+          <input
+            type="color"
+            value={heading}
+            onChange={(e) => setHeading(e.target.value)}
+            className="h-7 w-8 rounded border border-neutral-300"
+          />
+        </label>
+        <label className="flex items-center gap-1 text-xs text-neutral-500">
+          Secondary
+          <input
+            type="color"
+            value={secondary}
+            onChange={(e) => setSecondary(e.target.value)}
+            className="h-7 w-8 rounded border border-neutral-300"
+          />
+        </label>
+        <label className="flex items-center gap-1 text-xs text-neutral-500">
+          Accent
+          <input
+            type="color"
+            value={accent}
+            onChange={(e) => setAccent(e.target.value)}
+            className="h-7 w-8 rounded border border-neutral-300"
+          />
+        </label>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          value={fonts}
+          onChange={(e) => setFonts(e.target.value)}
+          placeholder="Web fonts (comma separated)"
+          className="flex-1 rounded-card border border-neutral-300 px-2 py-1.5 text-xs"
+        />
+        <select
+          value={industry}
+          onChange={(e) => setIndustry(e.target.value)}
+          title="Industry (tailors segments and How it works)"
+          className="rounded-card border border-neutral-300 px-2 py-1.5 text-xs text-neutral-600"
+        >
+          <option value="">No industry</option>
+          {INDUSTRIES.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={save}
+          className="rounded-card bg-light-accent px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+        >
+          Save brand
+        </button>
+      </div>
+      {err && <p className="mt-1 text-xs text-priority-low">{err}</p>}
     </div>
   );
 }

@@ -241,6 +241,7 @@ class Storage(Protocol):
     def list_audit(self, filters: dict, limit: int = 500) -> list[dict]: ...
     def cost_report(self, date_from: str | None, date_to: str | None) -> dict: ...
     def create_builder(self, builder: dict) -> None: ...
+    def update_builder(self, builder_id: str, fields: dict) -> bool: ...
     def list_builders(self, group_id: str | None = None) -> list[dict]: ...
     def get_accessible_brands(self, email: str) -> list[dict]: ...
     def set_user_brands(self, email: str, brand_ids: list[str]) -> None: ...
@@ -569,6 +570,23 @@ class InMemoryStore:
             **builder,
         }
 
+    def update_builder(self, builder_id: str, fields: dict) -> bool:
+        b = self._builders.get(builder_id)
+        if b is None:
+            return False
+        for key in (
+            "name",
+            "themeHeading",
+            "themeSecondary",
+            "themeAccent",
+            "fonts",
+            "targetLocations",
+            "industry",
+        ):
+            if key in fields:
+                b[key] = fields[key]
+        return True
+
     def list_builders(self, group_id: str | None = None) -> list[dict]:
         builders = self._builders.values()
         if group_id is not None:
@@ -576,12 +594,18 @@ class InMemoryStore:
         return sorted(builders, key=lambda b: b["name"])
 
     def get_accessible_brands(self, email: str) -> list[dict]:
+        # Specific brand grants, when present, define exactly what the user sees
+        # (they override a whole-group grant). Otherwise the user sees all the
+        # brands in their granted group.
         user = self._users.get(email.lower()) or {}
-        group_id = user.get("builderGroupId")
         granted = set(self._user_brands.get(email.lower(), set()))
+        group_id = user.get("builderGroupId")
         out = []
         for b in self._builders.values():
-            if (group_id and b["groupId"] == group_id) or b["id"] in granted:
+            keep = b["id"] in granted if granted else (
+                bool(group_id) and b["groupId"] == group_id
+            )
+            if keep:
                 out.append(_full_brand(b, self._groups.get(b["groupId"])))
         return sorted(out, key=lambda x: (x["name"] or "").lower())
 
@@ -1163,6 +1187,35 @@ class PostgresStore:
                 ],
             )
 
+    def update_builder(self, builder_id: str, fields: dict) -> bool:
+        # Updates editable brand attributes; never touches the logo or group.
+        cols: list[str] = []
+        params: list = []
+        for key, col in (
+            ("name", "name"),
+            ("themeHeading", "theme_heading"),
+            ("themeSecondary", "theme_secondary"),
+            ("themeAccent", "theme_accent"),
+            ("industry", "industry"),
+        ):
+            if key in fields:
+                cols.append(f"{col} = %s")
+                params.append(fields[key])
+        if "fonts" in fields:
+            cols.append("fonts = %s")
+            params.append(json.dumps(fields["fonts"]))
+        if "targetLocations" in fields:
+            cols.append("target_locations = %s")
+            params.append(json.dumps(fields["targetLocations"]))
+        if not cols:
+            return False
+        params.append(builder_id)
+        with self._pool.connection() as conn:
+            cur = conn.execute(
+                f"UPDATE builder SET {', '.join(cols)} WHERE id = %s", params
+            )
+            return cur.rowcount > 0
+
     def list_builders(self, group_id: str | None = None) -> list[dict]:
         sql = (
             "SELECT id, group_id, name, theme_heading, theme_secondary, "
@@ -1193,21 +1246,32 @@ class PostgresStore:
         ]
 
     def get_accessible_brands(self, email: str) -> list[dict]:
-        # Brands the user may switch between: all brands in their whole-group
-        # grant (app_user.builder_group_id), plus any explicitly granted brands.
+        # Specific brand grants, when present, define exactly what the user sees
+        # (they override a whole-group grant). Otherwise the user sees all the
+        # brands in their granted group.
         email = email.lower()
+        select = (
+            "SELECT b.id, b.group_id, b.name, b.theme_heading, b.theme_secondary, "
+            "b.theme_accent, b.fonts, b.logo_path, b.industry, g.name "
+            "FROM builder b JOIN builder_group g ON b.group_id = g.id "
+        )
         with self._pool.connection() as conn:
-            rows = conn.execute(
-                "SELECT DISTINCT b.id, b.group_id, b.name, b.theme_heading, "
-                "b.theme_secondary, b.theme_accent, b.fonts, b.logo_path, "
-                "b.industry, g.name "
-                "FROM builder b JOIN builder_group g ON b.group_id = g.id "
-                "LEFT JOIN app_user u ON u.email = %s "
-                "LEFT JOIN user_brand ub ON ub.brand_id = b.id AND ub.email = %s "
-                "WHERE b.group_id = u.builder_group_id OR ub.brand_id IS NOT NULL "
-                "ORDER BY b.name",
-                [email, email],
+            grants = conn.execute(
+                "SELECT brand_id FROM user_brand WHERE email = %s", [email]
             ).fetchall()
+            brand_ids = [r[0] for r in grants]
+            if brand_ids:
+                rows = conn.execute(
+                    select + "WHERE b.id = ANY(%s) ORDER BY b.name", [brand_ids]
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    select
+                    + "WHERE b.group_id = "
+                    "(SELECT builder_group_id FROM app_user WHERE email = %s) "
+                    "ORDER BY b.name",
+                    [email],
+                ).fetchall()
         return [
             _full_brand(
                 {

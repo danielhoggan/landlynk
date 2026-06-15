@@ -171,6 +171,45 @@ def test_specific_brand_grant_across_groups(client):
     )
 
 
+def test_specific_brand_grant_overrides_group_grant(client):
+    # Assigning a specific brand restricts the user to exactly that brand, even
+    # when they also hold a whole-group grant.
+    g = client.post("/admin/builders/groups", json={"name": "Plc"}).json()["id"]
+    a = client.post(
+        "/admin/builders", json={"groupId": g, "name": "Aone"}
+    ).json()["id"]
+    client.post("/admin/builders", json={"groupId": g, "name": "Btwo"})
+    client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "X", "developmentName": "D"},
+        headers=_h("ext@x.com"),
+    )
+    client.put("/admin/users/ext@x.com/group", json={"groupId": g})
+    assert len(client.get("/me", headers=_h("ext@x.com")).json()["brands"]) == 2
+
+    client.put("/admin/users/ext@x.com/brands", json={"brandIds": [a]})
+    brands = client.get("/me", headers=_h("ext@x.com")).json()["brands"]
+    assert [b["builderId"] for b in brands] == [a]
+
+
+def test_update_brand_palette(client):
+    g = client.post("/admin/builders/groups", json={"name": "Plc"}).json()["id"]
+    b = client.post(
+        "/admin/builders",
+        json={"groupId": g, "name": "Aone", "themeAccent": "#111111"},
+    ).json()["id"]
+    assert (
+        client.put(
+            f"/admin/builders/{b}",
+            json={"themeAccent": "#C9A24B", "industry": "retail"},
+        ).status_code
+        == 204
+    )
+    row = next(x for x in client.get(f"/admin/builders?group_id={g}").json())
+    assert row["themeAccent"] == "#C9A24B" and row["industry"] == "retail"
+    assert client.put("/admin/builders/nope", json={"name": "x"}).status_code == 404
+
+
 def test_brand_industry_and_usage_scoped_to_active_brand(client):
     # Industry lives on the brand; the active brand scopes the AI allowance.
     g = client.post(

@@ -67,5 +67,26 @@ def test_unknown_segment_is_a_noop():
     assert apply_segment(base, "nope") is base
 
 
-def test_library_has_five_segments():
-    assert len(SEGMENTS) == 5
+def test_library_is_industry_scoped():
+    from landlynk_worker.scoring.segments import list_segments
+
+    # Residential keeps the original five; other industries add their own.
+    residential = [s for s in SEGMENTS.values() if s.industry == "residential"]
+    assert len(residential) == 5
+    assert len(SEGMENTS) > 5
+
+    retail = list_segments("retail")
+    assert retail and all(s["industry"] == "retail" for s in retail)
+    # Filtering by industry excludes residential segments.
+    assert "first_time_buyer" not in {s["id"] for s in retail}
+    # No filter returns every segment.
+    assert len(list_segments()) == len(SEGMENTS)
+
+
+def test_non_residential_segment_applies_age_lens():
+    from landlynk_worker.scoring.segments import list_segments
+
+    older = apply_segment(ScoringConfig(), "active_retirees")
+    assert older.age_preference["age_55_74"] == 1.0
+    assert older.segment == "active_retirees"
+    assert {s["industry"] for s in list_segments("leisure")} == {"leisure"}
