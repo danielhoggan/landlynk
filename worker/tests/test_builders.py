@@ -115,75 +115,87 @@ def test_builder_profile_crud_and_scoping(client):
     assert scoped[0]["groupId"] == g1
 
 
-def test_me_brand_derives_from_group_default_builder(client):
-    # A group with two brands; the interface brand defaults to the first by name.
+def test_me_brands_from_group_grant_and_brand_grants(client):
+    # A whole-group grant exposes all the group's brands; the active brand is the
+    # user's choice, so /me just lists the accessible brands (sorted by name).
     g = client.post("/admin/builders/groups", json={"name": "Plc"}).json()["id"]
     alpha = client.post(
         "/admin/builders",
         json={"groupId": g, "name": "Alpha", "themeAccent": "#111111"},
     ).json()["id"]
-    zeta = client.post(
+    client.post(
         "/admin/builders",
         json={"groupId": g, "name": "Zeta", "themeAccent": "#222222"},
     ).json()["id"]
 
-    # A user with no group gets no brand.
     client.post(
         "/jobs/catchment",
         json={"kind": "postcode", "value": "X", "developmentName": "D"},
         headers=_h("ext@x.com"),
     )
-    assert client.get("/me", headers=_h("ext@x.com")).json()["brand"] is None
+    # No grant: no brands.
+    assert client.get("/me", headers=_h("ext@x.com")).json()["brands"] == []
 
-    # Pinned to the group, the interface brand is the first brand by name.
+    # Whole-group grant: both brands, sorted by name.
     client.put("/admin/users/ext@x.com/group", json={"groupId": g})
-    brand = client.get("/me", headers=_h("ext@x.com")).json()["brand"]
-    assert brand["builderId"] == alpha
-    assert brand["themeAccent"] == "#111111"
-    assert brand["hasLogo"] is False
-
-    # Admin designates Zeta as the app brand; the interface follows.
-    assert (
-        client.post(f"/admin/builders/{zeta}/default").status_code == 204
-    )
-    brand = client.get("/me", headers=_h("ext@x.com")).json()["brand"]
-    assert brand["builderId"] == zeta
-    assert brand["themeAccent"] == "#222222"
-
-    # Exactly one default per group.
-    builders = client.get(f"/admin/builders?group_id={g}").json()
-    assert [b["id"] for b in builders if b["isDefault"]] == [zeta]
+    brands = client.get("/me", headers=_h("ext@x.com")).json()["brands"]
+    assert [b["name"] for b in brands] == ["Alpha", "Zeta"]
+    assert brands[0]["builderId"] == alpha
+    assert brands[0]["companyName"] == "Plc"
 
 
-def test_set_default_unknown_brand_404(client):
-    assert client.post("/admin/builders/nope/default").status_code == 404
-
-
-def test_group_industry_in_me_brand_and_usage_reset(client):
-    # A group carries an industry; an external user's /me brand exposes the
-    # company and industry (even before a brand is added) for tailored copy, and
-    # the usage summary reports when the allowance resets.
-    g = client.post(
-        "/admin/builders/groups", json={"name": "Acme", "industry": "retail"}
+def test_specific_brand_grant_across_groups(client):
+    # An agency user assigned specific brands sees only those, across groups.
+    g1 = client.post("/admin/builders/groups", json={"name": "Tilia"}).json()["id"]
+    g2 = client.post("/admin/builders/groups", json={"name": "Hopkins"}).json()["id"]
+    b1 = client.post(
+        "/admin/builders", json={"groupId": g1, "name": "Tilia Homes"}
     ).json()["id"]
-    assert any(
-        gr["id"] == g and gr["industry"] == "retail"
-        for gr in client.get("/admin/builders/groups").json()
+    b2 = client.post(
+        "/admin/builders", json={"groupId": g2, "name": "Hopkins Homes"}
+    ).json()["id"]
+    client.post(
+        "/admin/builders", json={"groupId": g2, "name": "Other Brand"}
+    ).json()["id"]
+
+    client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "X", "developmentName": "D"},
+        headers=_h("cmo@x.com"),
+    )
+    client.put("/admin/users/cmo@x.com/brands", json={"brandIds": [b1, b2]})
+    brands = client.get("/me", headers=_h("cmo@x.com")).json()["brands"]
+    assert {b["name"] for b in brands} == {"Tilia Homes", "Hopkins Homes"}
+    assert client.get("/admin/users/cmo@x.com/brands").json()["brandIds"] == sorted(
+        [b1, b2]
     )
 
+
+def test_brand_industry_and_usage_scoped_to_active_brand(client):
+    # Industry lives on the brand; the active brand scopes the AI allowance.
+    g = client.post(
+        "/admin/builders/groups", json={"name": "Acme", "monthlyCap": 5}
+    ).json()["id"]
+    b = client.post(
+        "/admin/builders",
+        json={"groupId": g, "name": "Acme Retail", "industry": "retail"},
+    ).json()["id"]
     client.post(
         "/jobs/catchment",
         json={"kind": "postcode", "value": "X", "developmentName": "D"},
         headers=_h("ext@x.com"),
     )
-    client.put("/admin/users/ext@x.com/group", json={"groupId": g})
+    client.put("/admin/users/ext@x.com/brands", json={"brandIds": [b]})
 
-    brand = client.get("/me", headers=_h("ext@x.com")).json()["brand"]
-    assert brand["companyName"] == "Acme"
-    assert brand["industry"] == "retail"
-    assert brand["hasLogo"] is False and brand["builderId"] is None
+    brand = client.get("/me", headers=_h("ext@x.com")).json()["brands"][0]
+    assert brand["industry"] == "retail" and brand["companyName"] == "Acme"
 
-    usage = client.get("/builders/usage", headers=_h("ext@x.com")).json()
+    # With the brand active, usage is metered to that brand's group cap.
+    usage = client.get(
+        "/builders/usage",
+        headers={**_h("ext@x.com"), "X-Active-Brand": b},
+    ).json()
+    assert usage["metered"] is True and usage["cap"] == 5
     assert usage["resetsOn"].endswith("-01")
 
 

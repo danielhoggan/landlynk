@@ -7,6 +7,7 @@ import { Logo } from "./Logo";
 import { NAV_ITEMS, isActive } from "./navItems";
 import { ReferenceStatusDot } from "./ReferenceStatusDot";
 import { AllowanceBadge } from "./AllowanceBadge";
+import { BrandSelector } from "./BrandSelector";
 import { useUser } from "@/lib/userContext";
 
 // Persistent, fixed sidebar for desktop. Hidden on mobile, where the burger
@@ -40,9 +41,12 @@ export function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 z-30 hidden h-full w-60 flex-col border-r border-neutral-200 bg-white px-4 py-5 md:flex">
-      <a href="/" className="mb-8 px-2">
+      <a href="/" className="mb-4 px-2">
         <Logo className="text-lg" />
       </a>
+      <div className="mb-6">
+        <BrandSelector />
+      </div>
       <nav aria-label="Main navigation">
         <ul className="space-y-1">{mainItems.map(renderItem)}</ul>
         {adminItems.length > 0 && (

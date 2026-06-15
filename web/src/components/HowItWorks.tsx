@@ -55,16 +55,21 @@ interface UseCase {
 }
 interface Tailored {
   title: string;
-  intro: (company: string) => string;
+  // forBrand is the active sub-business (brand) name, or null. LandLynk is
+  // always the platform/actor; the copy never implies the client owns the portal
+  // and never names the parent group.
+  intro: (forBrand: string | null) => string;
   useCases: UseCase[];
 }
+
+const forPhrase = (brand: string | null) => (brand ? ` for ${brand}` : "");
 
 // Per-industry hero and use cases. The generic version (no industry) keeps the
 // original cross-sector framing.
 const GENERIC: Tailored = {
   title: "Turn a location into a targeting strategy",
-  intro: (company) =>
-    `Paste a postcode or an OS grid reference. ${company} builds a catchment, by drive time or by radius, scores and ranks every area inside it on how worth targeting it is, and generates a Battlecard for each one that says who to target, how to price and what to say. It is built on open public data, so every ranking is reproducible and explainable.`,
+  intro: (b) =>
+    `Paste a postcode or an OS grid reference. LandLynk builds a catchment${forPhrase(b)}, by drive time or by radius, scores and ranks every area inside it on how worth targeting it is, and generates a Battlecard for each one that says who to target, how to price and what to say. It is built on open public data, so every ranking is reproducible and explainable.`,
   useCases: [
     {
       icon: Building2,
@@ -92,8 +97,8 @@ const GENERIC: Tailored = {
 const BY_INDUSTRY: Record<string, Tailored> = {
   residential: {
     title: "Turn a site into a sales and marketing strategy",
-    intro: (company) =>
-      `Paste a development postcode or an OS grid reference. ${company} builds a catchment by drive time or radius, scores and ranks every area on how worth targeting it is, and generates a Battlecard per area that says who to target, how to price and what to say.`,
+    intro: (b) =>
+      `Paste a development postcode or an OS grid reference. LandLynk builds a catchment${forPhrase(b)} by drive time or radius, scores and ranks every area on how worth targeting it is, and generates a Battlecard per area that says who to target, how to price and what to say.`,
     useCases: [
       {
         icon: Building2,
@@ -114,8 +119,8 @@ const BY_INDUSTRY: Record<string, Tailored> = {
   },
   retail: {
     title: "Choose sites and catchments backed by real demographics",
-    intro: (company) =>
-      `Paste a candidate location as a postcode or OS grid reference. ${company} sizes the catchment by drive time or radius, scores and ranks the areas inside it, and shows the demographics that match your format.`,
+    intro: (b) =>
+      `Paste a candidate location as a postcode or OS grid reference. LandLynk sizes the catchment${forPhrase(b)} by drive time or radius, scores and ranks the areas inside it, and shows the demographics that match your format.`,
     useCases: [
       {
         icon: Store,
@@ -136,8 +141,8 @@ const BY_INDUSTRY: Record<string, Tailored> = {
   },
   leisure: {
     title: "Size the catchment for a new club or venue",
-    intro: (company) =>
-      `Paste a site postcode or OS grid reference. ${company} builds a realistic drive-time catchment, scores and ranks the areas inside it, and surfaces the neighbourhoods most likely to convert.`,
+    intro: (b) =>
+      `Paste a site postcode or OS grid reference. LandLynk builds a realistic drive-time catchment${forPhrase(b)}, scores and ranks the areas inside it, and surfaces the neighbourhoods most likely to convert.`,
     useCases: [
       {
         icon: Dumbbell,
@@ -158,8 +163,8 @@ const BY_INDUSTRY: Record<string, Tailored> = {
   },
   healthcare: {
     title: "Plan services around the population they actually reach",
-    intro: (company) =>
-      `Paste a site postcode or OS grid reference. ${company} builds a catchment by drive time or radius, ranks the areas inside it, and shows the population profile each service reaches.`,
+    intro: (b) =>
+      `Paste a site postcode or OS grid reference. LandLynk builds a catchment${forPhrase(b)} by drive time or radius, ranks the areas inside it, and shows the population profile each service reaches.`,
     useCases: [
       {
         icon: HeartPulse,
@@ -180,8 +185,8 @@ const BY_INDUSTRY: Record<string, Tailored> = {
   },
   education: {
     title: "Understand the catchment your provision draws from",
-    intro: (company) =>
-      `Paste a site postcode or OS grid reference. ${company} builds a travel-time catchment, ranks the areas inside it, and shows the demographics of the population it draws from.`,
+    intro: (b) =>
+      `Paste a site postcode or OS grid reference. LandLynk builds a travel-time catchment${forPhrase(b)}, ranks the areas inside it, and shows the demographics of the population it draws from.`,
     useCases: [
       {
         icon: GraduationCap,
@@ -202,8 +207,8 @@ const BY_INDUSTRY: Record<string, Tailored> = {
   },
   public_sector: {
     title: "Plan around the real population an area reaches",
-    intro: (company) =>
-      `Paste a postcode or OS grid reference. ${company} builds a catchment by drive time or radius, ranks the areas inside it, and grounds every figure in open ONS data with confidence flags where data is thin.`,
+    intro: (b) =>
+      `Paste a postcode or OS grid reference. LandLynk builds a catchment${forPhrase(b)} by drive time or radius, ranks the areas inside it, and grounds every figure in open ONS data with confidence flags where data is thin.`,
     useCases: [
       {
         icon: Landmark,
@@ -225,13 +230,14 @@ const BY_INDUSTRY: Record<string, Tailored> = {
 };
 
 export function HowItWorks() {
-  const { user } = useUser();
-  const industry = user?.brand?.industry ?? null;
-  const company = user?.brand?.companyName ?? null;
+  const { activeBrand } = useUser();
+  const industry = activeBrand?.industry ?? null;
+  // The sub-business (brand) the catchment is built for. LandLynk stays the
+  // platform; we never use the parent group name or imply the client owns it.
+  const subBusiness = activeBrand?.name ?? null;
   const content = (industry && BY_INDUSTRY[industry]) || GENERIC;
   const eyebrow =
     industryLabel(industry) ?? "The Geographic Intelligence Engine";
-  const companyWord = company ?? "LandLynk";
 
   return (
     <div className="mx-auto max-w-5xl space-y-12 p-4 py-8">
@@ -244,7 +250,7 @@ export function HowItWorks() {
           {content.title}
         </h1>
         <p className="mt-3 text-base leading-relaxed text-neutral-600">
-          {content.intro(companyWord)}
+          {content.intro(subBusiness)}
         </p>
       </header>
 

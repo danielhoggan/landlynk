@@ -29,6 +29,13 @@ export function userHeaders(user?: UserCtx): Record<string, string> {
   return headers;
 }
 
+// Forward the caller's active brand to the worker, which scopes profiles and the
+// AI allowance to that brand's group.
+export function activeBrandHeader(request: Request): Record<string, string> {
+  const id = request.headers.get("x-active-brand");
+  return id ? { "X-Active-Brand": id } : {};
+}
+
 async function workerFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${WORKER_BASE_URL}${path}`, {
     ...init,

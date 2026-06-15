@@ -161,26 +161,31 @@ def _check_admin(token: str | None) -> None:
 def current_user(
     x_user_email: str | None = Header(default=None),
     x_user_name: str | None = Header(default=None),
+    x_active_brand: str | None = Header(default=None),
 ) -> dict:
     """Resolve the caller from the SSO-gated web layer's forwarded headers.
 
     The web service authenticates via Azure AD and forwards the signed-in
-    identity. The worker is private, so it trusts these headers. Each call
-    upserts the user, applying the admin bootstrap from settings.admin_emails.
+    identity, plus the brand the user has selected as active (X-Active-Brand),
+    which scopes profiles and the AI allowance to that brand's group. The worker
+    is private, so it trusts these headers. Each call upserts the user, applying
+    the admin bootstrap from settings.admin_emails.
     """
     if not x_user_email:
         return {"email": None, "name": None, "role": "internal-user"}
     email = x_user_email.strip().lower()
     admin = email in settings.admin_email_set()
     try:
-        return get_store().upsert_user(email, x_user_name, admin)
+        user = get_store().upsert_user(email, x_user_name, admin)
     except Exception:  # never block a request on the user directory
         _log.exception("upsert_user failed for %s", email)
-        return {
+        user = {
             "email": email,
             "name": x_user_name,
             "role": "admin" if admin else "internal-user",
         }
+    user["activeBrandId"] = x_active_brand or None
+    return user
 
 
 def _require_admin(user: dict) -> None:
@@ -474,11 +479,11 @@ def remove_share(
 
 @app.get("/me")
 def get_me(user: dict = Depends(current_user)) -> dict:
-    # Attach the interface brand drawn from the user's group, so the web shell
-    # can white-label (logo, colours, fonts). None for users without a group.
-    group_id = user.get("builderGroupId")
-    brand = get_store().get_group_brand(group_id) if group_id else None
-    return {**user, "brand": brand}
+    # The brands this user may switch between (whole-group grant plus any granted
+    # brands). The web picks an active one and white-labels the shell from it.
+    email = user.get("email")
+    brands = get_store().get_accessible_brands(email) if email else []
+    return {**user, "brands": brands}
 
 
 @app.get("/me/settings")
@@ -506,15 +511,28 @@ def admin_list_users(user: dict = Depends(current_user)) -> list[dict]:
 # --- builder profiles -------------------------------------------------------
 
 
+def _active_group(user: dict) -> str | None:
+    """The group of the user's active brand, validated against the brands they
+    may access, falling back to their whole-group grant. Drives profile scoping
+    and the AI allowance, so a user switching brand switches client context."""
+    bid = user.get("activeBrandId")
+    email = user.get("email")
+    if bid and email:
+        for b in get_store().get_accessible_brands(email):
+            if b["builderId"] == bid:
+                return b["groupId"]
+    return user.get("builderGroupId")
+
+
 def _scope_group(user: dict) -> str | None:
     """The group a user is restricted to, or None to see all profiles.
 
-    Admins and internal users are unscoped. An external user pinned to a group
-    sees only that group's brands and profiles.
+    Admins are unscoped. Everyone else is scoped to their active brand's group
+    (or their whole-group grant), so they see only that client's profiles.
     """
     if user.get("role") == "admin":
         return None
-    return user.get("builderGroupId")
+    return _active_group(user)
 
 
 def _usage_period() -> str:
@@ -550,7 +568,7 @@ def _llm_usage_summary(user: dict) -> dict:
     period = _usage_period()
     model = _default_model()
     est_cost = model_cost(model) if model else 0.0
-    group_id = user.get("builderGroupId")
+    group_id = _active_group(user)
     if user.get("role") == "admin" or not group_id:
         return {
             "period": period,
@@ -665,6 +683,7 @@ class BuilderRequest(BaseModel):
     theme_accent: str | None = Field(default=None, alias="themeAccent")
     fonts: list[str] = []
     target_locations: list[str] = Field(default_factory=list, alias="targetLocations")
+    industry: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -693,6 +712,7 @@ def admin_create_builder(
             "themeAccent": request.theme_accent,
             "fonts": request.fonts,
             "targetLocations": request.target_locations,
+            "industry": request.industry,
         }
     )
     _audit(
@@ -703,19 +723,6 @@ def admin_create_builder(
         detail={"name": request.name, "groupId": request.group_id},
     )
     return {"id": builder_id}
-
-
-@app.post("/admin/builders/{builder_id}/default", status_code=204)
-def admin_set_builder_default(
-    builder_id: str, user: dict = Depends(current_user)
-) -> Response:
-    """Make this brand the one that white-labels the app interface for everyone
-    in its group. Matters only when a group owns more than one brand."""
-    _require_admin(user)
-    if not get_store().set_builder_default(builder_id):
-        raise HTTPException(status_code=404, detail="Brand not found")
-    _audit(user, "builder.brand.default", target_type="brand", target_id=builder_id)
-    return Response(status_code=204)
 
 
 @app.delete("/admin/builders/{builder_id}", status_code=204)
@@ -847,6 +854,39 @@ def admin_set_user_group(
         target_type="user",
         target_id=email,
         detail={"groupId": request.group_id},
+    )
+    return Response(status_code=204)
+
+
+class UserBrandsRequest(BaseModel):
+    brand_ids: list[str] = Field(default_factory=list, alias="brandIds")
+
+    model_config = {"populate_by_name": True}
+
+
+@app.get("/admin/users/{email}/brands")
+def admin_get_user_brands(
+    email: str, user: dict = Depends(current_user)
+) -> dict:
+    """The specific brand grants for a user (separate from a whole-group grant)."""
+    _require_admin(user)
+    return {"brandIds": get_store().list_user_brand_ids(email)}
+
+
+@app.put("/admin/users/{email}/brands", status_code=204)
+def admin_set_user_brands(
+    email: str, request: UserBrandsRequest, user: dict = Depends(current_user)
+) -> Response:
+    """Assign a user to specific brands (a business unit), which they can switch
+    between. Independent of any whole-group grant set above."""
+    _require_admin(user)
+    get_store().set_user_brands(email, request.brand_ids)
+    _audit(
+        user,
+        "user.brands",
+        target_type="user",
+        target_id=email,
+        detail={"count": len(request.brand_ids)},
     )
     return Response(status_code=204)
 
@@ -988,9 +1028,8 @@ def area_profile(
     total_tok = int(usage.get("total", in_tok + out_tok) or 0)
     cost = token_cost(model, in_tok, out_tok)
 
-    store.record_llm_usage(
-        user.get("email"), user.get("builderGroupId"), model, _usage_period()
-    )
+    active_group = _active_group(user)
+    store.record_llm_usage(user.get("email"), active_group, model, _usage_period())
     store.save_area_profile(cache_key, model, payload)
     _audit(
         user,
@@ -1000,7 +1039,7 @@ def area_profile(
         detail={
             "model": model,
             "areas": len(codes),
-            "groupId": user.get("builderGroupId"),
+            "groupId": active_group,
             "tokens": total_tok,
             "inputTokens": in_tok,
             "outputTokens": out_tok,

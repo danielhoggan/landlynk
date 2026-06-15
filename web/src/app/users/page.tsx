@@ -7,8 +7,12 @@ import {
   setUserRole,
   listGroups,
   setUserGroup,
+  listBuilders,
+  getUserBrands,
+  setUserBrands,
   type AppUser,
   type BuilderGroup,
+  type Builder,
 } from "@/lib/client";
 import { useUser } from "@/lib/userContext";
 
@@ -26,6 +30,7 @@ export default function UsersPage() {
   const { user, isAdmin, loading } = useUser();
   const [users, setUsers] = useState<AppUser[] | null>(null);
   const [groups, setGroups] = useState<BuilderGroup[]>([]);
+  const [builders, setBuilders] = useState<Builder[]>([]);
   const [error, setError] = useState("");
   const [savingEmail, setSavingEmail] = useState<string | null>(null);
 
@@ -39,6 +44,9 @@ export default function UsersPage() {
     listGroups()
       .then(setGroups)
       .catch(() => setGroups([]));
+    listBuilders()
+      .then(setBuilders)
+      .catch(() => setBuilders([]));
   }, [isAdmin]);
 
   if (loading) {
@@ -104,8 +112,13 @@ export default function UsersPage() {
         <p className="text-sm text-neutral-500">Loading...</p>
       )}
 
+      <p className="text-xs text-neutral-400">
+        Give an external user a whole group (all its brands) and/or assign
+        specific brands. They switch the active brand in the app.
+      </p>
+
       {users && (
-        <ul className="divide-y divide-neutral-200 overflow-hidden rounded-card border border-neutral-200 bg-white">
+        <ul className="divide-y divide-neutral-200 overflow-visible rounded-card border border-neutral-200 bg-white">
           {users.map((u) => (
             <li
               key={u.email}
@@ -125,22 +138,29 @@ export default function UsersPage() {
                 </span>
               </span>
               {u.role === "external-user" && (
-                <select
-                  value={u.builderGroupId ?? ""}
-                  disabled={savingEmail === u.email}
-                  onChange={(e) =>
-                    changeGroup(u.email as string, e.target.value)
-                  }
-                  title="Builder group"
-                  className="rounded-card border border-neutral-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-light-accent disabled:opacity-50"
-                >
-                  <option value="">No group</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    value={u.builderGroupId ?? ""}
+                    disabled={savingEmail === u.email}
+                    onChange={(e) =>
+                      changeGroup(u.email as string, e.target.value)
+                    }
+                    title="Whole-group access (all the group's brands)"
+                    className="rounded-card border border-neutral-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-light-accent disabled:opacity-50"
+                  >
+                    <option value="">No group</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                  <BrandAssign
+                    email={u.email as string}
+                    builders={builders}
+                    groups={groups}
+                  />
+                </>
               )}
               <select
                 value={u.role}
@@ -157,6 +177,116 @@ export default function UsersPage() {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+// Assign a user to specific brands (a business unit), across groups. Independent
+// of the whole-group grant. Loads the current grants when opened.
+function BrandAssign({
+  email,
+  builders,
+  groups,
+}: {
+  email: string;
+  builders: Builder[];
+  groups: BuilderGroup[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[] | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && selected === null) {
+      getUserBrands(email)
+        .then(setSelected)
+        .catch(() => setSelected([]));
+    }
+  }, [open, email, selected]);
+
+  const groupName = (id: string) =>
+    groups.find((g) => g.id === id)?.name ?? "Other";
+  const count = selected?.length ?? 0;
+
+  function toggle(id: string) {
+    setSelected((s) =>
+      s
+        ? s.includes(id)
+          ? s.filter((x) => x !== id)
+          : [...s, id]
+        : [id],
+    );
+  }
+
+  async function save() {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await setUserBrands(email, selected);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="rounded-card border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-700 hover:border-light-accent"
+        title="Assign specific brands"
+      >
+        Brands{count ? ` (${count})` : ""}
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-64 rounded-card border border-neutral-200 bg-white p-2 shadow-lg">
+          {selected === null ? (
+            <p className="p-2 text-xs text-neutral-500">Loading...</p>
+          ) : builders.length === 0 ? (
+            <p className="p-2 text-xs text-neutral-500">No brands yet.</p>
+          ) : (
+            <div className="max-h-64 space-y-1 overflow-auto">
+              {builders.map((b) => (
+                <label
+                  key={b.id}
+                  className="flex items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-neutral-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(b.id)}
+                    onChange={() => toggle(b.id)}
+                  />
+                  <span className="truncate">
+                    {b.name}
+                    <span className="text-neutral-400">
+                      {" "}
+                      · {groupName(b.groupId)}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="mt-2 flex justify-end gap-2 border-t border-neutral-100 pt-2">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-card px-2 py-1 text-xs text-neutral-500"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving || selected === null}
+              className="rounded-card bg-light-accent px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              Save
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

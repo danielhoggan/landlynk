@@ -8,6 +8,7 @@ import { Logo } from "./Logo";
 import { NAV_ITEMS, isActive } from "./navItems";
 import { ReferenceStatusDot } from "./ReferenceStatusDot";
 import { AllowanceBadge } from "./AllowanceBadge";
+import { BrandSelector } from "./BrandSelector";
 import { useUser } from "@/lib/userContext";
 
 interface DrawerNavProps {
@@ -77,6 +78,9 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
           >
             <X size={22} />
           </button>
+        </div>
+        <div className="mb-4">
+          <BrandSelector />
         </div>
         <ul className="space-y-1">{mainItems.map(renderItem)}</ul>
         {adminItems.length > 0 && (

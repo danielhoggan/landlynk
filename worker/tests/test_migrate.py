@@ -31,6 +31,7 @@ def test_migrations_dir_ships_with_the_package():
         "0015_builder_locations.sql",
         "0016_builder_default.sql",
         "0017_group_industry.sql",
+        "0018_user_brands.sql",
     ]
 
 

@@ -15,8 +15,7 @@ interface LogoProps {
 // that logo (white-labelling the interface); otherwise the LandLynk wordmark:
 // green "Land", charcoal "Lynk" (light in dark mode), with the map-pin motif.
 export function Logo({ className = "text-lg", showMark = true }: LogoProps) {
-  const { user } = useUser();
-  const brand = user?.brand;
+  const { activeBrand: brand } = useUser();
 
   // Hold an empty slot until the client has mounted and the brand (from cache)
   // is known. Otherwise the server-rendered default wordmark paints first and a

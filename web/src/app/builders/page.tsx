@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Plus, Star, Trash2 } from "lucide-react";
+import { Building2, Plus, Trash2 } from "lucide-react";
 import {
   listGroups,
   listBuilders,
@@ -14,13 +14,12 @@ import {
   deleteProfile,
   updateGroup,
   uploadBrandLogo,
-  setBuilderDefault,
   type BuilderGroup,
   type Builder,
   type BuilderProfile,
 } from "@/lib/client";
 import { SEGMENTS } from "@/lib/segments";
-import { INDUSTRIES } from "@/lib/industries";
+import { INDUSTRIES, industryLabel } from "@/lib/industries";
 import { useUser } from "@/lib/userContext";
 
 function fileToBase64(file: File): Promise<string> {
@@ -41,7 +40,6 @@ export default function BuildersPage() {
   const [builders, setBuilders] = useState<Builder[]>([]);
   const [profiles, setProfiles] = useState<BuilderProfile[]>([]);
   const [newGroup, setNewGroup] = useState("");
-  const [newIndustry, setNewIndustry] = useState("");
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
@@ -76,9 +74,8 @@ export default function BuildersPage() {
 
   async function addGroup() {
     if (!newGroup.trim()) return;
-    await createGroup(newGroup.trim(), newIndustry || null);
+    await createGroup(newGroup.trim());
     setNewGroup("");
-    setNewIndustry("");
     refresh();
   }
 
@@ -93,26 +90,13 @@ export default function BuildersPage() {
       </p>
       {error && <p className="text-sm text-priority-low">{error}</p>}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2">
         <input
           value={newGroup}
           onChange={(e) => setNewGroup(e.target.value)}
           placeholder="New group (e.g. Bellway plc)"
-          className="min-w-[12rem] flex-1 rounded-card border border-neutral-300 px-3 py-2 text-sm"
+          className="flex-1 rounded-card border border-neutral-300 px-3 py-2 text-sm"
         />
-        <select
-          value={newIndustry}
-          onChange={(e) => setNewIndustry(e.target.value)}
-          title="Industry (tailors How it works for this client)"
-          className="rounded-card border border-neutral-300 px-2 py-2 text-sm text-neutral-600"
-        >
-          <option value="">Industry (optional)</option>
-          {INDUSTRIES.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.label}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
           onClick={addGroup}
@@ -154,13 +138,13 @@ function GroupCard({
   const [secondary, setSecondary] = useState("#1F5A3C");
   const [accent, setAccent] = useState("#C9A24B");
   const [fonts, setFonts] = useState("");
+  const [brandIndustry, setBrandIndustry] = useState("");
   const [targetLocations, setTargetLocations] = useState("");
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [brandErr, setBrandErr] = useState("");
   const [cap, setCap] = useState(
     group.monthlyCap == null ? "" : String(group.monthlyCap),
   );
-  const [industry, setIndustry] = useState(group.industry ?? "");
   const [savingCap, setSavingCap] = useState(false);
 
   return (
@@ -168,22 +152,6 @@ function GroupCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{group.name}</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-xs text-neutral-500">
-            Industry
-            <select
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-              title="Tailors How it works for this client"
-              className="rounded-card border border-neutral-300 px-2 py-1 text-xs text-neutral-600"
-            >
-              <option value="">None</option>
-              {INDUSTRIES.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="flex items-center gap-1.5 text-xs text-neutral-500">
             Monthly AI cap
             <input
@@ -204,7 +172,6 @@ function GroupCard({
                 await updateGroup(group.id, {
                   name: group.name,
                   monthlyCap: cap === "" ? null : Number(cap),
-                  industry: industry || null,
                 });
                 onChange();
               } finally {
@@ -282,6 +249,19 @@ function GroupCard({
               placeholder="Web fonts (comma separated)"
               className="flex-1 rounded-card border border-neutral-300 px-3 py-1.5 text-xs"
             />
+            <select
+              value={brandIndustry}
+              onChange={(e) => setBrandIndustry(e.target.value)}
+              title="Industry (tailors segments and How it works for this brand)"
+              className="rounded-card border border-neutral-300 px-2 py-1.5 text-xs text-neutral-600"
+            >
+              <option value="">Industry (optional)</option>
+              {INDUSTRIES.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
             <label className="flex items-center gap-2 text-xs font-medium text-neutral-600">
               Brand logo (required)
               <input
@@ -319,11 +299,13 @@ function GroupCard({
                       .split(/[\n,]/)
                       .map((s) => s.trim())
                       .filter(Boolean),
+                    industry: brandIndustry || null,
                   });
                   const base64 = await fileToBase64(logoFile);
                   await uploadBrandLogo(id, logoFile.name, base64);
                   setName("");
                   setFonts("");
+                  setBrandIndustry("");
                   setTargetLocations("");
                   setLogoFile(null);
                   onChange();
@@ -393,25 +375,10 @@ function BrandCard({
             />
           ))}
         <span className="text-sm font-semibold">{brand.name}</span>
-        {brand.isDefault ? (
-          <span
-            className="inline-flex items-center gap-1 rounded-full bg-light-accent/10 px-2 py-0.5 text-[10px] font-semibold text-light-accent"
-            title="This brand white-labels the app interface for the group"
-          >
-            <Star size={10} fill="currentColor" /> App brand
+        {brand.industry && (
+          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-500">
+            {industryLabel(brand.industry) ?? brand.industry}
           </span>
-        ) : (
-          <button
-            type="button"
-            onClick={async () => {
-              await setBuilderDefault(brand.id);
-              onChange();
-            }}
-            className="rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-semibold text-neutral-500 hover:border-light-accent hover:text-light-accent"
-            title="Use this brand to white-label the app interface for the group"
-          >
-            Use for app
-          </button>
         )}
         <button
           type="button"

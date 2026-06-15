@@ -57,25 +57,12 @@ def _profile_row(row: tuple) -> dict:
     }
 
 
-def _empty_brand() -> dict:
-    """Brand shape for a group with no brand yet: no logo or colours, so the
-    interface keeps the default theme, but company/industry can still be set by
-    the caller for tailoring (e.g. the How it works page)."""
-    return {
-        "builderId": None,
-        "name": None,
-        "themeHeading": None,
-        "themeSecondary": None,
-        "themeAccent": None,
-        "fonts": [],
-        "hasLogo": False,
-    }
-
-
-def _builder_brand(builder: dict) -> dict:
-    """The interface brand drawn from a builder: colours, fonts and whether a
-    logo exists (the bytes are served separately by builder id). Used to
-    white-label the app shell for users pinned to the brand's group."""
+def _full_brand(builder: dict, group: dict | None) -> dict:
+    """A brand the user can make active: colours, fonts, whether a logo exists
+    (bytes served separately by builder id), the brand's industry, and its owning
+    group (for company name, profile scoping and the AI cap). Used to white-label
+    the shell and tailor content to the active brand."""
+    group = group or {}
     return {
         "builderId": builder["id"],
         "name": builder["name"],
@@ -84,6 +71,9 @@ def _builder_brand(builder: dict) -> dict:
         "themeAccent": builder.get("themeAccent"),
         "fonts": builder.get("fonts") or [],
         "hasLogo": bool(builder.get("logoPath")),
+        "industry": builder.get("industry"),
+        "groupId": builder.get("groupId") or group.get("id"),
+        "companyName": group.get("name"),
     }
 
 
@@ -252,8 +242,9 @@ class Storage(Protocol):
     def cost_report(self, date_from: str | None, date_to: str | None) -> dict: ...
     def create_builder(self, builder: dict) -> None: ...
     def list_builders(self, group_id: str | None = None) -> list[dict]: ...
-    def get_group_brand(self, group_id: str) -> dict | None: ...
-    def set_builder_default(self, builder_id: str) -> bool: ...
+    def get_accessible_brands(self, email: str) -> list[dict]: ...
+    def set_user_brands(self, email: str, brand_ids: list[str]) -> None: ...
+    def list_user_brand_ids(self, email: str) -> list[str]: ...
     def set_builder_logo(self, builder_id: str, path: str) -> bool: ...
     def delete_builder(self, builder_id: str) -> bool: ...
     def upsert_builder_profile(self, profile: dict) -> None: ...
@@ -308,6 +299,7 @@ class InMemoryStore:
         self._area_profiles: dict[str, dict] = {}
         self._groups: dict[str, dict] = {}
         self._builders: dict[str, dict] = {}
+        self._user_brands: dict[str, set[str]] = {}
         self._profiles: dict[str, dict] = {}
         self._usage: list[dict] = []
         self._audit: list[dict] = []
@@ -573,7 +565,7 @@ class InMemoryStore:
         self._builders[builder["id"]] = {
             "fonts": [],
             "logoPath": None,
-            "isDefault": False,
+            "industry": None,
             **builder,
         }
 
@@ -583,31 +575,21 @@ class InMemoryStore:
             builders = [b for b in builders if b["groupId"] == group_id]
         return sorted(builders, key=lambda b: b["name"])
 
-    def get_group_brand(self, group_id: str) -> dict | None:
-        group = self._groups.get(group_id)
-        if group is None:
-            return None
-        builders = sorted(
-            (b for b in self._builders.values() if b["groupId"] == group_id),
-            key=lambda b: b["name"],
-        )
-        chosen = next(
-            (b for b in builders if b.get("isDefault")),
-            builders[0] if builders else None,
-        )
-        brand = _builder_brand(chosen) if chosen else _empty_brand()
-        brand["companyName"] = group.get("name")
-        brand["industry"] = group.get("industry")
-        return brand
-
-    def set_builder_default(self, builder_id: str) -> bool:
-        target = self._builders.get(builder_id)
-        if target is None:
-            return False
+    def get_accessible_brands(self, email: str) -> list[dict]:
+        user = self._users.get(email.lower()) or {}
+        group_id = user.get("builderGroupId")
+        granted = set(self._user_brands.get(email.lower(), set()))
+        out = []
         for b in self._builders.values():
-            if b["groupId"] == target["groupId"]:
-                b["isDefault"] = b["id"] == builder_id
-        return True
+            if (group_id and b["groupId"] == group_id) or b["id"] in granted:
+                out.append(_full_brand(b, self._groups.get(b["groupId"])))
+        return sorted(out, key=lambda x: (x["name"] or "").lower())
+
+    def set_user_brands(self, email: str, brand_ids: list[str]) -> None:
+        self._user_brands[email.lower()] = set(brand_ids)
+
+    def list_user_brand_ids(self, email: str) -> list[str]:
+        return sorted(self._user_brands.get(email.lower(), set()))
 
     def set_builder_logo(self, builder_id: str, path: str) -> bool:
         builder = self._builders.get(builder_id)
@@ -1159,13 +1141,14 @@ class PostgresStore:
             conn.execute(
                 "INSERT INTO builder (id, group_id, name, theme_heading, "
                 "theme_secondary, theme_accent, fonts, logo_path, "
-                "target_locations) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "target_locations, industry) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, "
                 "theme_heading = EXCLUDED.theme_heading, "
                 "theme_secondary = EXCLUDED.theme_secondary, "
                 "theme_accent = EXCLUDED.theme_accent, fonts = EXCLUDED.fonts, "
-                "target_locations = EXCLUDED.target_locations",
+                "target_locations = EXCLUDED.target_locations, "
+                "industry = EXCLUDED.industry",
                 [
                     builder["id"],
                     builder["groupId"],
@@ -1176,13 +1159,14 @@ class PostgresStore:
                     json.dumps(builder.get("fonts", [])),
                     builder.get("logoPath"),
                     json.dumps(builder.get("targetLocations", [])),
+                    builder.get("industry"),
                 ],
             )
 
     def list_builders(self, group_id: str | None = None) -> list[dict]:
         sql = (
             "SELECT id, group_id, name, theme_heading, theme_secondary, "
-            "theme_accent, fonts, logo_path, target_locations, is_default "
+            "theme_accent, fonts, logo_path, target_locations, industry "
             "FROM builder"
         )
         params: list = []
@@ -1203,63 +1187,63 @@ class PostgresStore:
                 "fonts": r[6] or [],
                 "logoPath": r[7],
                 "targetLocations": r[8] or [],
-                "isDefault": r[9],
+                "industry": r[9],
             }
             for r in rows
         ]
 
-    def get_group_brand(self, group_id: str) -> dict | None:
-        # The group's flagged default brand, else the first by name. Company name
-        # and industry come from the group itself, so they are present even when
-        # the group has no brand yet (for tailoring like the How it works page).
+    def get_accessible_brands(self, email: str) -> list[dict]:
+        # Brands the user may switch between: all brands in their whole-group
+        # grant (app_user.builder_group_id), plus any explicitly granted brands.
+        email = email.lower()
         with self._pool.connection() as conn:
-            grp = conn.execute(
-                "SELECT name, industry FROM builder_group WHERE id = %s",
-                [group_id],
-            ).fetchone()
-            if grp is None:
-                return None
-            row = conn.execute(
-                "SELECT id, name, theme_heading, theme_secondary, theme_accent, "
-                "fonts, logo_path FROM builder WHERE group_id = %s "
-                "ORDER BY is_default DESC, name LIMIT 1",
-                [group_id],
-            ).fetchone()
-        if row is None:
-            brand = _empty_brand()
-        else:
-            brand = _builder_brand(
+            rows = conn.execute(
+                "SELECT DISTINCT b.id, b.group_id, b.name, b.theme_heading, "
+                "b.theme_secondary, b.theme_accent, b.fonts, b.logo_path, "
+                "b.industry, g.name "
+                "FROM builder b JOIN builder_group g ON b.group_id = g.id "
+                "LEFT JOIN app_user u ON u.email = %s "
+                "LEFT JOIN user_brand ub ON ub.brand_id = b.id AND ub.email = %s "
+                "WHERE b.group_id = u.builder_group_id OR ub.brand_id IS NOT NULL "
+                "ORDER BY b.name",
+                [email, email],
+            ).fetchall()
+        return [
+            _full_brand(
                 {
-                    "id": row[0],
-                    "name": row[1],
-                    "themeHeading": row[2],
-                    "themeSecondary": row[3],
-                    "themeAccent": row[4],
-                    "fonts": row[5] or [],
-                    "logoPath": row[6],
-                }
+                    "id": r[0],
+                    "groupId": r[1],
+                    "name": r[2],
+                    "themeHeading": r[3],
+                    "themeSecondary": r[4],
+                    "themeAccent": r[5],
+                    "fonts": r[6] or [],
+                    "logoPath": r[7],
+                    "industry": r[8],
+                },
+                {"id": r[1], "name": r[9]},
             )
-        brand["companyName"] = grp[0]
-        brand["industry"] = grp[1]
-        return brand
+            for r in rows
+        ]
 
-    def set_builder_default(self, builder_id: str) -> bool:
+    def set_user_brands(self, email: str, brand_ids: list[str]) -> None:
+        email = email.lower()
         with self._pool.connection() as conn, conn.transaction():
-            row = conn.execute(
-                "SELECT group_id FROM builder WHERE id = %s", [builder_id]
-            ).fetchone()
-            if row is None:
-                return False
-            # Clear the old default first so the one-default-per-group index holds.
-            conn.execute(
-                "UPDATE builder SET is_default = false "
-                "WHERE group_id = %s AND id <> %s",
-                [row[0], builder_id],
-            )
-            conn.execute(
-                "UPDATE builder SET is_default = true WHERE id = %s", [builder_id]
-            )
-        return True
+            conn.execute("DELETE FROM user_brand WHERE email = %s", [email])
+            for bid in dict.fromkeys(brand_ids):
+                conn.execute(
+                    "INSERT INTO user_brand (email, brand_id) VALUES (%s, %s) "
+                    "ON CONFLICT DO NOTHING",
+                    [email, bid],
+                )
+
+    def list_user_brand_ids(self, email: str) -> list[str]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT brand_id FROM user_brand WHERE email = %s ORDER BY brand_id",
+                [email.lower()],
+            ).fetchall()
+        return [r[0] for r in rows]
 
     def set_builder_logo(self, builder_id: str, path: str) -> bool:
         with self._pool.connection() as conn:

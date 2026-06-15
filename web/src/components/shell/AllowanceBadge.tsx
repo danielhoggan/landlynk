@@ -3,18 +3,21 @@
 import { useEffect, useState } from "react";
 import { Coins } from "lucide-react";
 import { getUsage, type LlmUsage } from "@/lib/client";
+import { useUser } from "@/lib/userContext";
 
 // Persistent AI allowance indicator for external (metered) users: lookups left
 // this month and when the allowance refreshes. Internal users and admins are
-// unmetered, so it renders nothing for them.
+// unmetered, so it renders nothing for them. Refetches when the active brand
+// changes, since the allowance is pooled per the active brand's group.
 export function AllowanceBadge() {
+  const { activeBrand } = useUser();
   const [usage, setUsage] = useState<LlmUsage | null>(null);
 
   useEffect(() => {
     getUsage()
       .then(setUsage)
       .catch(() => {});
-  }, []);
+  }, [activeBrand?.builderId]);
 
   if (!usage?.metered) return null;
 

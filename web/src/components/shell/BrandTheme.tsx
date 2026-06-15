@@ -9,12 +9,11 @@ import { useUser } from "@/lib/userContext";
 // that the Tailwind tokens consume (see tailwind.config.ts); the logo is handled
 // by <Logo>. Renders nothing.
 export function BrandTheme() {
-  const { user } = useUser();
+  const { activeBrand } = useUser();
   // The interface accent is the brand's accent, falling back to its heading
   // colour so a brand that only set a primary colour still tints the shell.
-  const accent =
-    user?.brand?.themeAccent ?? user?.brand?.themeHeading ?? null;
-  const font = user?.brand?.fonts?.[0]?.trim() || null;
+  const accent = activeBrand?.themeAccent ?? activeBrand?.themeHeading ?? null;
+  const font = activeBrand?.fonts?.[0]?.trim() || null;
 
   useEffect(() => {
     const root = document.documentElement;

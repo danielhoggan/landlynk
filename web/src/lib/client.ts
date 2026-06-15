@@ -169,7 +169,9 @@ export interface AreaProfile {
 export async function getCachedAreaProfile(
   id: string,
 ): Promise<AreaProfile | null> {
-  const res = await fetch(`/api/catchments/${id}/area-profile`);
+  const res = await fetch(`/api/catchments/${id}/area-profile`, {
+    headers: activeBrandHeaders(),
+  });
   if (!res.ok) return null;
   const data = await res.json().catch(() => ({ profile: null }));
   return data?.profile ?? null;
@@ -186,7 +188,7 @@ export async function generateAreaProfile(
 ): Promise<AreaProfile> {
   const res = await fetch(`/api/catchments/${id}/area-profile`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...activeBrandHeaders() },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
@@ -282,7 +284,9 @@ export async function getCosts(filters: {
 }
 
 export async function getUsage(): Promise<LlmUsage> {
-  const res = await fetch("/api/builders/usage");
+  const res = await fetch("/api/builders/usage", {
+    headers: activeBrandHeaders(),
+  });
   if (!res.ok) return { metered: false };
   return res.json();
 }
@@ -310,19 +314,34 @@ export interface Builder {
   logoPath?: string | null;
   /** Best / target locations (postcodes) for lookalike weighting. */
   targetLocations?: string[];
-  /** This brand white-labels the app interface for everyone in its group. */
-  isDefault?: boolean;
+  /** The brand's sector, used to tailor segments and How it works. */
+  industry?: string | null;
 }
 
-// Make a brand the one that white-labels the app interface for its group.
-export async function setBuilderDefault(builderId: string): Promise<void> {
-  const res = await fetch(`/api/admin/builders/${builderId}/default`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error ?? `Could not set app brand (${res.status})`);
-  }
+// The specific brand grants for a user (separate from a whole-group grant).
+export async function getUserBrands(email: string): Promise<string[]> {
+  const res = await fetch(
+    `/api/admin/users/${encodeURIComponent(email)}/brands`,
+  );
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({ brandIds: [] }));
+  return data?.brandIds ?? [];
+}
+
+// Assign a user to specific brands they can switch between.
+export async function setUserBrands(
+  email: string,
+  brandIds: string[],
+): Promise<void> {
+  const res = await fetch(
+    `/api/admin/users/${encodeURIComponent(email)}/brands`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ brandIds }),
+    },
+  );
+  if (!res.ok) throw new Error(`Could not assign brands (${res.status})`);
 }
 
 export async function uploadBrandLogo(
@@ -347,7 +366,10 @@ async function jsonOrThrow<T>(res: Response, what: string): Promise<T> {
 }
 
 export async function getBuilderProfiles(): Promise<BuilderProfile[]> {
-  return jsonOrThrow(await fetch("/api/builders/profiles"), "Could not load profiles");
+  return jsonOrThrow(
+    await fetch("/api/builders/profiles", { headers: activeBrandHeaders() }),
+    "Could not load profiles",
+  );
 }
 
 export async function listGroups(): Promise<BuilderGroup[]> {
@@ -385,6 +407,7 @@ export async function createBuilder(body: {
   themeAccent?: string;
   fonts?: string[];
   targetLocations?: string[];
+  industry?: string | null;
 }): Promise<{ id: string }> {
   return jsonOrThrow(
     await fetch("/api/admin/builders", {
@@ -480,7 +503,8 @@ export interface Brand {
   themeAccent?: string | null;
   fonts?: string[];
   hasLogo?: boolean;
-  /** The client company and its sector, for white-labelled / tailored copy. */
+  /** The owning group (company) and the brand's sector, for theming and copy. */
+  groupId?: string | null;
   companyName?: string | null;
   industry?: string | null;
 }
@@ -490,7 +514,28 @@ export interface AppUser {
   name: string | null;
   role: string;
   builderGroupId?: string | null;
-  brand?: Brand | null;
+  /** Brands this user may switch between; the active one white-labels the app. */
+  brands?: Brand[];
+}
+
+// The brand the user has selected as active, read from localStorage so it can be
+// forwarded to the worker (which scopes profiles and the AI allowance to it).
+const ACTIVE_BRAND_KEY = "landlynk.activeBrandId";
+
+export function getActiveBrandId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(ACTIVE_BRAND_KEY);
+}
+
+export function setActiveBrandId(id: string | null): void {
+  if (typeof window === "undefined") return;
+  if (id) window.localStorage.setItem(ACTIVE_BRAND_KEY, id);
+  else window.localStorage.removeItem(ACTIVE_BRAND_KEY);
+}
+
+function activeBrandHeaders(): Record<string, string> {
+  const id = getActiveBrandId();
+  return id ? { "x-active-brand": id } : {};
 }
 
 export async function getMe(): Promise<AppUser> {
