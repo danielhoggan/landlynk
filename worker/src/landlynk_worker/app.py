@@ -847,6 +847,21 @@ def _default_model() -> str | None:
     return default_available_model()
 
 
+def _objective_id(catchment: dict) -> str | None:
+    """The business objective stored on a catchment, part of the AI cache key."""
+    return ((catchment.get("input") or {}).get("config") or {}).get("objective")
+
+
+def _area_profile_key(codes: list[str], model: str, objective_id: str | None) -> str:
+    """Cache identity for an AI Local Area Profile: the area set, the model and
+    the business objective (which frames the prompt). Shared by the generate,
+    read and export paths so a cached profile is found consistently."""
+    import hashlib
+
+    key_src = "|".join(sorted(codes)) + "::" + model + "::" + (objective_id or "")
+    return hashlib.sha256(key_src.encode()).hexdigest()
+
+
 @app.get("/admin/models")
 def admin_list_models(user: dict = Depends(current_user)) -> dict:
     """Available AI models (by configured provider keys) and the chosen default."""
@@ -888,8 +903,6 @@ def area_profile(
     user: dict = Depends(current_user),
 ) -> dict:
     """Generate (or return cached) an AI Local Area Profile for the area set."""
-    import hashlib
-
     from .enrichment import generate_area_profile
 
     _require_access(catchment_id, user)
@@ -914,8 +927,7 @@ def area_profile(
 
     # The business objective frames the commentary, so it is part of the prompt
     # and therefore part of the cache identity.
-    stored_config = (catchment.get("input") or {}).get("config") or {}
-    objective_id = stored_config.get("objective")
+    objective_id = _objective_id(catchment)
     objective_framing = None
     if objective_id:
         from .scoring.objectives import OBJECTIVES
@@ -923,8 +935,7 @@ def area_profile(
         obj = OBJECTIVES.get(objective_id)
         objective_framing = obj.ai_framing if obj else None
 
-    key_src = "|".join(sorted(codes)) + "::" + model + "::" + (objective_id or "")
-    cache_key = hashlib.sha256(key_src.encode()).hexdigest()
+    cache_key = _area_profile_key(codes, model, objective_id)
     if not request.refresh:
         cached = store.get_area_profile(cache_key)
         if cached is not None:
@@ -981,6 +992,32 @@ def area_profile(
         cost=cost,
     )
     return {"model": model, **payload, "cached": False}
+
+
+@app.get("/catchments/{catchment_id}/area-profile")
+def cached_area_profile(
+    catchment_id: str,
+    scope: str = "whole",
+    user: dict = Depends(current_user),
+) -> dict:
+    """Return an already-cached AI Local Area Profile for the whole catchment,
+    or {"profile": None} if none exists. Read-only: never calls the provider and
+    never touches the allowance, so a historic catchment can show its snapshot
+    without the user clicking Add AI lookup."""
+    _require_access(catchment_id, user)
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    codes = [a["areaCode"] for a in catchment.get("areas", [])]
+    model = _default_model()
+    if not codes or not model:
+        return {"profile": None}
+    key = _area_profile_key(codes, model, _objective_id(catchment))
+    cached = store.get_area_profile(key)
+    if cached is None:
+        return {"profile": None}
+    return {"profile": {"model": model, **cached, "cached": True}}
 
 
 class RoleRequest(BaseModel):
@@ -1234,10 +1271,8 @@ def _combined_card(catchment_id: str, request: CombineRequest) -> Battlecard:
     area_profile = None
     model = _default_model()
     if model:
-        import hashlib
-
-        key = hashlib.sha256(("|".join(sorted(codes)) + "::" + model).encode())
-        area_profile = store.get_area_profile(key.hexdigest())
+        key = _area_profile_key(codes, model, _objective_id(catchment))
+        area_profile = store.get_area_profile(key)
     return build_combined_battlecard(payloads, names, config, area_profile=area_profile)
 
 

@@ -159,6 +159,39 @@ def test_set_default_unknown_brand_404(client):
     assert client.post("/admin/builders/nope/default").status_code == 404
 
 
+def test_cached_area_profile_is_read_only(client, monkeypatch):
+    # GET returns a snapshot only after one is generated, and never generates
+    # itself (so a historic run can auto-show without spending the allowance).
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    ext = _h("ext@x.com")
+    job = client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "IP1 1AA", "developmentName": "D"},
+        headers=ext,
+    ).json()["id"]
+
+    monkeypatch.setattr(app_module.settings, "openai_api_key", "sk-test")
+    client.put("/admin/models/default", json={"model": "gpt-4o"})
+    monkeypatch.setattr(
+        "landlynk_worker.enrichment.generate_area_profile",
+        lambda names, model, transport=None: {"description": "x", "amenities": []},
+    )
+
+    # Nothing cached: the read-only GET reports no profile and does not generate.
+    assert (
+        client.get(f"/catchments/{job}/area-profile", headers=ext).json()["profile"]
+        is None
+    )
+
+    # Generate once, then the GET serves the cached snapshot.
+    gen = client.post(
+        f"/catchments/{job}/area-profile", json={"scope": "whole"}, headers=ext
+    )
+    assert gen.status_code == 200 and gen.json()["cached"] is False
+    got = client.get(f"/catchments/{job}/area-profile", headers=ext).json()["profile"]
+    assert got is not None and got["cached"] is True and got["description"] == "x"
+
+
 def test_non_admin_cannot_manage_builders(client):
     assert (
         client.get("/admin/builders/groups", headers=_h("u@x.com")).status_code == 403

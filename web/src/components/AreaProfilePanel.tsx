@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Sparkles, RefreshCw } from "lucide-react";
 import {
   generateAreaProfile,
+  getCachedAreaProfile,
   getUsage,
   type AreaProfile,
   type LlmUsage,
@@ -43,14 +44,31 @@ export function AreaProfilePanel({
       .catch(() => setUsage({ metered: false }));
   }, []);
 
+  // Auto-show a previously generated snapshot for this catchment, so a historic
+  // run displays its AI profile without the user clicking Add AI lookup (and
+  // without re-running the model or touching the allowance).
+  useEffect(() => {
+    let active = true;
+    getCachedAreaProfile(catchmentId)
+      .then((p) => {
+        if (active && p) setProfile(p);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [catchmentId]);
+
   const metered = usage?.metered === true;
   const exhausted =
     metered && usage?.remaining != null && usage.remaining <= 0;
 
-  // Internal users see a one-time cost confirmation; external users draw on a
-  // metered allowance, so the cost is already governed and no prompt is shown.
+  // Confirm before the first run of the session: internal users see the money
+  // cost, external users see what it draws from their metered allowance. After
+  // acknowledging once, later runs go straight through (the allowance line and
+  // the per-run cost stay visible regardless).
   function requestRun(scope: "whole" | "selection", refresh = false) {
-    if (!metered && !costAck) {
+    if (!costAck) {
       setPending({ scope, refresh });
       return;
     }
@@ -145,16 +163,30 @@ export function AreaProfilePanel({
         </p>
       )}
 
-      {/* Internal users: one-time cost confirmation. */}
+      {/* Confirmation: external users see their allowance, internal users cost. */}
       {pending && (
         <div className="mt-2 rounded-card border border-priority-mid/40 bg-priority-mid/10 p-2.5 text-xs">
           <p className="text-neutral-700">
-            This runs an AI model{usage?.model ? ` (${usage.model})` : ""} and
-            incurs a cost to your account
-            {usage?.estCost
-              ? `, estimated about £${usage.estCost.toFixed(3)} per lookup`
-              : ""}
-            . Continue?
+            {metered ? (
+              <>
+                This uses 1
+                {usage?.cap != null
+                  ? ` of your ${usage?.remaining ?? 0} remaining`
+                  : ""}{" "}
+                AI {usage?.cap != null ? "generations" : "generation"} this month
+                {usage?.model ? ` (${usage.model})` : ""}. Already-cached lookups
+                are free. Continue?
+              </>
+            ) : (
+              <>
+                This runs an AI model{usage?.model ? ` (${usage.model})` : ""} and
+                incurs a cost to your account
+                {usage?.estCost
+                  ? `, estimated about £${usage.estCost.toFixed(3)} per lookup`
+                  : ""}
+                . Continue?
+              </>
+            )}
           </p>
           <div className="mt-2 flex gap-2">
             <button
@@ -165,7 +197,7 @@ export function AreaProfilePanel({
               }}
               className="rounded-card bg-light-accent px-3 py-1 font-semibold text-white"
             >
-              Generate (incurs cost)
+              {metered ? "Use 1 generation" : "Generate (incurs cost)"}
             </button>
             <button
               type="button"

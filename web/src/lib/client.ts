@@ -164,6 +164,17 @@ export interface AreaProfile {
   cached?: boolean;
 }
 
+// Read an already-cached whole-catchment profile without generating or metering.
+// Returns null when none is cached, so the panel can auto-show a prior snapshot.
+export async function getCachedAreaProfile(
+  id: string,
+): Promise<AreaProfile | null> {
+  const res = await fetch(`/api/catchments/${id}/area-profile`);
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({ profile: null }));
+  return data?.profile ?? null;
+}
+
 export async function generateAreaProfile(
   id: string,
   body: {

@@ -4,6 +4,22 @@ import { userHeaders } from "@/lib/workerClient";
 
 const WORKER_BASE_URL = process.env.WORKER_BASE_URL ?? "http://localhost:8000";
 
+// GET /api/catchments/:id/area-profile. Return an already-cached whole-catchment
+// profile (or { profile: null }). Read-only: never generates, never meters.
+export async function GET(
+  _request: Request,
+  { params }: { params: { id: string } },
+) {
+  const session = await requireSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const res = await fetch(`${WORKER_BASE_URL}/catchments/${params.id}/area-profile`, {
+    headers: userHeaders(sessionUser(session)),
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({ profile: null }));
+  return NextResponse.json(data, { status: res.ok ? 200 : res.status });
+}
+
 // POST /api/catchments/:id/area-profile. Generate (or fetch cached) an AI Local
 // Area Profile for the whole catchment or a selection.
 export async function POST(
