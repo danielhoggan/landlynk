@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
 import { useUser } from "@/lib/userContext";
 
@@ -16,6 +17,21 @@ interface LogoProps {
 export function Logo({ className = "text-lg", showMark = true }: LogoProps) {
   const { user } = useUser();
   const brand = user?.brand;
+
+  // Hold an empty slot until the client has mounted and the brand (from cache)
+  // is known. Otherwise the server-rendered default wordmark paints first and a
+  // branded user briefly sees the LandLynk logo behind their own on refresh.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) {
+    return (
+      <span
+        className={`inline-flex items-center ${className}`}
+        style={{ height: "1.6em" }}
+        aria-hidden
+      />
+    );
+  }
 
   if (brand?.hasLogo) {
     return (
