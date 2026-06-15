@@ -295,6 +295,19 @@ export interface Builder {
   logoPath?: string | null;
   /** Best / target locations (postcodes) for lookalike weighting. */
   targetLocations?: string[];
+  /** This brand white-labels the app interface for everyone in its group. */
+  isDefault?: boolean;
+}
+
+// Make a brand the one that white-labels the app interface for its group.
+export async function setBuilderDefault(builderId: string): Promise<void> {
+  const res = await fetch(`/api/admin/builders/${builderId}/default`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error ?? `Could not set app brand (${res.status})`);
+  }
 }
 
 export async function uploadBrandLogo(
@@ -439,11 +452,24 @@ export async function getReferenceHealth(): Promise<ReferenceHealth> {
   return res.json();
 }
 
+// The interface brand for the signed-in user, drawn from their group's brand.
+// The logo bytes are served separately at /api/builders/:builderId/logo.
+export interface Brand {
+  builderId: string;
+  name: string;
+  themeHeading?: string | null;
+  themeSecondary?: string | null;
+  themeAccent?: string | null;
+  fonts?: string[];
+  hasLogo?: boolean;
+}
+
 export interface AppUser {
   email: string | null;
   name: string | null;
   role: string;
   builderGroupId?: string | null;
+  brand?: Brand | null;
 }
 
 export async function getMe(): Promise<AppUser> {

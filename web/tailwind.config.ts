@@ -14,15 +14,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Light mode: Apple-style.
+        // Light mode: Apple-style. The accent is a CSS variable so a client
+        // brand can white-label the interface at runtime; the literal is the
+        // default when no brand is set (see BrandTheme).
         light: {
           bg: "#F5F5F7",
-          accent: "#0071E3",
+          accent: "var(--brand-accent, #0071E3)",
         },
-        // Dark mode: Mediaworks palette.
+        // Dark mode: Mediaworks palette. Same brand override, different default.
         dark: {
           bg: "#0D0D0D",
-          accent: "#DC167A",
+          accent: "var(--brand-accent, #DC167A)",
         },
         // Semantic colours for priority bands and status. Not arbitrary use.
         priority: {
@@ -37,8 +39,14 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // Single typeface for now: Poppins for both UI and web output.
-        sans: ["var(--font-poppins)", "Poppins", "system-ui", "sans-serif"],
+        // Poppins by default. --brand-font lets a client brand white-label the
+        // interface typeface at runtime, falling back to Poppins (see BrandTheme).
+        sans: [
+          "var(--brand-font, var(--font-poppins))",
+          "Poppins",
+          "system-ui",
+          "sans-serif",
+        ],
         output: ["var(--font-poppins)", "Poppins", "system-ui", "sans-serif"],
       },
       borderRadius: {

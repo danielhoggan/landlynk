@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Plus, Trash2 } from "lucide-react";
+import { Building2, Plus, Star, Trash2 } from "lucide-react";
 import {
   listGroups,
   listBuilders,
@@ -14,6 +14,7 @@ import {
   deleteProfile,
   updateGroup,
   uploadBrandLogo,
+  setBuilderDefault,
   type BuilderGroup,
   type Builder,
   type BuilderProfile,
@@ -358,6 +359,26 @@ function BrandCard({
             />
           ))}
         <span className="text-sm font-semibold">{brand.name}</span>
+        {brand.isDefault ? (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-light-accent/10 px-2 py-0.5 text-[10px] font-semibold text-light-accent"
+            title="This brand white-labels the app interface for the group"
+          >
+            <Star size={10} fill="currentColor" /> App brand
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={async () => {
+              await setBuilderDefault(brand.id);
+              onChange();
+            }}
+            className="rounded-full border border-neutral-300 px-2 py-0.5 text-[10px] font-semibold text-neutral-500 hover:border-light-accent hover:text-light-accent"
+            title="Use this brand to white-label the app interface for the group"
+          >
+            Use for app
+          </button>
+        )}
         <button
           type="button"
           onClick={async () => {

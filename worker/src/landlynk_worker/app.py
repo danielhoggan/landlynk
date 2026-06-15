@@ -474,7 +474,11 @@ def remove_share(
 
 @app.get("/me")
 def get_me(user: dict = Depends(current_user)) -> dict:
-    return user
+    # Attach the interface brand drawn from the user's group, so the web shell
+    # can white-label (logo, colours, fonts). None for users without a group.
+    group_id = user.get("builderGroupId")
+    brand = get_store().get_group_brand(group_id) if group_id else None
+    return {**user, "brand": brand}
 
 
 @app.get("/me/settings")
@@ -683,6 +687,19 @@ def admin_create_builder(
         detail={"name": request.name, "groupId": request.group_id},
     )
     return {"id": builder_id}
+
+
+@app.post("/admin/builders/{builder_id}/default", status_code=204)
+def admin_set_builder_default(
+    builder_id: str, user: dict = Depends(current_user)
+) -> Response:
+    """Make this brand the one that white-labels the app interface for everyone
+    in its group. Matters only when a group owns more than one brand."""
+    _require_admin(user)
+    if not get_store().set_builder_default(builder_id):
+        raise HTTPException(status_code=404, detail="Brand not found")
+    _audit(user, "builder.brand.default", target_type="brand", target_id=builder_id)
+    return Response(status_code=204)
 
 
 @app.delete("/admin/builders/{builder_id}", status_code=204)

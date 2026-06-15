@@ -57,6 +57,21 @@ def _profile_row(row: tuple) -> dict:
     }
 
 
+def _builder_brand(builder: dict) -> dict:
+    """The interface brand drawn from a builder: colours, fonts and whether a
+    logo exists (the bytes are served separately by builder id). Used to
+    white-label the app shell for users pinned to the brand's group."""
+    return {
+        "builderId": builder["id"],
+        "name": builder["name"],
+        "themeHeading": builder.get("themeHeading"),
+        "themeSecondary": builder.get("themeSecondary"),
+        "themeAccent": builder.get("themeAccent"),
+        "fonts": builder.get("fonts") or [],
+        "hasLogo": bool(builder.get("logoPath")),
+    }
+
+
 def _build_cost_report(items: list[dict]) -> dict:
     """Aggregate AI cost line items by user, model and group, with a total."""
 
@@ -214,6 +229,8 @@ class Storage(Protocol):
     def cost_report(self, date_from: str | None, date_to: str | None) -> dict: ...
     def create_builder(self, builder: dict) -> None: ...
     def list_builders(self, group_id: str | None = None) -> list[dict]: ...
+    def get_group_brand(self, group_id: str) -> dict | None: ...
+    def set_builder_default(self, builder_id: str) -> bool: ...
     def set_builder_logo(self, builder_id: str, path: str) -> bool: ...
     def delete_builder(self, builder_id: str) -> bool: ...
     def upsert_builder_profile(self, profile: dict) -> None: ...
@@ -520,13 +537,37 @@ class InMemoryStore:
         return existed
 
     def create_builder(self, builder: dict) -> None:
-        self._builders[builder["id"]] = {"fonts": [], "logoPath": None, **builder}
+        self._builders[builder["id"]] = {
+            "fonts": [],
+            "logoPath": None,
+            "isDefault": False,
+            **builder,
+        }
 
     def list_builders(self, group_id: str | None = None) -> list[dict]:
         builders = self._builders.values()
         if group_id is not None:
             builders = [b for b in builders if b["groupId"] == group_id]
         return sorted(builders, key=lambda b: b["name"])
+
+    def get_group_brand(self, group_id: str) -> dict | None:
+        builders = sorted(
+            (b for b in self._builders.values() if b["groupId"] == group_id),
+            key=lambda b: b["name"],
+        )
+        if not builders:
+            return None
+        chosen = next((b for b in builders if b.get("isDefault")), builders[0])
+        return _builder_brand(chosen)
+
+    def set_builder_default(self, builder_id: str) -> bool:
+        target = self._builders.get(builder_id)
+        if target is None:
+            return False
+        for b in self._builders.values():
+            if b["groupId"] == target["groupId"]:
+                b["isDefault"] = b["id"] == builder_id
+        return True
 
     def set_builder_logo(self, builder_id: str, path: str) -> bool:
         builder = self._builders.get(builder_id)
@@ -1088,7 +1129,8 @@ class PostgresStore:
     def list_builders(self, group_id: str | None = None) -> list[dict]:
         sql = (
             "SELECT id, group_id, name, theme_heading, theme_secondary, "
-            "theme_accent, fonts, logo_path, target_locations FROM builder"
+            "theme_accent, fonts, logo_path, target_locations, is_default "
+            "FROM builder"
         )
         params: list = []
         if group_id is not None:
@@ -1108,9 +1150,51 @@ class PostgresStore:
                 "fonts": r[6] or [],
                 "logoPath": r[7],
                 "targetLocations": r[8] or [],
+                "isDefault": r[9],
             }
             for r in rows
         ]
+
+    def get_group_brand(self, group_id: str) -> dict | None:
+        # The group's flagged default brand, else the first by name.
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT id, name, theme_heading, theme_secondary, theme_accent, "
+                "fonts, logo_path FROM builder WHERE group_id = %s "
+                "ORDER BY is_default DESC, name LIMIT 1",
+                [group_id],
+            ).fetchone()
+        if row is None:
+            return None
+        return _builder_brand(
+            {
+                "id": row[0],
+                "name": row[1],
+                "themeHeading": row[2],
+                "themeSecondary": row[3],
+                "themeAccent": row[4],
+                "fonts": row[5] or [],
+                "logoPath": row[6],
+            }
+        )
+
+    def set_builder_default(self, builder_id: str) -> bool:
+        with self._pool.connection() as conn, conn.transaction():
+            row = conn.execute(
+                "SELECT group_id FROM builder WHERE id = %s", [builder_id]
+            ).fetchone()
+            if row is None:
+                return False
+            # Clear the old default first so the one-default-per-group index holds.
+            conn.execute(
+                "UPDATE builder SET is_default = false "
+                "WHERE group_id = %s AND id <> %s",
+                [row[0], builder_id],
+            )
+            conn.execute(
+                "UPDATE builder SET is_default = true WHERE id = %s", [builder_id]
+            )
+        return True
 
     def set_builder_logo(self, builder_id: str, path: str) -> bool:
         with self._pool.connection() as conn:

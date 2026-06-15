@@ -6,6 +6,7 @@ import { TopBar } from "./TopBar";
 import { DrawerNav } from "./DrawerNav";
 import { Sidebar } from "./Sidebar";
 import { ReferenceWarning } from "./ReferenceWarning";
+import { BrandTheme } from "./BrandTheme";
 
 // Routes shown without the nav chrome. The sign-in page must not expose the
 // navigation, so an unauthenticated visitor never sees the app structure.
@@ -23,6 +24,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
+      <BrandTheme />
       <Sidebar />
       <DrawerNav open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <div className="md:pl-60">

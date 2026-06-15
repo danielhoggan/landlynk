@@ -115,6 +115,50 @@ def test_builder_profile_crud_and_scoping(client):
     assert scoped[0]["groupId"] == g1
 
 
+def test_me_brand_derives_from_group_default_builder(client):
+    # A group with two brands; the interface brand defaults to the first by name.
+    g = client.post("/admin/builders/groups", json={"name": "Plc"}).json()["id"]
+    alpha = client.post(
+        "/admin/builders",
+        json={"groupId": g, "name": "Alpha", "themeAccent": "#111111"},
+    ).json()["id"]
+    zeta = client.post(
+        "/admin/builders",
+        json={"groupId": g, "name": "Zeta", "themeAccent": "#222222"},
+    ).json()["id"]
+
+    # A user with no group gets no brand.
+    client.post(
+        "/jobs/catchment",
+        json={"kind": "postcode", "value": "X", "developmentName": "D"},
+        headers=_h("ext@x.com"),
+    )
+    assert client.get("/me", headers=_h("ext@x.com")).json()["brand"] is None
+
+    # Pinned to the group, the interface brand is the first brand by name.
+    client.put("/admin/users/ext@x.com/group", json={"groupId": g})
+    brand = client.get("/me", headers=_h("ext@x.com")).json()["brand"]
+    assert brand["builderId"] == alpha
+    assert brand["themeAccent"] == "#111111"
+    assert brand["hasLogo"] is False
+
+    # Admin designates Zeta as the app brand; the interface follows.
+    assert (
+        client.post(f"/admin/builders/{zeta}/default").status_code == 204
+    )
+    brand = client.get("/me", headers=_h("ext@x.com")).json()["brand"]
+    assert brand["builderId"] == zeta
+    assert brand["themeAccent"] == "#222222"
+
+    # Exactly one default per group.
+    builders = client.get(f"/admin/builders?group_id={g}").json()
+    assert [b["id"] for b in builders if b["isDefault"]] == [zeta]
+
+
+def test_set_default_unknown_brand_404(client):
+    assert client.post("/admin/builders/nope/default").status_code == 404
+
+
 def test_non_admin_cannot_manage_builders(client):
     assert (
         client.get("/admin/builders/groups", headers=_h("u@x.com")).status_code == 403

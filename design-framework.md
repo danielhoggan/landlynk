@@ -1,15 +1,20 @@
 # design-framework.md
 
-The design system for the Geographic Intelligence Engine. Two surfaces have two different design languages: the app shell (Mediaworks and Apple light or dark) and the client-facing Battlecard exports (client brand). Keep them separate.
+The design system for the Geographic Intelligence Engine. The app shell defaults to the Mediaworks and Apple light or dark language, and white-labels to a client brand when the signed-in user belongs to a branded group. Battlecard exports always carry the client brand.
 
 ## App shell
 
-The web app uses the standard Mediaworks HTML UI shell.
+The web app uses the standard Mediaworks HTML UI shell by default.
 
 Theme toggle:
 - Persistent light and dark mode toggle, bottom-left, position fixed.
 - Light mode: Apple-style. Background #F5F5F7. Accent #0071E3.
 - Dark mode: Mediaworks palette. Background #0D0D0D. Accent #DC167A.
+
+White-labelling the shell:
+- When the signed-in user is pinned to a builder_group, the shell takes that group's brand: logo, accent colour and typeface. The brand is the group's default brand, or the first brand by name when none is flagged.
+- Users with no group keep the default Mediaworks/Apple theme. Internal users and admins are unscoped, so they see the default.
+- Implemented as CSS variables (--brand-accent, --brand-font) consumed by the shell tokens, plus the brand logo in the wordmark slot. Never hard-code a client brand into shell components; the same shell takes any brand.
 
 Layout shell:
 - Mobile-first.
