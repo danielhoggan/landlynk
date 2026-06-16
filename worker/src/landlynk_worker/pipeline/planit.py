@@ -106,3 +106,44 @@ def fetch_competitor_sites(
         log.warning("PlanIt fetch failed: %s", exc)
         return []
     return _residential_sites_from_geojson(data, poly)[:limit]
+
+
+def planit_diagnostic(base_url: str, lookback_days: int) -> dict:
+    """Probe PlanIt with a known UK bbox and report what comes back, so an admin
+    can tell a deploy/network problem from an empty result without a catchment."""
+    geom = {
+        "type": "Polygon",
+        "coordinates": [
+            [[-1.8, 54.85], [-1.8, 55.05], [-1.4, 55.05], [-1.4, 54.85], [-1.8, 54.85]]
+        ],
+    }
+    poly = shape(geom)
+    minx, miny, maxx, maxy = poly.bounds
+    params = {
+        "bbox": f"{minx},{miny},{maxx},{maxy}",
+        "pg_sz": 50,
+        "start_date": (date.today() - timedelta(days=lookback_days)).isoformat(),
+    }
+    url = f"{base_url.rstrip('/')}/api/applics/geojson"
+    try:
+        with httpx.Client(
+            timeout=20.0, headers={"User-Agent": "LandLynk/1.0"}
+        ) as client:
+            resp = client.get(url, params=params)
+            status = resp.status_code
+            preview = resp.text[:200]
+            resp.raise_for_status()
+            data = resp.json()
+        total = len(data.get("features", []) if isinstance(data, dict) else [])
+        residential = _residential_sites_from_geojson(data, poly)
+        return {
+            "ok": True,
+            "requestUrl": str(resp.url),
+            "status": status,
+            "totalFeatures": total,
+            "residential": len(residential),
+            "sample": [s["name"] for s in residential[:3]],
+            "bodyPreview": preview,
+        }
+    except Exception as exc:  # pragma: no cover - network path
+        return {"ok": False, "requestUrl": url, "error": str(exc)}

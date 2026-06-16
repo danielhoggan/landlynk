@@ -1578,6 +1578,20 @@ def _live_competitors(geom: dict) -> list[dict]:
     )
 
 
+@app.get("/admin/diagnostics/planit")
+def planit_diagnostics(user: dict = Depends(current_user)) -> dict:
+    """Probe PlanIt from the worker so an admin can confirm the live competitor
+    feed reaches the API and returns residential applications."""
+    _require_admin(user)
+    from .pipeline.planit import planit_diagnostic
+
+    return {
+        "enabled": settings.planit_enabled,
+        "baseUrl": settings.planit_base_url,
+        **planit_diagnostic(settings.planit_base_url, settings.planit_lookback_days),
+    }
+
+
 def _competitor_sites(catchment_id: str, geom: dict) -> list[dict]:
     raw = _live_competitors(geom)
     if not raw:
