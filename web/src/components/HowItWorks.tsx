@@ -117,6 +117,16 @@ const BY_INDUSTRY: Record<string, Tailored> = {
         title: "Plan the next phase",
         body: "On a site you already own, see which audiences are under-served nearby and which product mix to lean the last phase toward when other types are slow.",
       },
+      {
+        icon: MapPin,
+        title: "Brownfield plots",
+        body: "On Find a site the map overlays the national brownfield land register: previously-developed sites councils have flagged as suitable for housing, each with its dwelling capacity. These are the actual buildable plots in the areas that fit your buyer.",
+      },
+      {
+        icon: Building2,
+        title: "Competitor developments",
+        body: "Toggle competitor developments to see where rivals are already building: recent major and medium residential planning applications in the catchment, pulled live from national planning data. It is context on the competing pipeline, not land for you to build on.",
+      },
     ],
   },
   retail: {
