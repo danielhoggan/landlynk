@@ -1294,6 +1294,7 @@ export default function HomePage() {
             ? sites.filter((s) => s.areaCode === selectedCode)
             : undefined
         }
+        catchmentHasSites={sites.length > 0}
         audienceSegment={runConfig?.segment}
       />
     </div>

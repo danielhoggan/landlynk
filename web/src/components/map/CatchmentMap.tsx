@@ -198,10 +198,11 @@ export function CatchmentMap({
         type: "circle",
         source: "sites",
         paint: {
-          "circle-radius": 5,
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 12, 7],
           "circle-color": "#1F5A3C",
           "circle-stroke-color": "#FFFFFF",
           "circle-stroke-width": 1.5,
+          "circle-opacity": 0.9,
         },
       });
       map.on("mousemove", "sites-circle", (e) => {

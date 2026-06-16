@@ -103,7 +103,7 @@ const BY_INDUSTRY: Record<string, Tailored> = {
       {
         icon: Building2,
         title: "Find a site",
-        body: "Start from a target buyer, from first-time buyers to downsizers, and rank the areas that best fit them, so you know where to look for land.",
+        body: "Start from a target buyer, from first-time buyers to downsizers, and rank the areas that best fit them. Overlay buildable plots from the national brownfield land register, with dwelling capacity, to see where the land actually is.",
       },
       {
         icon: Target,

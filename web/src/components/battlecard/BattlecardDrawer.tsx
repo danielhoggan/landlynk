@@ -25,6 +25,9 @@ interface BattlecardDrawerProps {
   audienceLabel?: string | null;
   /** Brownfield development sites that fall in this area (Find a site). */
   sites?: DevelopmentSite[];
+  /** Whether the catchment has any sites at all, to tell "none here" from
+   * "dataset not loaded". */
+  catchmentHasSites?: boolean;
   /** Searched audience segment id, so its addressable pool is emphasised. */
   audienceSegment?: string | null;
 }
@@ -42,6 +45,7 @@ export function BattlecardDrawer({
   priceSet = true,
   audienceLabel,
   sites,
+  catchmentHasSites,
   audienceSegment,
 }: BattlecardDrawerProps) {
   // Mount gate so the portal target (document.body) exists before rendering.
@@ -101,12 +105,13 @@ export function BattlecardDrawer({
               </h3>
               {sites.length === 0 ? (
                 <p className="text-xs text-neutral-500">
-                  No brownfield register sites here. Load the Development sites
-                  data (Reference data) and re-run to see buildable plots.
+                  {catchmentHasSites
+                    ? "No brownfield register sites fall in this area. Other areas in the catchment have plots, shown on the map and ranking."
+                    : "No brownfield register sites loaded for this catchment. Load the Development sites data (Reference data) and re-run to see buildable plots."}
                 </p>
               ) : (
-                <ul className="space-y-1.5">
-                  {sites.slice(0, 12).map((s, i) => {
+                <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                  {sites.map((s, i) => {
                     const cap =
                       s.minDwellings != null && s.maxDwellings != null
                         ? `${s.minDwellings} to ${s.maxDwellings} homes`
@@ -127,11 +132,6 @@ export function BattlecardDrawer({
                       </li>
                     );
                   })}
-                  {sites.length > 12 && (
-                    <li className="text-xs text-neutral-400">
-                      and {sites.length - 12} more on the map
-                    </li>
-                  )}
                 </ul>
               )}
             </section>
