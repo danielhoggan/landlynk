@@ -30,24 +30,45 @@ def test_boundary_rows_extracts_code_name_geometry():
 
 
 def test_demographics_rows_merge_and_suppression():
+    # Real ONS TS003 headers: the total reads 'Total' (not 'All households'), and
+    # the single family aggregate sits alongside its sub-rows, which must not be
+    # summed into it (that would double count).
     age = "geography code,Aged 10 years,Aged 20 years,Aged 90 years and over\nE1,100,200,:\n"
-    hh = "geography code,Total: All households,Single family household\nE1,200,120\n"
+    hh = (
+        "geography code,Household composition: Total; measures: Value,"
+        "Household composition: One person household; measures: Value,"
+        "Household composition: Single family household; measures: Value,"
+        "Household composition: Single family household: Lone parent family; "
+        "measures: Value,"
+        "Household composition: Other household types; measures: Value\n"
+        "E1,200,50,120,40,30\n"
+    )
     rows = loaders._demographics_rows(age, hh, "MSOA")
     row = rows[0]
     assert row["age_0_15"] == 100
     assert row["age_16_34"] == 200
     assert row["age_75_plus"] is None  # the only 75+ value was suppressed
+    assert row["households"] == 200
+    # 120, the aggregate, not 160 (aggregate + the lone parent sub-row).
     assert row["family_household_share"] == 120 / 200
 
 
 def test_tenure_rows_to_shares():
+    # Real ONS TS054 headers, with a 'Total' column and social-rented sub-rows
+    # that must not inflate the aggregate.
     csv_text = (
-        "geography code,Total: All households,Owned: Owns outright,"
-        "Owned: Owns with a mortgage or loan,Social rented,Private rented\n"
-        "E1,1000,250,400,150,200\n"
+        "geography code,Tenure of household: Total; measures: Value,"
+        "Tenure of household: Owned: Owns outright; measures: Value,"
+        "Tenure of household: Owned: Owns with a mortgage or loan; measures: Value,"
+        "Tenure of household: Social rented; measures: Value,"
+        "Tenure of household: Social rented: Rented from council; measures: Value,"
+        "Tenure of household: Private rented; measures: Value\n"
+        "E1,1000,250,400,150,90,200\n"
     )
     row = loaders._tenure_rows(csv_text, "MSOA")[0]
     assert row["owns_outright"] == 0.25
+    assert row["owns_with_mortgage"] == 0.40
+    assert row["social_rented"] == 0.15  # 150, not 240 (aggregate plus its sub-row)
     assert row["private_rented"] == 0.20
 
 

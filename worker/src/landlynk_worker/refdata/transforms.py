@@ -107,11 +107,34 @@ def find_area_code_field(fieldnames: list[str]) -> str:
     raise ValueError(f"No area code column found in {fieldnames}")
 
 
-def sum_matching(record: dict, code_field: str, needles: tuple[str, ...]) -> int | None:
+def _deepest_category(label: str) -> str:
+    """The deepest classification segment of an ONS bulk-CSV column label.
+
+    Labels look like '<Classification>: <Category>[: <Sub>...]; measures: Value'.
+    The part after the last ':' (ignoring the '; measures: ...' suffix) is the
+    most specific category, e.g. 'Household composition: Single family household'
+    -> 'single family household', and its sub-row '...: Lone parent family' ->
+    'lone parent family'.
+    """
+    head = label.split(";", 1)[0]
+    return head.rsplit(":", 1)[-1].strip().lower()
+
+
+def category_value(record: dict, code_field: str, *categories: str) -> int | None:
+    """Sum the columns whose deepest category exactly matches one of ``categories``.
+
+    Matching the deepest segment exactly (rather than any substring) picks an
+    aggregate column without also summing its sub-breakdowns, which would double
+    count, e.g. 'Social rented' alongside 'Social rented: Rented from council'.
+    It is also robust to the classification prefix, so the total column matches
+    whether it reads 'Household composition: Total' or 'Tenure of household: Total'.
+    Returns None when no column matches, so a missing measure stays suppressed.
+    """
+    wanted = {c.strip().lower() for c in categories}
     matched = [
         parse_count(v)
         for label, v in record.items()
-        if label != code_field and any(n in label.lower() for n in needles)
+        if label != code_field and _deepest_category(label) in wanted
     ]
     if not matched:
         return None

@@ -377,8 +377,12 @@ def _demographics_rows(
         code = (record.get(hh_code) or "").strip()
         if not code:
             continue
-        total = t.sum_matching(record, hh_code, ("all households",))
-        family = t.sum_matching(record, hh_code, ("single family", "one family"))
+        # TS003 total reads 'Household composition: Total'; family is the single
+        # family household aggregate (not its sub-rows, which would double count).
+        total = t.category_value(record, hh_code, "total", "all households")
+        family = t.category_value(
+            record, hh_code, "single family household", "one family household"
+        )
         households_by_area[code] = (total, t.share(family, total))
 
     rows: list[dict] = []
@@ -411,25 +415,34 @@ def _tenure_rows(text: str, area_type: str) -> list[dict]:
         code = (record.get(code_field) or "").strip()
         if not code:
             continue
-        total = t.sum_matching(record, code_field, ("all households",))
+        # TS054 total reads 'Tenure of household: Total'. Each tenure is the
+        # category aggregate, matched exactly so the aggregate is not summed with
+        # its own sub-rows (e.g. social rented and its council/other breakdown).
+        total = t.category_value(record, code_field, "total", "all households")
         rows.append(
             {
                 "area_code": code,
                 "area_type": area_type,
                 "owns_outright": t.share(
-                    t.sum_matching(record, code_field, ("owns outright",)), total
+                    t.category_value(record, code_field, "owns outright"), total
                 ),
                 "owns_with_mortgage": t.share(
-                    t.sum_matching(
-                        record, code_field, ("mortgage", "shared ownership")
+                    t.category_value(
+                        record,
+                        code_field,
+                        "owns with a mortgage or loan",
+                        "owns with a mortgage or shared ownership",
+                        "shared ownership",
                     ),
                     total,
                 ),
                 "social_rented": t.share(
-                    t.sum_matching(record, code_field, ("social rented",)), total
+                    t.category_value(record, code_field, "social rented"), total
                 ),
                 "private_rented": t.share(
-                    t.sum_matching(record, code_field, ("private rented", "rent free")),
+                    t.category_value(
+                        record, code_field, "private rented", "lives rent free"
+                    ),
                     total,
                 ),
             }
