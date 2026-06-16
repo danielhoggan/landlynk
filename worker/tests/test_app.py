@@ -39,6 +39,7 @@ def client(monkeypatch):
     monkeypatch.setattr(app_module, "get_pool", lambda: None)
     # The default caller is bootstrapped as admin (sees all, can delete).
     monkeypatch.setattr(app_module.settings, "admin_emails", "tester@example.com")
+    monkeypatch.setattr(app_module.settings, "planit_enabled", False)
     return TestClient(
         app_module.app,
         headers={"X-User-Email": "tester@example.com", "X-User-Name": "Tester"},

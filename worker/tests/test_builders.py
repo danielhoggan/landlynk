@@ -59,6 +59,7 @@ def client(monkeypatch):
     monkeypatch.setattr(app_module, "_store", InMemoryStore())
     monkeypatch.setattr(app_module, "get_pool", lambda: None)
     monkeypatch.setattr(app_module.settings, "admin_emails", "admin@x.com")
+    monkeypatch.setattr(app_module.settings, "planit_enabled", False)
     return TestClient(
         app_module.app,
         headers={"X-User-Email": "admin@x.com", "X-User-Name": "Admin"},
