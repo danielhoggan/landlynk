@@ -1545,7 +1545,9 @@ def _development_site_rows(text: str) -> list[dict]:
     lat_c = t.find_column(f, ("latitude", "lat"))
     lng_c = t.find_column(f, ("longitude", "long", "lng"))
     ref_c = t.find_column(f, ("reference", "site reference", "slug"))
-    name_c = t.find_column(f, ("name", "site-address", "site address", "address"))
+    # Prefer the human address; the brownfield 'name' column is often the bare
+    # reference, so it is only a last resort.
+    name_c = t.find_column(f, ("site-address", "site address", "address", "name"))
     ha_c = t.find_column(f, ("hectares", "site area", "area"))
     maxd_c = t.find_column(
         f, ("maximum-net-dwellings", "maximum net dwellings", "max dwellings")
