@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from landlynk_worker.refdata import loaders
 from landlynk_worker.refdata import transforms as t
@@ -51,6 +52,39 @@ def test_demographics_rows_merge_and_suppression():
     assert row["households"] == 200
     # 120, the aggregate, not 160 (aggregate + the lone parent sub-row).
     assert row["family_household_share"] == 120 / 200
+
+
+def test_demographics_load_rejects_unparseable_households(monkeypatch):
+    # A household file whose columns do not match must fail loudly, not silently
+    # null every household count.
+    age = "geography code,Aged 10 years\nE1,100\n"
+    bad_hh = "geography code,Mystery column\nE1,200\n"
+    monkeypatch.setattr(
+        loaders, "_fetch_csv_text", lambda url, area_type: age if url == "a" else bad_hh
+    )
+    monkeypatch.setattr(loaders, "_replace_table", lambda *a, **k: 1)
+    with pytest.raises(ValueError, match="household-composition"):
+        loaders.load_demographics(None, "a", "hh", "MSOA")
+
+
+def test_demographics_load_accepts_real_ts003_format(monkeypatch):
+    age = "geography code,Aged 10 years\nE1,100\n"
+    hh = (
+        "geography code,Household composition: Total; measures: Value,"
+        "Household composition: Single family household; measures: Value\n"
+        "E1,200,120\n"
+    )
+    monkeypatch.setattr(
+        loaders, "_fetch_csv_text", lambda url, area_type: age if url == "a" else hh
+    )
+    captured: dict = {}
+    monkeypatch.setattr(
+        loaders,
+        "_replace_table",
+        lambda pool, table, cols, rows, **k: (captured.update(rows=rows), len(rows))[1],
+    )
+    loaders.load_demographics(None, "a", "hh", "MSOA")
+    assert captured["rows"][0]["households"] == 200
 
 
 def test_tenure_rows_to_shares():

@@ -1453,6 +1453,15 @@ def load_demographics(
         _fetch_csv_text(households_url, area_type),
         area_type,
     )
+    # A household file that parses to no totals nulls households, family share
+    # and the addressable segments silently. Fail loudly instead so the cause is
+    # visible on the Reference data page rather than surfacing as empty cards.
+    if households_url and rows and not any(r["households"] is not None for r in rows):
+        raise ValueError(
+            "Parsed zero household counts from the household-composition file. "
+            "Check the household URL points to the ONS TS003 bulk CSV: its total "
+            "column should read 'Household composition: Total'."
+        )
     return _replace_table(
         pool,
         "census_demographics",
@@ -1476,6 +1485,23 @@ def load_demographics(
 
 def load_tenure(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
     rows = _tenure_rows(_fetch_csv_text(url, area_type), area_type)
+    if rows and not any(
+        any(
+            r[k] is not None
+            for k in (
+                "owns_outright",
+                "owns_with_mortgage",
+                "social_rented",
+                "private_rented",
+            )
+        )
+        for r in rows
+    ):
+        raise ValueError(
+            "Parsed zero tenure shares from the tenure file. Check the URL points "
+            "to the ONS TS054 bulk CSV: its total column should read 'Tenure of "
+            "household: Total'."
+        )
     return _replace_table(
         pool,
         "census_tenure",
