@@ -33,6 +33,7 @@ def test_migrations_dir_ships_with_the_package():
         "0017_group_industry.sql",
         "0018_user_brands.sql",
         "0019_brand_heading_green_default.sql",
+        "0020_job_cap.sql",
     ]
 
 

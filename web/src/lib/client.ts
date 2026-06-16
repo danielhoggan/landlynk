@@ -225,20 +225,28 @@ export interface BuilderGroup {
   id: string;
   name: string;
   monthlyCap?: number | null;
+  /** Monthly catchment-run allowance, pooled per group. Null means unlimited. */
+  monthlyJobCap?: number | null;
   /** The client's sector, used to tailor explanatory content (How it works). */
   industry?: string | null;
 }
 
-export interface LlmUsage {
+/** A monthly allowance and how much of it has been used (AI or runs). */
+export interface UsageAllowance {
   period?: string;
   metered: boolean;
   cap?: number | null;
   used?: number;
   remaining?: number | null;
-  model?: string | null;
-  estCost?: number;
   /** ISO date the monthly allowance resets (the 1st of next month). */
   resetsOn?: string;
+}
+
+export interface LlmUsage extends UsageAllowance {
+  model?: string | null;
+  estCost?: number;
+  /** The monthly catchment-run allowance, alongside this AI allowance. */
+  jobs?: UsageAllowance;
 }
 
 export interface CostRow {
@@ -293,7 +301,12 @@ export async function getUsage(): Promise<LlmUsage> {
 
 export async function updateGroup(
   id: string,
-  body: { name?: string; monthlyCap?: number | null; industry?: string | null },
+  body: {
+    name?: string;
+    monthlyCap?: number | null;
+    monthlyJobCap?: number | null;
+    industry?: string | null;
+  },
 ): Promise<void> {
   const res = await fetch(`/api/admin/builders/groups/${id}`, {
     method: "PUT",

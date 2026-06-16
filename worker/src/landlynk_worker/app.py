@@ -379,6 +379,9 @@ def submit_catchment_job(
     background: BackgroundTasks,
     user: dict = Depends(current_user),
 ) -> dict[str, str]:
+    # External users draw each run from a monthly allowance pooled per their
+    # active brand's group; internal users and admins are unmetered.
+    _enforce_job_quota(user)
     job_id = str(uuid.uuid4())
     config = to_scoring_config(request)
     get_store().create_job(
@@ -390,6 +393,12 @@ def submit_catchment_job(
         ),
         config,
         created_by=user.get("email") or "system",
+    )
+    # Record the run against the allowance now, on submission. This is an
+    # append-only tally, so deleting or archiving the catchment later never
+    # reclaims the run.
+    get_store().record_job_usage(
+        user.get("email"), _active_group(user), job_id, _usage_period()
     )
     background.add_task(_run_job, job_id, request, config)
     _audit(
@@ -612,10 +621,62 @@ def _enforce_llm_quota(user: dict) -> None:
         )
 
 
+def _group_job_cap(group_id: str) -> int | None:
+    for g in get_store().list_builder_groups():
+        if g["id"] == group_id:
+            return g.get("monthlyJobCap")
+    return None
+
+
+def _job_usage_summary(user: dict) -> dict:
+    """Remaining monthly catchment-run allowance for the caller. Pooled per the
+    active brand's group, resets on the 1st, unmetered for internal users."""
+    period = _usage_period()
+    group_id = _active_group(user)
+    if user.get("role") == "admin" or not group_id:
+        return {
+            "period": period,
+            "metered": False,
+            "cap": None,
+            "used": 0,
+            "resetsOn": _next_reset_date(),
+        }
+    cap = _group_job_cap(group_id)
+    used = get_store().job_usage_count(group_id, period)
+    remaining = None if cap is None else max(cap - used, 0)
+    return {
+        "period": period,
+        "metered": True,
+        "cap": cap,
+        "used": used,
+        "remaining": remaining,
+        "resetsOn": _next_reset_date(),
+    }
+
+
+def _enforce_job_quota(user: dict) -> None:
+    """Block an external user whose group has spent its monthly run allowance."""
+    summary = _job_usage_summary(user)
+    if (
+        summary["metered"]
+        and summary["cap"] is not None
+        and summary["used"] >= summary["cap"]
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Monthly run allowance reached ({summary['cap']}). "
+                "It resets at the start of next month."
+            ),
+        )
+
+
 @app.get("/builders/usage")
 def llm_usage(user: dict = Depends(current_user)) -> dict:
-    """The caller's AI generation allowance and usage this month."""
-    return _llm_usage_summary(user)
+    """The caller's AI generation and catchment-run allowances this month. The
+    AI allowance is flat at the top level (its long-standing shape); the run
+    allowance is nested under ``jobs``."""
+    return {**_llm_usage_summary(user), "jobs": _job_usage_summary(user)}
 
 
 @app.get("/builders/profiles")
@@ -627,6 +688,7 @@ def list_profiles(user: dict = Depends(current_user)) -> list[dict]:
 class GroupRequest(BaseModel):
     name: str | None = None
     monthly_cap: int | None = Field(default=None, alias="monthlyCap")
+    monthly_job_cap: int | None = Field(default=None, alias="monthlyJobCap")
     industry: str | None = None
 
     model_config = {"populate_by_name": True}
@@ -645,14 +707,22 @@ def admin_create_group(
     _require_admin(user)
     group_id = str(uuid.uuid4())
     get_store().create_builder_group(
-        group_id, request.name or "", request.monthly_cap, request.industry
+        group_id,
+        request.name or "",
+        request.monthly_cap,
+        request.industry,
+        monthly_job_cap=request.monthly_job_cap,
     )
     _audit(
         user,
         "builder.group.create",
         target_type="group",
         target_id=group_id,
-        detail={"name": request.name, "monthlyCap": request.monthly_cap},
+        detail={
+            "name": request.name,
+            "monthlyCap": request.monthly_cap,
+            "monthlyJobCap": request.monthly_job_cap,
+        },
     )
     return {"id": group_id, "name": request.name}
 
@@ -663,7 +733,11 @@ def admin_update_group(
 ) -> Response:
     _require_admin(user)
     get_store().update_builder_group(
-        group_id, request.name, request.monthly_cap, request.industry
+        group_id,
+        request.name,
+        request.monthly_cap,
+        request.industry,
+        monthly_job_cap=request.monthly_job_cap,
     )
     return Response(status_code=204)
 

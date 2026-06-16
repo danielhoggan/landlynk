@@ -223,6 +223,7 @@ class Storage(Protocol):
         name: str,
         monthly_cap: int | None = None,
         industry: str | None = None,
+        monthly_job_cap: int | None = None,
     ) -> None: ...
     def update_builder_group(
         self,
@@ -230,6 +231,7 @@ class Storage(Protocol):
         name: str | None,
         monthly_cap: int | None,
         industry: str | None = None,
+        monthly_job_cap: int | None = None,
     ) -> bool: ...
     def list_builder_groups(self) -> list[dict]: ...
     def delete_builder_group(self, group_id: str) -> bool: ...
@@ -237,6 +239,14 @@ class Storage(Protocol):
         self, email: str | None, group_id: str | None, model: str, period: str
     ) -> None: ...
     def llm_usage_count(self, group_id: str | None, period: str) -> int: ...
+    def record_job_usage(
+        self,
+        email: str | None,
+        group_id: str | None,
+        catchment_id: str | None,
+        period: str,
+    ) -> None: ...
+    def job_usage_count(self, group_id: str | None, period: str) -> int: ...
     def record_audit(self, entry: dict) -> None: ...
     def list_audit(self, filters: dict, limit: int = 500) -> list[dict]: ...
     def cost_report(self, date_from: str | None, date_to: str | None) -> dict: ...
@@ -303,6 +313,7 @@ class InMemoryStore:
         self._user_brands: dict[str, set[str]] = {}
         self._profiles: dict[str, dict] = {}
         self._usage: list[dict] = []
+        self._job_usage: list[dict] = []
         self._audit: list[dict] = []
 
     def create_job(
@@ -457,11 +468,13 @@ class InMemoryStore:
         name: str,
         monthly_cap: int | None = None,
         industry: str | None = None,
+        monthly_job_cap: int | None = None,
     ) -> None:
         self._groups[group_id] = {
             "id": group_id,
             "name": name,
             "monthlyCap": monthly_cap,
+            "monthlyJobCap": monthly_job_cap,
             "industry": industry,
         }
 
@@ -471,6 +484,7 @@ class InMemoryStore:
         name: str | None,
         monthly_cap: int | None,
         industry: str | None = None,
+        monthly_job_cap: int | None = None,
     ) -> bool:
         group = self._groups.get(group_id)
         if group is None:
@@ -478,6 +492,7 @@ class InMemoryStore:
         if name is not None:
             group["name"] = name
         group["monthlyCap"] = monthly_cap
+        group["monthlyJobCap"] = monthly_job_cap
         group["industry"] = industry
         return True
 
@@ -495,6 +510,29 @@ class InMemoryStore:
         return sum(
             1
             for u in self._usage
+            if u["group_id"] == group_id and u["period"] == period
+        )
+
+    def record_job_usage(
+        self,
+        email: str | None,
+        group_id: str | None,
+        catchment_id: str | None,
+        period: str,
+    ) -> None:
+        self._job_usage.append(
+            {
+                "email": email,
+                "group_id": group_id,
+                "catchment_id": catchment_id,
+                "period": period,
+            }
+        )
+
+    def job_usage_count(self, group_id: str | None, period: str) -> int:
+        return sum(
+            1
+            for u in self._job_usage
             if u["group_id"] == group_id and u["period"] == period
         )
 
@@ -1014,14 +1052,17 @@ class PostgresStore:
         name: str,
         monthly_cap: int | None = None,
         industry: str | None = None,
+        monthly_job_cap: int | None = None,
     ) -> None:
         with self._pool.connection() as conn:
             conn.execute(
-                "INSERT INTO builder_group (id, name, monthly_llm_cap, industry) "
-                "VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET "
+                "INSERT INTO builder_group "
+                "(id, name, monthly_llm_cap, monthly_job_cap, industry) "
+                "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (id) DO UPDATE SET "
                 "name = EXCLUDED.name, monthly_llm_cap = EXCLUDED.monthly_llm_cap, "
+                "monthly_job_cap = EXCLUDED.monthly_job_cap, "
                 "industry = EXCLUDED.industry",
-                [group_id, name, monthly_cap, industry],
+                [group_id, name, monthly_cap, monthly_job_cap, industry],
             )
 
     def update_builder_group(
@@ -1030,23 +1071,31 @@ class PostgresStore:
         name: str | None,
         monthly_cap: int | None,
         industry: str | None = None,
+        monthly_job_cap: int | None = None,
     ) -> bool:
         with self._pool.connection() as conn:
             cur = conn.execute(
                 "UPDATE builder_group SET name = COALESCE(%s, name), "
-                "monthly_llm_cap = %s, industry = %s WHERE id = %s",
-                [name, monthly_cap, industry, group_id],
+                "monthly_llm_cap = %s, monthly_job_cap = %s, industry = %s "
+                "WHERE id = %s",
+                [name, monthly_cap, monthly_job_cap, industry, group_id],
             )
             return cur.rowcount > 0
 
     def list_builder_groups(self) -> list[dict]:
         with self._pool.connection() as conn:
             rows = conn.execute(
-                "SELECT id, name, monthly_llm_cap, industry FROM builder_group "
-                "ORDER BY name"
+                "SELECT id, name, monthly_llm_cap, monthly_job_cap, industry "
+                "FROM builder_group ORDER BY name"
             ).fetchall()
         return [
-            {"id": r[0], "name": r[1], "monthlyCap": r[2], "industry": r[3]}
+            {
+                "id": r[0],
+                "name": r[1],
+                "monthlyCap": r[2],
+                "monthlyJobCap": r[3],
+                "industry": r[4],
+            }
             for r in rows
         ]
 
@@ -1069,6 +1118,28 @@ class PostgresStore:
         with self._pool.connection() as conn:
             row = conn.execute(
                 "SELECT count(*) FROM llm_usage WHERE group_id = %s AND period = %s",
+                [group_id, period],
+            ).fetchone()
+        return int(row[0]) if row else 0
+
+    def record_job_usage(
+        self,
+        email: str | None,
+        group_id: str | None,
+        catchment_id: str | None,
+        period: str,
+    ) -> None:
+        with self._pool.connection() as conn:
+            conn.execute(
+                "INSERT INTO job_usage (email, group_id, catchment_id, period) "
+                "VALUES (%s, %s, %s, %s)",
+                [email, group_id, catchment_id, period],
+            )
+
+    def job_usage_count(self, group_id: str | None, period: str) -> int:
+        with self._pool.connection() as conn:
+            row = conn.execute(
+                "SELECT count(*) FROM job_usage WHERE group_id = %s AND period = %s",
                 [group_id, period],
             ).fetchone()
         return int(row[0]) if row else 0

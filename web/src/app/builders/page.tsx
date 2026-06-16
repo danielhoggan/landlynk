@@ -146,6 +146,9 @@ function GroupCard({
   const [cap, setCap] = useState(
     group.monthlyCap == null ? "" : String(group.monthlyCap),
   );
+  const [jobCap, setJobCap] = useState(
+    group.monthlyJobCap == null ? "" : String(group.monthlyJobCap),
+  );
   const [savingCap, setSavingCap] = useState(false);
 
   return (
@@ -160,7 +163,18 @@ function GroupCard({
               onChange={(e) => setCap(e.target.value)}
               placeholder="∞"
               type="number"
-              title="Blank means unlimited"
+              title="AI lookups per month. Blank means unlimited"
+              className="w-20 rounded-card border border-neutral-300 px-2 py-1 text-xs"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+            Monthly run cap
+            <input
+              value={jobCap}
+              onChange={(e) => setJobCap(e.target.value)}
+              placeholder="∞"
+              type="number"
+              title="Catchment runs per month. Blank means unlimited"
               className="w-20 rounded-card border border-neutral-300 px-2 py-1 text-xs"
             />
           </label>
@@ -173,6 +187,7 @@ function GroupCard({
                 await updateGroup(group.id, {
                   name: group.name,
                   monthlyCap: cap === "" ? null : Number(cap),
+                  monthlyJobCap: jobCap === "" ? null : Number(jobCap),
                 });
                 onChange();
               } finally {

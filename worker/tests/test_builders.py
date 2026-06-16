@@ -238,6 +238,58 @@ def test_brand_industry_and_usage_scoped_to_active_brand(client):
     assert usage["resetsOn"].endswith("-01")
 
 
+def test_job_run_allowance_meters_and_blocks(client, monkeypatch):
+    # A monthly run cap, pooled per group like the AI cap, blocks once spent.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    g = client.post(
+        "/admin/builders/groups", json={"name": "Plc", "monthlyJobCap": 2}
+    ).json()["id"]
+    ext = _h("ext@x.com")
+    client.get("/me", headers=ext)  # create the user record before granting access
+    client.put("/admin/users/ext@x.com/group", json={"groupId": g})
+    client.put("/admin/users/ext@x.com/role", json={"role": "external-user"})
+    body = {"kind": "postcode", "value": "NN15 7FJ", "developmentName": "Westhill"}
+
+    usage = client.get("/builders/usage", headers=ext).json()["jobs"]
+    assert usage["metered"] is True and usage["cap"] == 2 and usage["used"] == 0
+    assert usage["resetsOn"].endswith("-01")
+
+    assert client.post("/jobs/catchment", json=body, headers=ext).status_code == 202
+    assert client.post("/jobs/catchment", json=body, headers=ext).status_code == 202
+    # Cap reached: the next run is refused.
+    assert client.post("/jobs/catchment", json=body, headers=ext).status_code == 429
+
+    usage = client.get("/builders/usage", headers=ext).json()["jobs"]
+    assert usage["used"] == 2 and usage["remaining"] == 0
+
+
+def test_job_runs_survive_catchment_deletion(client, monkeypatch):
+    # Deleting or archiving a catchment must not give back a spent run.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    g = client.post(
+        "/admin/builders/groups", json={"name": "Plc", "monthlyJobCap": 5}
+    ).json()["id"]
+    ext = _h("ext@x.com")
+    client.get("/me", headers=ext)  # create the user record before granting access
+    client.put("/admin/users/ext@x.com/group", json={"groupId": g})
+    client.put("/admin/users/ext@x.com/role", json={"role": "external-user"})
+    body = {"kind": "postcode", "value": "NN15 7FJ", "developmentName": "Westhill"}
+    job_id = client.post("/jobs/catchment", json=body, headers=ext).json()["id"]
+
+    assert client.delete(f"/catchments/{job_id}").status_code == 204
+    usage = client.get("/builders/usage", headers=ext).json()["jobs"]
+    assert usage["used"] == 1 and usage["remaining"] == 4
+
+
+def test_admin_is_unmetered_for_runs(client):
+    # Even with a zero cap on a group, an admin caller is never blocked.
+    client.post("/admin/builders/groups", json={"name": "Plc", "monthlyJobCap": 0})
+    usage = client.get("/builders/usage").json()["jobs"]
+    assert usage["metered"] is False
+    body = {"kind": "postcode", "value": "NN15 7FJ", "developmentName": "Westhill"}
+    assert client.post("/jobs/catchment", json=body).status_code == 202
+
+
 def test_cached_area_profile_is_read_only(client, monkeypatch):
     # GET returns a snapshot only after one is generated, and never generates
     # itself (so a historic run can auto-show without spending the allowance).
