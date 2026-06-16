@@ -582,12 +582,16 @@ export default function HomePage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
             label={
-              intent === "find_site" ? "Search label (optional)" : "Development name"
+              intent === "find_site"
+                ? "Search label (optional)"
+                : "Site name (optional)"
             }
             value={developmentName}
             onChange={setDevelopmentName}
             placeholder={
-              intent === "find_site" ? "e.g. Downsizer search" : "e.g. Abbots Vale"
+              intent === "find_site"
+                ? "e.g. Downsizer search"
+                : "e.g. Land off Mill Road"
             }
           />
           <Field

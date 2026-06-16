@@ -41,11 +41,16 @@ export function RunAssumptions({ config }: { config?: StoredConfig | null }) {
       now: String(now.overlapThreshold),
     });
   }
-  for (const [key, label] of Object.entries(WEIGHT_LABELS)) {
-    const used = config.weights?.[key];
-    const cur = now.weights[key as keyof typeof now.weights];
-    if (used != null && cur != null && !approxEqual(used, cur)) {
-      diffs.push({ label, used: String(used), now: String(cur) });
+  // When the run used an objective, its weights are that objective's preset by
+  // design, not a deviation from the user's defaults, so comparing them is
+  // misleading. Only flag weight differences for runs scored on manual weights.
+  if (!config.objective) {
+    for (const [key, label] of Object.entries(WEIGHT_LABELS)) {
+      const used = config.weights?.[key];
+      const cur = now.weights[key as keyof typeof now.weights];
+      if (used != null && cur != null && !approxEqual(used, cur)) {
+        diffs.push({ label, used: String(used), now: String(cur) });
+      }
     }
   }
 
