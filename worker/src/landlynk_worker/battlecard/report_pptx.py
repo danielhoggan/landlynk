@@ -18,13 +18,20 @@ import io
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
+from pptx.enum.chart import (
+    XL_CHART_TYPE,
+    XL_LABEL_POSITION,
+    XL_LEGEND_POSITION,
+)
+from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE
 from pptx.slide import Slide
 from pptx.util import Inches, Length, Pt
 
 from .schema import Battlecard, DataValue
 
-_DEFAULT_HEADING = "4169E1"
+# LandLynk green, the brand wordmark colour. Used as the default heading and
+# theme colour when no client brand colour is supplied (see web tailwind config).
+_DEFAULT_HEADING = "2F6B3A"
 _FONT = "Poppins"
 _WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 _INK = RGBColor(0x1E, 0x2A, 0x32)
@@ -42,6 +49,13 @@ _AMENITY_ORDER = ["Transport", "Retail", "Leisure", "Education", "Healthcare", "
 
 def _hex(color: str | None, fallback: str = _DEFAULT_HEADING) -> RGBColor:
     return RGBColor.from_string((color or fallback).lstrip("#"))
+
+
+def _darken(color: RGBColor, factor: float = 0.6) -> RGBColor:
+    """A darker shade of a colour, for panels on a coloured slide background."""
+    return RGBColor(
+        int(color[0] * factor), int(color[1] * factor), int(color[2] * factor)
+    )
 
 
 def _num(dv: DataValue) -> float:
@@ -78,13 +92,23 @@ def render_report_pptx(
 
     theme = {"navy": navy, "accent": accent_rgb, "secondary": secondary_rgb}
     _cover(prs.slides.add_slide(blank), card, theme, logo)
-    _overview(prs.slides.add_slide(blank), card, theme, development_context)
-    _area_profile(prs.slides.add_slide(blank), card, theme, map_image)
-    _age(prs.slides.add_slide(blank), card, theme)
-    _income(prs.slides.add_slide(blank), card, theme)
-    _tenure(prs.slides.add_slide(blank), card, theme)
-    _plan(prs.slides.add_slide(blank), card, theme)
-    _appendix(prs.slides.add_slide(blank), card, theme)
+    # Content slides, each branded with a footer mark (brand logo or wordmark).
+    for build in (
+        lambda s: _overview(s, card, theme, development_context),
+        lambda s: _area_profile(s, card, theme, map_image),
+        lambda s: _age(s, card, theme),
+        lambda s: _income(s, card, theme),
+        lambda s: _tenure(s, card, theme),
+    ):
+        slide = prs.slides.add_slide(blank)
+        build(slide)
+        _footer(slide, theme, logo, on_dark=False)
+    plan = prs.slides.add_slide(blank)
+    _plan(plan, card, theme)
+    _footer(plan, theme, logo, on_dark=True)
+    appendix = prs.slides.add_slide(blank)
+    _appendix(appendix, card, theme)
+    _footer(appendix, theme, logo, on_dark=False)
 
     buf = io.BytesIO()
     prs.save(buf)
@@ -116,13 +140,20 @@ def _text(
     width: Length,
     height: Length,
     lines: list[tuple],
+    shrink: bool = False,
 ) -> None:
-    """Each line is (text, size, color, bold, italic)."""
+    """Each line is (text, size, color, bold, italic).
+
+    With ``shrink`` the text auto-fits its box, so long generated prose (an AI
+    area description, amenity lists) never overflows into the next block.
+    """
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
     tf.word_wrap = True
     tf.margin_left = 0
     tf.margin_right = 0
+    if shrink:
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
     for i, (text, size, color, bold, italic) in enumerate(lines):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.space_after = Pt(3)
@@ -154,6 +185,67 @@ def _section(slide: Slide, label: str, title: str, navy: RGBColor) -> None:
     )
 
 
+def _wordmark(
+    slide: Slide,
+    left: Length,
+    top: Length,
+    height: Length,
+    theme: dict,
+    on_dark: bool,
+) -> None:
+    """The LandLynk wordmark, drawn as text so no image asset is needed.
+
+    Green "Land" then "Lynk", the second half white on a dark slide and ink on
+    a light one. The deck fallback when a run has no client brand logo.
+    """
+    box = slide.shapes.add_textbox(left, top, Inches(2.2), height)
+    tf = box.text_frame
+    tf.word_wrap = False
+    tf.margin_left = 0
+    tf.margin_right = 0
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p = tf.paragraphs[0]
+    size = 13
+    land = p.add_run()
+    land.text = "Land"
+    lynk = p.add_run()
+    lynk.text = "Lynk"
+    # On a dark cover the brand green is hard to read, so lift the whole mark to
+    # the accent; on light slides keep the green "Land".
+    land.font.color.rgb = theme["accent"] if on_dark else _hex(_DEFAULT_HEADING)
+    lynk.font.color.rgb = _WHITE if on_dark else _INK
+    for run in (land, lynk):
+        run.font.name = _FONT
+        run.font.bold = True
+        run.font.size = Pt(size)
+
+
+def _brandmark(
+    slide: Slide,
+    left: Length,
+    top: Length,
+    height: Length,
+    logo: bytes | None,
+    theme: dict,
+    on_dark: bool,
+) -> None:
+    """Place the client brand logo, or fall back to the LandLynk wordmark."""
+    if logo:
+        try:
+            slide.shapes.add_picture(io.BytesIO(logo), left, top, height=height)
+            return
+        except Exception:  # pragma: no cover - bad image bytes, fall back to text
+            pass
+    _wordmark(slide, left, top, height, theme, on_dark)
+
+
+def _footer(slide: Slide, theme: dict, logo: bytes | None, on_dark: bool = False) -> None:
+    """A small brand mark in the slide footer, so every page carries branding."""
+    _brandmark(
+        slide, Inches(11.0), Inches(6.95), Inches(0.32), logo, theme, on_dark
+    )
+
+
 def _bar(
     slide: Slide,
     left: Length,
@@ -163,6 +255,7 @@ def _bar(
     cats: list[str],
     vals: list[float],
     color: RGBColor,
+    value_format: str = '0"%"',
 ) -> None:
     data = CategoryChartData()
     data.categories = cats
@@ -178,8 +271,19 @@ def _bar(
         chart.series[0].format.fill.fore_color.rgb = color
         chart.value_axis.visible = False
         chart.value_axis.has_major_gridlines = False
-        chart.category_axis.tick_labels.font.size = Pt(10)
+        chart.category_axis.tick_labels.font.size = Pt(12)
         chart.category_axis.tick_labels.font.name = _FONT
+        # Label each bar with its value, so the chart reads without a y axis.
+        plot = chart.plots[0]
+        plot.has_data_labels = True
+        labels = plot.data_labels
+        labels.number_format = value_format
+        labels.number_format_is_linked = False
+        labels.position = XL_LABEL_POSITION.OUTSIDE_END
+        labels.font.size = Pt(12)
+        labels.font.bold = True
+        labels.font.name = _FONT
+        labels.font.color.rgb = _INK
     except Exception:
         pass
 
@@ -205,8 +309,18 @@ def _donut(
     try:
         chart.legend.position = XL_LEGEND_POSITION.RIGHT
         chart.legend.include_in_layout = False
-        chart.legend.font.size = Pt(10)
-        points = chart.plots[0].series[0].points
+        chart.legend.font.size = Pt(12)
+        chart.legend.font.name = _FONT
+        plot = chart.plots[0]
+        plot.has_data_labels = True
+        labels = plot.data_labels
+        labels.number_format = '0"%"'
+        labels.number_format_is_linked = False
+        labels.font.size = Pt(11)
+        labels.font.bold = True
+        labels.font.name = _FONT
+        labels.font.color.rgb = _WHITE
+        points = plot.series[0].points
         for i, pt in enumerate(points):
             pt.format.fill.solid()
             pt.format.fill.fore_color.rgb = _TENURE_COLORS[i % len(_TENURE_COLORS)]
@@ -262,13 +376,7 @@ def _cover(slide: Slide, card: Battlecard, theme: dict, logo: bytes | None) -> N
             )
         ],
     )
-    if logo:
-        try:
-            slide.shapes.add_picture(
-                io.BytesIO(logo), Inches(10.8), Inches(0.6), height=Inches(0.7)
-            )
-        except Exception:
-            pass
+    _brandmark(slide, Inches(10.6), Inches(0.55), Inches(0.7), logo, theme, True)
 
 
 def _overview(
@@ -331,24 +439,26 @@ def _area_profile(
     _section(slide, "Section 01", "Local area profile", theme["navy"])
     profile = card.local_area_profile
     desc = profile.description if profile else card.visual_summary.header.strapline
+    # Left column: the description in a bounded box (shrink-to-fit so long AI
+    # prose never spills into the amenities), then amenities below with a gap.
     _text(
         slide,
         Inches(0.6),
-        Inches(1.7),
-        Inches(7.2),
-        Inches(2.0),
+        Inches(1.65),
+        Inches(6.6),
+        Inches(3.0),
         [
             ("AREA DESCRIPTION", 11, _GOLD, True, False),
             (
                 desc or "Generate an AI local area profile to populate this section.",
-                13,
+                12,
                 _INK,
                 False,
                 False,
             ),
         ],
+        shrink=True,
     )
-    # Amenities grouped (left), map (right).
     if profile and profile.amenities:
         grouped: dict[str, list[str]] = {}
         for a in profile.amenities:
@@ -357,21 +467,43 @@ def _area_profile(
         for cat in _AMENITY_ORDER:
             if grouped.get(cat):
                 lines.append((cat.upper(), 10, theme["navy"], True, False))
-                for name in grouped[cat][:4]:
+                for name in grouped[cat][:3]:
                     lines.append((f"· {name}", 11, _INK, False, False))
-        _text(slide, Inches(0.6), Inches(3.6), Inches(7.2), Inches(3.6), lines)
+        _text(
+            slide, Inches(0.6), Inches(4.75), Inches(6.6), Inches(2.5), lines, shrink=True
+        )
+    # Right column: map (height-bounded so it cannot overlap the context below),
+    # then local context.
     if map_image:
         try:
             slide.shapes.add_picture(
-                io.BytesIO(map_image), Inches(8.2), Inches(1.9), width=Inches(4.5)
+                io.BytesIO(map_image), Inches(7.5), Inches(1.65), height=Inches(3.3)
             )
         except Exception:
             pass
     if card.context_metrics:
-        lines: list[tuple] = [("LOCAL CONTEXT", 11, _GOLD, True, False)]
+        lines = [("LOCAL CONTEXT", 11, _GOLD, True, False)]
         for m in card.context_metrics:
             lines.append((f"{m.label}: {m.value:g} {m.unit}", 11, _INK, False, False))
-        _text(slide, Inches(8.2), Inches(4.7), Inches(4.5), Inches(2.4), lines)
+        _text(
+            slide, Inches(7.5), Inches(5.15), Inches(5.2), Inches(2.1), lines, shrink=True
+        )
+
+
+def _analysis(slide: Slide, body: str) -> None:
+    """The narrative panel beside a chart. Sized to use the column it sits in."""
+    _text(
+        slide,
+        Inches(8.2),
+        Inches(1.9),
+        Inches(4.6),
+        Inches(4.8),
+        [
+            ("ANALYSIS", 13, _GOLD, True, False),
+            (body, 17, _INK, False, False),
+        ],
+        shrink=True,
+    )
 
 
 def _age(slide: Slide, card: Battlecard, theme: dict) -> None:
@@ -389,14 +521,7 @@ def _age(slide: Slide, card: Battlecard, theme: dict) -> None:
     )
     cohorts = card.audience_and_demographics.age_cohorts
     body = cohorts[0].body if cohorts else ""
-    _text(
-        slide,
-        Inches(8.2),
-        Inches(1.9),
-        Inches(4.5),
-        Inches(4.5),
-        [("ANALYSIS", 11, _GOLD, True, False), (body, 12, _INK, False, False)],
-    )
+    _analysis(slide, body)
 
 
 def _income(slide: Slide, card: Battlecard, theme: dict) -> None:
@@ -421,48 +546,51 @@ def _income(slide: Slide, card: Battlecard, theme: dict) -> None:
             _num(inc.highest_la.value),
         ],
         theme["secondary"],
+        value_format='"£"#,##0',
     )
-    _text(
-        slide,
-        Inches(8.2),
-        Inches(1.9),
-        Inches(4.5),
-        Inches(4.5),
-        [
-            ("ANALYSIS", 11, _GOLD, True, False),
-            (card.income_and_tenure.income_commentary, 12, _INK, False, False),
-        ],
-    )
+    _analysis(slide, card.income_and_tenure.income_commentary)
 
 
 def _tenure(slide: Slide, card: Battlecard, theme: dict) -> None:
     _section(slide, "Chart 03", "Housing tenure profile", theme["navy"])
     t = card.visual_summary.charts.housing_tenure
-    _donut(
-        slide,
-        Inches(0.6),
-        Inches(1.7),
-        Inches(7.2),
-        Inches(4.8),
-        ["Owns outright", "Owns with mortgage", "Social rented", "Private rented"],
-        [
-            _num(t.owns_outright),
-            _num(t.owns_with_mortgage),
-            _num(t.social_rented),
-            _num(t.private_rented),
-        ],
-    )
-    _text(
-        slide,
-        Inches(8.2),
-        Inches(1.9),
-        Inches(4.5),
-        Inches(4.5),
-        [
-            ("ANALYSIS", 11, _GOLD, True, False),
-            (card.income_and_tenure.tenure_commentary, 12, _INK, False, False),
-        ],
-    )
+    vals = [
+        t.owns_outright.value,
+        t.owns_with_mortgage.value,
+        t.social_rented.value,
+        t.private_rented.value,
+    ]
+    if any(v is not None and v > 0 for v in vals):
+        _donut(
+            slide,
+            Inches(0.6),
+            Inches(1.7),
+            Inches(7.2),
+            Inches(4.8),
+            ["Owns outright", "Owns with mortgage", "Social rented", "Private rented"],
+            [v or 0.0 for v in vals],
+        )
+    else:
+        # No tenure data: say so rather than drawing an empty chart.
+        _text(
+            slide,
+            Inches(0.6),
+            Inches(3.2),
+            Inches(7.2),
+            Inches(1.6),
+            [
+                (
+                    "Tenure data is not available for this catchment. Load the ONS "
+                    "tenure dataset (TS054) to populate this chart.",
+                    14,
+                    _GREY,
+                    False,
+                    True,
+                )
+            ],
+            shrink=True,
+        )
+    _analysis(slide, card.income_and_tenure.tenure_commentary)
 
 
 def _plan(slide: Slide, card: Battlecard, theme: dict) -> None:
@@ -499,6 +627,7 @@ def _plan(slide: Slide, card: Battlecard, theme: dict) -> None:
         ("KEY MARKETING MESSAGES", "  •  ".join(messages[:5]) or "n/a"),
         ("ADDRESSABLE SEGMENTS", _segments_line(card)),
     ]
+    panel = _darken(theme["navy"], 0.6)
     for i, (label, body) in enumerate(cards):
         top = Inches(1.9 + i * 1.3)
         _rect(
@@ -507,7 +636,7 @@ def _plan(slide: Slide, card: Battlecard, theme: dict) -> None:
             top,
             Inches(12.1),
             Inches(1.15),
-            RGBColor(0x14, 0x2A, 0x44),
+            panel,
         )
         _rect(slide, Inches(0.6), top, Inches(0.08), Inches(1.15), theme["accent"])
         _text(

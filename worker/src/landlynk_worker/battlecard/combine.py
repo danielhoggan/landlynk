@@ -52,8 +52,10 @@ def reconstruct_profile(payload: dict) -> AreaProfile:
     income = charts.get("householdIncome") or {}
     ages = charts.get("ageDemographics") or []
 
-    age_shares = [_share(a.get("percentage")) or 0.0 for a in ages][:5]
-    age_shares += [0.0] * (5 - len(age_shares))
+    # Preserve None (suppression) rather than coercing to zero, so a missing
+    # cell never reads as a real zero (house-standards.md, data handling).
+    age_shares = [_share(a.get("percentage")) for a in ages][:5]
+    age_shares += [None] * (5 - len(age_shares))
 
     family = _val(ks.get("familyHouseholdShare"))
     return AreaProfile(
@@ -65,10 +67,10 @@ def reconstruct_profile(payload: dict) -> AreaProfile:
         mean_income=_val(ks.get("averageHouseholdIncome")) or _val(income.get("mean")),
         median_age=_val(ks.get("medianAge")),
         tenure=TenureMix(
-            owns_outright=_share(tenure.get("ownsOutright")) or 0.0,
-            owns_with_mortgage=_share(tenure.get("ownsWithMortgage")) or 0.0,
-            social_rented=_share(tenure.get("socialRented")) or 0.0,
-            private_rented=_share(tenure.get("privateRented")) or 0.0,
+            owns_outright=_share(tenure.get("ownsOutright")),
+            owns_with_mortgage=_share(tenure.get("ownsWithMortgage")),
+            social_rented=_share(tenure.get("socialRented")),
+            private_rented=_share(tenure.get("privateRented")),
         ),
         age=AgeProfile(*age_shares),
         family_household_share=None if family is None else family / 100.0,
@@ -97,11 +99,17 @@ def aggregate_profiles(profiles: list[AreaProfile]) -> AreaProfile:
         return _wavg([(get(p), p.population or 0.0) for p in profiles])
 
     def by_hh(get: Callable[[AreaProfile], float | None]) -> float | None:
-        return _wavg([(get(p), p.households or 0.0) for p in profiles])
+        # Household-weighted rates (tenure, family share, house price). When
+        # household counts are unavailable (TS003 not loaded), fall back to
+        # population weighting so these rates still aggregate from the per-area
+        # data instead of collapsing to None and reading as a false zero.
+        weighted = [(get(p), p.households or 0.0) for p in profiles]
+        if all(w == 0 for _, w in weighted):
+            weighted = [(get(p), p.population or 0.0) for p in profiles]
+        return _wavg(weighted)
 
-    age_bands = {
-        band: by_pop(lambda p, b=band: getattr(p.age, b)) or 0.0 for band in _AGE_BANDS
-    }
+    # None (not zero) when an age band is suppressed across every area.
+    age_bands = {band: by_pop(lambda p, b=band: getattr(p.age, b)) for band in _AGE_BANDS}
     return AreaProfile(
         area_code="combined",
         area_type=profiles[0].area_type if profiles else "MSOA",
@@ -111,10 +119,10 @@ def aggregate_profiles(profiles: list[AreaProfile]) -> AreaProfile:
         mean_income=by_pop(lambda p: p.mean_income),
         median_age=by_pop(lambda p: p.median_age),
         tenure=TenureMix(
-            owns_outright=by_hh(lambda p: p.tenure.owns_outright) or 0.0,
-            owns_with_mortgage=by_hh(lambda p: p.tenure.owns_with_mortgage) or 0.0,
-            social_rented=by_hh(lambda p: p.tenure.social_rented) or 0.0,
-            private_rented=by_hh(lambda p: p.tenure.private_rented) or 0.0,
+            owns_outright=by_hh(lambda p: p.tenure.owns_outright),
+            owns_with_mortgage=by_hh(lambda p: p.tenure.owns_with_mortgage),
+            social_rented=by_hh(lambda p: p.tenure.social_rented),
+            private_rented=by_hh(lambda p: p.tenure.private_rented),
         ),
         age=AgeProfile(**age_bands),
         family_household_share=by_hh(lambda p: p.family_household_share),
