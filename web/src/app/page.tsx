@@ -788,6 +788,7 @@ export default function HomePage() {
                   <Field
                     label="Drive time"
                     suffix="min"
+                    hint="roughly how far buyers move for a new home"
                     value={driveTime}
                     onChange={setDriveTime}
                     placeholder="30"
@@ -1087,6 +1088,21 @@ export default function HomePage() {
           matchedCodes={matchedCodes}
           tagContext={tagContext}
         />
+        {activeRun &&
+          (() => {
+            const cfg = catchment?.input?.config;
+            const desc =
+              cfg?.catchmentMode === "radius" && cfg?.radiusKm
+                ? `a ${cfg.radiusKm} km radius around the location`
+                : `a ${cfg?.driveTimeMinutes ?? 30}-minute drive time, roughly how far buyers move for a new home in their area`;
+            return (
+              <p className="text-xs text-neutral-500">
+                The shaded zone is the catchment: {desc}. Areas inside it are
+                where buyers are most likely to come from, scored and ranked
+                below.
+              </p>
+            );
+          })()}
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-neutral-500">
             Priority ranking
