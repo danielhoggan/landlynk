@@ -461,7 +461,13 @@ export default function HomePage() {
     pollCatchment(id, setCatchment)
       .then((c) => {
         // Restore the run's intent so its land overlays and framing return.
-        const savedIntent = c.input?.config?.intent;
+        // Older runs predate stored intent, so infer Find a site from a config
+        // that used the land objective with a chosen audience.
+        const cfg = c.input?.config;
+        let savedIntent = cfg?.intent;
+        if (!savedIntent && cfg?.objective === "land_acquisition" && cfg?.segment) {
+          savedIntent = "find_site";
+        }
         if (savedIntent === "find_site" || savedIntent === "next_phase") {
           setIntent(savedIntent);
         }
