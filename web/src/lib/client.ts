@@ -293,6 +293,8 @@ export async function getCosts(filters: {
 
 export interface CatchmentVerdict {
   priceFit: "within" | "stretch" | "above" | "unknown";
+  /** Whether the run carried an explicit target price (vs the engine default). */
+  priceSet: boolean;
   priceFrom: number | null;
   impliedAffordablePrice: number | null;
   positioning: string;

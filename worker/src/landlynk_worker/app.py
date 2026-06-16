@@ -1518,7 +1518,14 @@ def catchment_verdict(
 ) -> dict:
     """Whole-catchment appraisal verdict (price fit and addressable demand)."""
     _require_access(catchment_id, user)
-    return _appraisal_verdict(_combined_card(catchment_id, request))
+    verdict = _appraisal_verdict(_combined_card(catchment_id, request))
+    # Whether the run carried an explicit target price. When it did not, the
+    # price from is the engine default, so the UI must not present the price fit
+    # as if the user chose that price.
+    catchment = get_store().get_catchment(catchment_id)
+    config = ((catchment or {}).get("input") or {}).get("config") or {}
+    verdict["priceSet"] = bool((config.get("priceBand") or {}).get("from"))
+    return verdict
 
 
 @app.post("/catchments/{catchment_id}/combined/pptx")

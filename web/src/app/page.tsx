@@ -244,10 +244,10 @@ export default function HomePage() {
   const audienceLabel = segmentOptions.find((s) => s.id === segment)?.label;
   // Find-a-site needs a target audience and a search location; the other flows
   // need a development name and a location.
+  // Find a site needs an audience; the others just need a location (the site
+  // name is optional).
   const canSubmit =
-    intent === "find_site"
-      ? Boolean(value && segment)
-      : Boolean(value && developmentName);
+    intent === "find_site" ? Boolean(value && segment) : Boolean(value);
 
   function chooseIntent(next: Intent) {
     setIntent(next);

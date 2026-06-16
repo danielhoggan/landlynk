@@ -66,13 +66,28 @@ export function VerdictPanel({ catchmentId }: { catchmentId: string }) {
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Gauge size={16} className="text-light-accent" /> Site verdict
         </h2>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${fit.cls}`}>
-          Price fit: {fit.label}
-        </span>
+        {verdict.priceSet && (
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${fit.cls}`}
+          >
+            Price fit: {fit.label}
+          </span>
+        )}
       </div>
-      <p className="text-sm text-neutral-600">{verdict.positioning}</p>
+      {verdict.priceSet ? (
+        <p className="text-sm text-neutral-600">{verdict.positioning}</p>
+      ) : (
+        <p className="rounded-card border border-priority-mid/40 bg-priority-mid/10 p-3 text-sm text-neutral-600">
+          No target price was set for this run, so there is no price-fit yet. Add
+          a price band in the brief to see how it sits against local incomes and
+          sale prices. The local figures below are from the area data.
+        </p>
+      )}
       <div className="grid gap-2 sm:grid-cols-3">
-        <Stat label="Price from" value={money(verdict.priceFrom)} />
+        <Stat
+          label="Price from"
+          value={verdict.priceSet ? money(verdict.priceFrom) : "Not set"}
+        />
         <Stat
           label="Locally affordable"
           value={money(verdict.impliedAffordablePrice)}
