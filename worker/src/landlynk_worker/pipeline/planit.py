@@ -191,14 +191,37 @@ def planit_diagnostic(base_url: str, lookback_days: int) -> dict:
             data = resp.json()
         total = len(data.get("features", []) if isinstance(data, dict) else [])
         residential = _residential_sites_from_geojson(data, poly)
-        return {
-            "ok": True,
-            "requestUrl": str(resp.url),
-            "status": status,
-            "totalFeatures": total,
-            "residential": len(residential),
-            "sample": [s["name"] for s in residential[:3]],
-            "bodyPreview": preview,
-        }
     except Exception as exc:  # pragma: no cover - network path
         return {"ok": False, "requestUrl": url, "error": str(exc)}
+    # Exercise the real catchment path (tiled, major+medium) over a large
+    # Newcastle-area polygon, so the diagnostic reflects what a real run does.
+    import time
+
+    big = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [-2.5, 54.4],
+                [-2.5, 55.4],
+                [-1.1, 55.4],
+                [-1.1, 54.4],
+                [-2.5, 54.4],
+            ]
+        ],
+    }
+    t0 = time.time()
+    tiled = fetch_competitor_sites(big, base_url, lookback_days)
+    return {
+        "ok": True,
+        "requestUrl": str(resp.url),
+        "status": status,
+        "totalFeatures": total,
+        "residential": len(residential),
+        "sample": [s["name"] for s in residential[:3]],
+        "tiledCatchmentTest": {
+            "count": len(tiled),
+            "seconds": round(time.time() - t0, 1),
+            "sample": [s["name"] for s in tiled[:3]],
+        },
+        "bodyPreview": preview,
+    }
