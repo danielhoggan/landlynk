@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Download, ChevronDown, SlidersHorizontal, Loader2 } from "lucide-react";
 import { CatchmentMap } from "@/components/map/CatchmentMap";
 import { RankingList } from "@/components/map/RankingList";
 import { BattlecardDrawer } from "@/components/battlecard/BattlecardDrawer";
@@ -208,6 +208,9 @@ export default function HomePage() {
   // not held up.
   const [sites, setSites] = useState<DevelopmentSite[]>([]);
   const [competitors, setCompetitors] = useState<DevelopmentSite[]>([]);
+  // Competitor data is a live national query and can take 10-20s, so the pill
+  // shows a spinner while it loads.
+  const [competitorsLoading, setCompetitorsLoading] = useState(false);
   // Find a site: weight the ranking toward areas with more brownfield capacity.
   const [weightByLand, setWeightByLand] = useState(false);
   // Find a site: order the ranking by audience fit (score) or by buildable land.
@@ -495,12 +498,15 @@ export default function HomePage() {
       getCatchmentSites(id)
         .then(setSites)
         .catch(() => setSites([]));
+      setCompetitorsLoading(true);
       getCatchmentCompetitors(id)
         .then(setCompetitors)
-        .catch(() => setCompetitors([]));
+        .catch(() => setCompetitors([]))
+        .finally(() => setCompetitorsLoading(false));
     } else {
       setSites([]);
       setCompetitors([]);
+      setCompetitorsLoading(false);
     }
   }, [intent, catchment?.id, catchment?.status]);
 
@@ -1295,7 +1301,7 @@ export default function HomePage() {
           sites={intent === "find_site" ? visibleSites : undefined}
         />
         {activeRun && intent === "find_site" &&
-          (overlaySites.length > 0 ? (
+          (overlaySites.length > 0 || competitorsLoading ? (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-medium text-neutral-500">Land layers</span>
               {(
@@ -1306,32 +1312,39 @@ export default function HomePage() {
               ).map(([key, label, colour]) => {
                 const n = siteCounts[key] ?? 0;
                 const on = siteLayers[key];
+                const loading = key === "permission" && competitorsLoading;
                 return (
                   <button
                     key={key}
                     type="button"
-                    disabled={n === 0}
+                    disabled={loading || n === 0}
                     title={
-                      n === 0
-                        ? `No ${label.toLowerCase()} data loaded for this catchment. Load it on Reference data and re-run.`
-                        : on
-                          ? `Hide ${label.toLowerCase()} plots`
-                          : `Show ${label.toLowerCase()} plots`
+                      loading
+                        ? "Finding competitor developments..."
+                        : n === 0
+                          ? `No ${label.toLowerCase()} data loaded for this catchment. Load it on Reference data and re-run.`
+                          : on
+                            ? `Hide ${label.toLowerCase()} plots`
+                            : `Show ${label.toLowerCase()} plots`
                     }
                     onClick={() =>
                       setSiteLayers((s) => ({ ...s, [key]: !s[key] }))
                     }
-                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition disabled:opacity-40 ${
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition disabled:opacity-60 ${
                       on
                         ? "border-neutral-300 text-neutral-700"
                         : "border-neutral-200 text-neutral-400"
                     }`}
                   >
-                    <span
-                      className="inline-block h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: on ? colour : "#CBD5E1" }}
-                    />
-                    {label} ({n})
+                    {loading ? (
+                      <Loader2 size={11} className="animate-spin text-neutral-400" />
+                    ) : (
+                      <span
+                        className="inline-block h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: on ? colour : "#CBD5E1" }}
+                      />
+                    )}
+                    {loading ? `${label}…` : `${label} (${n})`}
                   </button>
                 );
               })}
