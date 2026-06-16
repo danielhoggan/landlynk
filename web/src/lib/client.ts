@@ -307,6 +307,13 @@ export interface CatchmentVerdict {
     family: number | null;
   };
   confidence: "high" | "medium" | "low";
+  /** Buildable supply and competitor schemes in the catchment. */
+  supply?: {
+    buildablePlots: number;
+    buildableHomes: number;
+    competitorSchemes: number;
+    competitorHomes: number;
+  };
 }
 
 // The whole-catchment appraisal verdict (price fit + addressable demand), used

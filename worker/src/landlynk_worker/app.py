@@ -1556,13 +1556,47 @@ def catchment_sites(
     }
 
 
+def _site_supply(geom: dict | None) -> dict:
+    """Buildable supply (brownfield + allocations) and competitor schemes
+    (residential permissions) in the catchment. Best effort: zeros without the
+    datasets or a database."""
+    out = {
+        "buildablePlots": 0,
+        "buildableHomes": 0,
+        "competitorSchemes": 0,
+        "competitorHomes": 0,
+    }
+    if not geom:
+        return out
+    try:
+        with get_pool().connection() as conn:
+            rows = conn.execute(
+                "SELECT source_type, count(*), COALESCE(SUM(max_dwellings), 0) "
+                "FROM development_site "
+                "WHERE ST_Within(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
+                "GROUP BY source_type",
+                [json.dumps(geom)],
+            ).fetchall()
+    except Exception:  # no DB, no dataset, or PostGIS missing
+        return out
+    for source_type, n, homes in rows:
+        if source_type in ("brownfield", "allocation"):
+            out["buildablePlots"] += int(n)
+            out["buildableHomes"] += int(homes or 0)
+        elif source_type == "permission":
+            out["competitorSchemes"] += int(n)
+            out["competitorHomes"] += int(homes or 0)
+    return out
+
+
 @app.post("/catchments/{catchment_id}/verdict")
 def catchment_verdict(
     catchment_id: str, request: CombineRequest, user: dict = Depends(current_user)
 ) -> dict:
-    """Whole-catchment appraisal verdict (price fit and addressable demand)."""
+    """Whole-catchment appraisal verdict (price fit, addressable demand, supply)."""
     _require_access(catchment_id, user)
     verdict = _appraisal_verdict(_combined_card(catchment_id, request))
+    verdict["supply"] = _site_supply(_catchment_geometry(catchment_id))
     # Whether the run carried an explicit target price. When it did not, the
     # price from is the engine default, so the UI must not present the price fit
     # as if the user chose that price.

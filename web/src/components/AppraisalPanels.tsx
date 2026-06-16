@@ -106,6 +106,25 @@ export function VerdictPanel({ catchmentId }: { catchmentId: string }) {
           />
         ))}
       </div>
+      {verdict.supply &&
+        (verdict.supply.buildablePlots > 0 ||
+          verdict.supply.competitorSchemes > 0) && (
+          <>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+              Supply and competition
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Stat
+                label="Buildable land (plots · homes)"
+                value={`${count(verdict.supply.buildablePlots)} · ${count(verdict.supply.buildableHomes)}`}
+              />
+              <Stat
+                label="Competitor schemes (· homes)"
+                value={`${count(verdict.supply.competitorSchemes)} · ${count(verdict.supply.competitorHomes)}`}
+              />
+            </div>
+          </>
+        )}
       <p className="text-[11px] text-neutral-400">
         Data confidence: {verdict.confidence}. Across the whole catchment.
       </p>
