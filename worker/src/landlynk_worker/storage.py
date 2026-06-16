@@ -127,6 +127,7 @@ def scoring_config_to_dict(config: ScoringConfig) -> dict:
         "tenurePreference": config.tenure_preference,
         "agePreference": config.age_preference,
         "scaleSaturation": config.scale_saturation,
+        "intent": config.intent,
     }
 
 
@@ -296,6 +297,7 @@ def _summary(cid: str, r: _MemRecord, viewer_email: str | None) -> dict:
         "owner": r.owner,
         "shared": bool(r.owner and viewer_email and r.owner != viewer_email),
         "archived": r.archived,
+        "intent": (r.config or {}).get("intent"),
     }
 
 
@@ -899,7 +901,8 @@ class PostgresStore:
         with self._pool.connection() as conn:
             rows = conn.execute(
                 "SELECT c.id, c.development_name, c.input_value, c.status, "
-                "c.created_at, c.owner_email, count(ca.area_code) AS area_count "
+                "c.created_at, c.owner_email, count(ca.area_code) AS area_count, "
+                "c.config->>'intent' AS intent "
                 "FROM catchment c "
                 "LEFT JOIN catchment_area ca ON ca.catchment_id = c.id "
                 f"WHERE {' AND '.join(where)} "
@@ -917,8 +920,18 @@ class PostgresStore:
                 "owner": owner,
                 "shared": bool(owner and viewer_email and owner != viewer_email),
                 "archived": archived,
+                "intent": intent,
             }
-            for (cid, dev_name, value, status, created_at, owner, area_count) in rows
+            for (
+                cid,
+                dev_name,
+                value,
+                status,
+                created_at,
+                owner,
+                area_count,
+                intent,
+            ) in rows
         ]
 
     def get_owner(self, catchment_id: str) -> str | None:

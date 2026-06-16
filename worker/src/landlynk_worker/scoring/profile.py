@@ -104,6 +104,9 @@ class ScoringConfig:
     # Business objective id (see scoring/objectives.py): what the user is using
     # the catchment for. Reweights the signals and frames the commentary.
     objective: str | None = None
+    # Housebuilder journey the run was started from (find_site / appraise /
+    # next_phase). Metadata only: restores the UI and labels the run in history.
+    intent: str | None = None
     # Brand theme for themed exports, from a builder profile. Metadata only, not
     # used in scoring. brand_heading is the primary colour.
     brand_heading: str | None = None

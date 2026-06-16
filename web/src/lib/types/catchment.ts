@@ -62,6 +62,8 @@ export interface StoredConfig {
   radiusKm?: number;
   segment?: string;
   objective?: string;
+  /** Housebuilder journey: find_site | appraise | next_phase. */
+  intent?: string;
   lookalikeLocations?: string[];
   brandHeading?: string;
   brandSecondary?: string;
@@ -114,6 +116,8 @@ export interface CatchmentSummary {
   /** True when shared with the viewer by someone else (not their own run). */
   shared?: boolean;
   archived?: boolean;
+  /** Housebuilder journey: find_site | appraise | next_phase. */
+  intent?: string | null;
 }
 
 export interface Catchment {

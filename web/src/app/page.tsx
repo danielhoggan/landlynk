@@ -451,13 +451,18 @@ export default function HomePage() {
     if (!id) return;
     setStatus("Loading saved catchment...");
     pollCatchment(id, setCatchment)
-      .then((c) =>
+      .then((c) => {
+        // Restore the run's intent so its land overlays and framing return.
+        const savedIntent = c.input?.config?.intent;
+        if (savedIntent === "find_site" || savedIntent === "next_phase") {
+          setIntent(savedIntent);
+        }
         setStatus(
           c.status === "complete"
             ? `Ranked ${c.areas.length} areas.`
             : `Status: ${c.status}`,
-        ),
-      )
+        );
+      })
       .catch((e) =>
         setStatus(e instanceof Error ? e.message : "Failed to load"),
       );
@@ -492,6 +497,9 @@ export default function HomePage() {
       if (bedRange) config.bedRange = bedRange;
       if (segment) config.segment = segment;
       if (objective) config.objective = objective;
+      // Persist the housebuilder intent so reopening the run restores its land
+      // overlays and history can label what kind of run it was.
+      if (isHousebuilder) config.intent = intent;
       if (useLookalike && brandLocations.length)
         config.lookalikeLocations = brandLocations;
       if (brandHeading) config.brandHeading = brandHeading;

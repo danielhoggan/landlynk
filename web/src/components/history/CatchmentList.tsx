@@ -19,6 +19,13 @@ import {
   removeShare,
 } from "@/lib/client";
 
+// Short label for the housebuilder journey a run was started from.
+const INTENT_LABEL: Record<string, string> = {
+  find_site: "Find a site",
+  appraise: "Appraise",
+  next_phase: "Next phase",
+};
+
 interface Props {
   items: CatchmentSummary[];
   mode: "active" | "archived";
@@ -83,6 +90,11 @@ export function CatchmentList({
                       ? `${item.developmentName} · ${item.inputValue}`
                       : item.inputValue}
                   </span>
+                  {INTENT_LABEL[item.intent ?? ""] && (
+                    <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-500">
+                      {INTENT_LABEL[item.intent as string]}
+                    </span>
+                  )}
                   {item.shared && (
                     <span className="rounded-full bg-light-accent/10 px-2 py-0.5 text-[10px] font-medium text-light-accent">
                       Shared with you
