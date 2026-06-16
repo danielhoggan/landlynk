@@ -63,10 +63,10 @@ export function AreaProfilePanel({
   const exhausted =
     metered && usage?.remaining != null && usage.remaining <= 0;
 
-  // Confirm before the first run of the session: internal users see the money
-  // cost, external users see what it draws from their metered allowance. After
-  // acknowledging once, later runs go straight through (the allowance line and
-  // the per-run cost stay visible regardless).
+  // Confirm before the first lookup of the session, framed around the monthly
+  // AI-lookup allowance (capped accounts see what they have left). After
+  // acknowledging once, later lookups go straight through; the allowance line
+  // stays visible regardless.
   function requestRun(scope: "whole" | "selection", refresh = false) {
     if (!costAck) {
       setPending({ scope, refresh });
@@ -95,6 +95,26 @@ export function AreaProfilePanel({
       setBusy(false);
     }
   }
+
+  // Confirmation copy, framed around the monthly AI-lookup allowance rather than
+  // money. A capped (client) account sees what it has left; an uncapped account
+  // sees a neutral note. Regenerating is called out as replacing the profile.
+  const regenerating = pending?.refresh ?? false;
+  const verb = regenerating ? "regeneration" : "lookup";
+  const confirmText =
+    metered && usage?.cap != null
+      ? `You have ${usage?.remaining ?? 0} of ${usage.cap} AI lookups left this ` +
+        `month. This ${verb} uses 1. Already-cached lookups are free.`
+      : `This ${regenerating ? "regenerates the area profile" : "adds an AI lookup of the area"}` +
+        `${usage?.model ? ` with ${usage.model}` : ""}. Already-cached lookups are free.`;
+  const confirmQuestion = regenerating
+    ? "Regenerate this profile?"
+    : "Are you sure?";
+  const confirmCta = regenerating
+    ? "Regenerate"
+    : metered && usage?.cap != null
+      ? "Use 1 lookup"
+      : "Add lookup";
 
   const grouped = (profile?.amenities ?? []).reduce<Record<string, string[]>>(
     (acc, a) => {
@@ -148,12 +168,12 @@ export function AreaProfilePanel({
         </div>
       </div>
 
-      {/* External users: metered allowance. */}
+      {/* External users: monthly AI-lookup allowance. */}
       {metered && (
         <p className="mt-2 text-xs text-neutral-500">
           {usage?.cap == null
-            ? `${usage?.used ?? 0} generations used this month`
-            : `${usage?.remaining ?? 0} of ${usage.cap} AI generations left this month`}
+            ? `${usage?.used ?? 0} AI lookups used this month`
+            : `${usage?.remaining ?? 0} of ${usage.cap} AI lookups left this month`}
           {exhausted && (
             <span className="text-priority-low">
               {" "}
@@ -163,30 +183,11 @@ export function AreaProfilePanel({
         </p>
       )}
 
-      {/* Confirmation: external users see their allowance, internal users cost. */}
+      {/* Confirmation, framed around the monthly allowance, never money. */}
       {pending && (
         <div className="mt-2 rounded-card border border-priority-mid/40 bg-priority-mid/10 p-2.5 text-xs">
           <p className="text-neutral-700">
-            {metered ? (
-              <>
-                This uses 1
-                {usage?.cap != null
-                  ? ` of your ${usage?.remaining ?? 0} remaining`
-                  : ""}{" "}
-                AI {usage?.cap != null ? "generations" : "generation"} this month
-                {usage?.model ? ` (${usage.model})` : ""}. Already-cached lookups
-                are free. Continue?
-              </>
-            ) : (
-              <>
-                This runs an AI model{usage?.model ? ` (${usage.model})` : ""} and
-                incurs a cost to your account
-                {usage?.estCost
-                  ? `, estimated about £${usage.estCost.toFixed(3)} per lookup`
-                  : ""}
-                . Continue?
-              </>
-            )}
+            {confirmText} {confirmQuestion}
           </p>
           <div className="mt-2 flex gap-2">
             <button
@@ -197,7 +198,7 @@ export function AreaProfilePanel({
               }}
               className="rounded-card bg-light-accent px-3 py-1 font-semibold text-white"
             >
-              {metered ? "Use 1 generation" : "Generate (incurs cost)"}
+              {confirmCta}
             </button>
             <button
               type="button"
