@@ -80,6 +80,9 @@ const DEFAULT_SCHOOLS =
 const DEFAULT_HOSPITALS =
   "https://directory.spineservices.nhs.uk/ORD/2-0-0/organisations?" +
   "PrimaryRoleId=RO198&Limit=1000";
+// The national brownfield land register, published as one CSV.
+const DEFAULT_BROWNFIELD =
+  "https://files.planning.data.gov.uk/dataset/brownfield-land.csv";
 
 interface FieldDef {
   key: string;
@@ -305,7 +308,7 @@ const DATASETS: DatasetDef[] = [
       {
         key: "url",
         label: "Brownfield land CSV URL",
-        placeholder: "planning.data.gov.uk brownfield-land CSV download",
+        placeholder: DEFAULT_BROWNFIELD,
       },
     ],
   },
@@ -359,6 +362,7 @@ export default function DataPage() {
     crime: { url: "" },
     postcodes: { url: "" },
     hospitals: { url: DEFAULT_HOSPITALS },
+    development_sites: { url: DEFAULT_BROWNFIELD },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -394,7 +398,14 @@ export default function DataPage() {
           const merged = { ...v };
           for (const [k, val] of Object.entries(saved)) {
             if (val && typeof val === "object") {
-              merged[k] = { ...merged[k], ...(val as Record<string, string>) };
+              // Only override with non-empty saved values, so a blank saved
+              // field never clobbers a pre-filled default URL.
+              const nonEmpty = Object.fromEntries(
+                Object.entries(val as Record<string, string>).filter(
+                  ([, vv]) => vv,
+                ),
+              );
+              merged[k] = { ...merged[k], ...nonEmpty };
             }
           }
           return merged;
