@@ -79,7 +79,9 @@ export function CatchmentList({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="truncate text-sm font-semibold">
-                    {item.developmentName}
+                    {item.developmentName?.trim()
+                      ? `${item.developmentName} · ${item.inputValue}`
+                      : item.inputValue}
                   </span>
                   {item.shared && (
                     <span className="rounded-full bg-light-accent/10 px-2 py-0.5 text-[10px] font-medium text-light-accent">
@@ -88,7 +90,7 @@ export function CatchmentList({
                   )}
                 </span>
                 <span className="block text-xs text-neutral-500">
-                  {item.inputValue} - {item.status} - {item.areaCount} areas
+                  {item.status} - {item.areaCount} areas
                   {item.createdAt
                     ? ` - ${new Date(item.createdAt).toLocaleDateString("en-GB")}`
                     : ""}

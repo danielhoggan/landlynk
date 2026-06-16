@@ -5,7 +5,7 @@ import { X, LogOut } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Logo } from "./Logo";
-import { NAV_ITEMS, isActive } from "./navItems";
+import { navSections, isActive } from "./navItems";
 import { ReferenceStatusDot } from "./ReferenceStatusDot";
 import { AllowanceBadge } from "./AllowanceBadge";
 import { BrandSelector } from "./BrandSelector";
@@ -21,10 +21,9 @@ interface DrawerNavProps {
 export function DrawerNav({ open, onClose }: DrawerNavProps) {
   const pathname = usePathname();
   const { isAdmin } = useUser();
-  const mainItems = NAV_ITEMS.filter((i) => !i.adminOnly);
-  const adminItems = isAdmin ? NAV_ITEMS.filter((i) => i.adminOnly) : [];
+  const sections = navSections(isAdmin);
 
-  const renderItem = (item: (typeof NAV_ITEMS)[number]) => {
+  const renderItem = (item: ReturnType<typeof navSections>[number]["items"][number]) => {
     const Icon = item.icon;
     const active = isActive(pathname, item.href);
     return (
@@ -82,15 +81,18 @@ export function DrawerNav({ open, onClose }: DrawerNavProps) {
         <div className="mb-4">
           <BrandSelector />
         </div>
-        <ul className="space-y-1">{mainItems.map(renderItem)}</ul>
-        {adminItems.length > 0 && (
-          <>
-            <p className="mb-1 mt-5 px-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
-              Admin
+        {sections.map((section, i) => (
+          <div key={section.id}>
+            <p
+              className={`mb-1 px-3 text-xs font-semibold uppercase tracking-wider text-neutral-400 ${
+                i === 0 ? "" : "mt-5"
+              }`}
+            >
+              {section.heading}
             </p>
-            <ul className="space-y-1">{adminItems.map(renderItem)}</ul>
-          </>
-        )}
+            <ul className="space-y-1">{section.items.map(renderItem)}</ul>
+          </div>
+        ))}
         <div className="mt-auto space-y-3">
           <AllowanceBadge />
           <ReferenceStatusDot />

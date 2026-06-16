@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, Download, ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Download, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { CatchmentMap } from "@/components/map/CatchmentMap";
 import { RankingList } from "@/components/map/RankingList";
 import { BattlecardDrawer } from "@/components/battlecard/BattlecardDrawer";
@@ -186,6 +186,9 @@ export default function HomePage() {
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
   const [selectedName, setSelectedName] = useState<string | undefined>();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The new-catchment form. Shown by default (the page is "New catchment"), then
+  // collapsed once a run completes so its title and map lead, not the form.
+  const [showForm, setShowForm] = useState(true);
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
 
@@ -229,6 +232,14 @@ export default function HomePage() {
     setFilter(new Set());
     setRangeInputs({});
   };
+
+  // A completed run that has areas. Its title leads the page (development name
+  // and the postcode or grid ref entered), falling back to the input alone.
+  const activeRun = catchment?.status === "complete" && areas.length > 0;
+  const runTitle =
+    [catchment?.input?.developmentName?.trim(), catchment?.input?.value?.trim()]
+      .filter(Boolean)
+      .join(" · ") || "Catchment";
 
   // Shortlist: starred areas the user wants combined into one export document.
   // Persisted per catchment so a selection survives a reload or revisit.
@@ -355,6 +366,11 @@ export default function HomePage() {
       );
   }, []);
 
+  // Once a run completes, collapse the form so the run title and results lead.
+  useEffect(() => {
+    if (catchment?.status === "complete") setShowForm(false);
+  }, [catchment?.id, catchment?.status]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -433,7 +449,7 @@ export default function HomePage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Catchment map
+            New catchment
           </h1>
           <p className="mt-1 text-sm text-neutral-500">
             Paste a postcode or grid reference to build a ranked, clickable
@@ -445,15 +461,31 @@ export default function HomePage() {
         </div>
       </header>
 
+      {activeRun && !showForm && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-neutral-200 bg-white px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+              Current catchment
+            </p>
+            <h2 className="truncate text-lg font-semibold tracking-tight">
+              {runTitle}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="shrink-0 rounded-card bg-light-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-95"
+          >
+            New catchment
+          </button>
+        </div>
+      )}
+
+      {showForm && (
       <form
         onSubmit={onSubmit}
         className="space-y-5 rounded-card border border-neutral-200 bg-white p-5 sm:p-6"
       >
-        <div className="flex items-center gap-2">
-          <MapPin size={18} className="text-light-accent" />
-          <h2 className="text-sm font-semibold">New catchment</h2>
-        </div>
-
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <span className="mb-1.5 block text-xs font-medium text-neutral-500">
@@ -769,6 +801,7 @@ export default function HomePage() {
           {status && <p className="text-xs text-neutral-500">{status}</p>}
         </div>
       </form>
+      )}
 
       {catchment?.status === "complete" && areas.length === 0 && (
         <div className="rounded-card border border-priority-mid/40 bg-priority-mid/10 p-4 text-sm">
