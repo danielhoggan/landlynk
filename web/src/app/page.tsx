@@ -206,6 +206,8 @@ export default function HomePage() {
   const [sites, setSites] = useState<DevelopmentSite[]>([]);
   // Find a site: weight the ranking toward areas with more brownfield capacity.
   const [weightByLand, setWeightByLand] = useState(false);
+  // Find a site: order the ranking by audience fit (score) or by buildable land.
+  const [rankSort, setRankSort] = useState<"fit" | "land">("fit");
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
 
@@ -294,6 +296,16 @@ export default function HomePage() {
     },
     {},
   );
+
+  // Find a site can lead with the most buildable land instead of pure fit.
+  const rankedAreas =
+    intent === "find_site" && rankSort === "land"
+      ? [...filteredAreas].sort(
+          (a, b) =>
+            (plotsByArea[b.areaCode]?.homes ?? 0) -
+            (plotsByArea[a.areaCode]?.homes ?? 0),
+        )
+      : filteredAreas;
 
   const runConfig = catchment?.input?.config;
   const runPriceSet = Boolean(runConfig?.priceBand?.from);
@@ -1216,14 +1228,26 @@ export default function HomePage() {
             );
           })()}
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-neutral-500">
-            Priority ranking
-            {activeFilterCount > 0 && (
-              <span className="ml-1 font-normal text-neutral-400">
-                ({filteredAreas.length} of {areas.length})
-              </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-neutral-500">
+              Priority ranking
+              {activeFilterCount > 0 && (
+                <span className="ml-1 font-normal text-neutral-400">
+                  ({filteredAreas.length} of {areas.length})
+                </span>
+              )}
+            </h2>
+            {intent === "find_site" && areas.length > 0 && (
+              <Segmented
+                options={[
+                  { value: "fit", label: "Best fit" },
+                  { value: "land", label: "Most land" },
+                ]}
+                value={rankSort}
+                onChange={(v) => setRankSort(v as "fit" | "land")}
+              />
             )}
-          </h2>
+          </div>
           {areas.length === 0 ? (
             <p className="rounded-card border border-dashed border-neutral-300 p-4 text-xs text-neutral-500">
               {busy
@@ -1236,7 +1260,7 @@ export default function HomePage() {
             </p>
           ) : (
             <RankingList
-              areas={filteredAreas}
+              areas={rankedAreas}
               onSelectArea={onSelectArea}
               selectedAreaCode={selectedCode}
               starredCodes={starred}
