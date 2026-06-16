@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types/catchment";
 import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/lib/priority";
 import { tagsForArea, type TagContext } from "@/lib/areaTags";
+import type { DevelopmentSite } from "@/lib/client";
 
 interface CatchmentMapProps {
   areas: CatchmentArea[];
@@ -21,6 +22,8 @@ interface CatchmentMapProps {
   matchedCodes?: Set<string> | null;
   /** Catchment-derived context for relative signal tags. */
   tagContext?: TagContext;
+  /** Brownfield development sites to overlay (Find a site). */
+  sites?: DevelopmentSite[];
 }
 
 // Open vector base map. OpenFreeMap is free, OSM-based and needs no API key, so
@@ -77,6 +80,7 @@ export function CatchmentMap({
   selectedAreaCode,
   matchedCodes,
   tagContext,
+  sites,
 }: CatchmentMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -88,6 +92,8 @@ export function CatchmentMap({
   areasRef.current = areas;
   const tagContextRef = useRef(tagContext);
   tagContextRef.current = tagContext;
+  const sitesRef = useRef(sites);
+  sitesRef.current = sites;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -185,6 +191,40 @@ export function CatchmentMap({
         popup.remove();
       });
 
+      // Brownfield development sites, drawn above the areas (Find a site).
+      map.addSource("sites", { type: "geojson", data: emptyFc() });
+      map.addLayer({
+        id: "sites-circle",
+        type: "circle",
+        source: "sites",
+        paint: {
+          "circle-radius": 5,
+          "circle-color": "#1F5A3C",
+          "circle-stroke-color": "#FFFFFF",
+          "circle-stroke-width": 1.5,
+        },
+      });
+      map.on("mousemove", "sites-circle", (e) => {
+        const p = e.features?.[0]?.properties as Record<string, unknown>;
+        if (!p) return;
+        map.getCanvas().style.cursor = "pointer";
+        const cap = p.capacity ? String(p.capacity) : "";
+        popup
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div class="text-xs">
+               <div class="font-semibold text-sm">${escapeHtml(String(p.name || "Development site"))}</div>
+               ${cap ? `<div class="text-neutral-500">${escapeHtml(cap)} dwellings</div>` : ""}
+               ${p.hectares ? `<div>${escapeHtml(String(p.hectares))} ha</div>` : ""}
+             </div>`,
+          )
+          .addTo(map);
+      });
+      map.on("mouseleave", "sites-circle", () => {
+        map.getCanvas().style.cursor = "";
+        popup.remove();
+      });
+
       mapRef.current = map;
       syncData();
     });
@@ -220,6 +260,11 @@ export function CatchmentMap({
       isoSource?.setData(emptyFc());
     }
 
+    const sitesSource = map.getSource("sites") as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    sitesSource?.setData(sitesToFeatures(sitesRef.current));
+
     markerRef.current?.remove();
     if (coordinate) {
       markerRef.current = new maplibregl.Marker({ color: "#0071E3" })
@@ -231,7 +276,7 @@ export function CatchmentMap({
   useEffect(() => {
     syncData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areas, isochrone, coordinate, matchedCodes]);
+  }, [areas, isochrone, coordinate, matchedCodes, sites]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -256,6 +301,27 @@ export function CatchmentMap({
 
 function emptyFc(): GeoJSON.FeatureCollection {
   return { type: "FeatureCollection", features: [] };
+}
+
+function sitesToFeatures(
+  sites: DevelopmentSite[] | undefined,
+): GeoJSON.FeatureCollection {
+  const capacity = (s: DevelopmentSite) =>
+    s.minDwellings != null && s.maxDwellings != null
+      ? `${s.minDwellings} to ${s.maxDwellings}`
+      : (s.maxDwellings ?? s.minDwellings ?? null);
+  return {
+    type: "FeatureCollection",
+    features: (sites ?? []).map((s) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [s.lng, s.lat] },
+      properties: {
+        name: s.name ?? "Development site",
+        capacity: capacity(s),
+        hectares: s.hectares,
+      },
+    })),
+  };
 }
 
 function escapeHtml(s: string): string {

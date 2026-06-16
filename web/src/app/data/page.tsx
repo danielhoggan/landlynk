@@ -294,6 +294,21 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
+  {
+    id: "development_sites",
+    title: "Development sites (brownfield)",
+    blurb:
+      "Buildable sites from the national brownfield land register, shown within a catchment on the Find a site flow, with dwelling capacity. Paste the planning.data.gov.uk brownfield-land dataset CSV (it carries a point column with hectares and net dwellings). Open Government Licence.",
+    source: "https://www.planning.data.gov.uk/dataset/brownfield-land",
+    sourceLabel: "planning.data.gov.uk brownfield land",
+    fields: [
+      {
+        key: "url",
+        label: "Brownfield land CSV URL",
+        placeholder: "planning.data.gov.uk brownfield-land CSV download",
+      },
+    ],
+  },
 ];
 
 export default function DataPage() {

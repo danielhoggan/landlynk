@@ -13,6 +13,7 @@ module imports without a database for the unit tests.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import TYPE_CHECKING
@@ -1509,6 +1510,45 @@ def _appraisal_verdict(card: Battlecard) -> dict:
             "family": seg.family_households.value,
         },
         "confidence": card.data_confidence.level,
+    }
+
+
+@app.get("/catchments/{catchment_id}/sites")
+def catchment_sites(
+    catchment_id: str, user: dict = Depends(current_user)
+) -> dict:
+    """Development sites (brownfield register) that fall inside the catchment.
+
+    Best effort: returns an empty list without a database, the dataset or a
+    catchment polygon, so the Find a site overlay degrades gracefully."""
+    _require_access(catchment_id, user)
+    geom = _catchment_geometry(catchment_id)
+    if not geom:
+        return {"sites": []}
+    try:
+        with get_pool().connection() as conn:
+            rows = conn.execute(
+                "SELECT reference, name, hectares, min_dwellings, max_dwellings, "
+                "lat, lng FROM development_site "
+                "WHERE ST_Within(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
+                "ORDER BY max_dwellings DESC NULLS LAST LIMIT 500",
+                [json.dumps(geom)],
+            ).fetchall()
+    except Exception:  # no DB, no dataset, or PostGIS missing
+        return {"sites": []}
+    return {
+        "sites": [
+            {
+                "reference": r[0],
+                "name": r[1],
+                "hectares": float(r[2]) if r[2] is not None else None,
+                "minDwellings": r[3],
+                "maxDwellings": r[4],
+                "lat": float(r[5]),
+                "lng": float(r[6]),
+            }
+            for r in rows
+        ]
     }
 
 

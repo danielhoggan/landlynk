@@ -323,6 +323,28 @@ export async function getCatchmentVerdict(
   return res.json();
 }
 
+export interface DevelopmentSite {
+  reference: string | null;
+  name: string | null;
+  hectares: number | null;
+  minDwellings: number | null;
+  maxDwellings: number | null;
+  lat: number;
+  lng: number;
+}
+
+// Brownfield development sites inside a catchment, for the Find a site overlay.
+export async function getCatchmentSites(
+  catchmentId: string,
+): Promise<DevelopmentSite[]> {
+  const res = await fetch(`/api/catchments/${catchmentId}/sites`, {
+    headers: activeBrandHeaders(),
+  });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({ sites: [] }));
+  return data?.sites ?? [];
+}
+
 export async function getUsage(): Promise<LlmUsage> {
   const res = await fetch("/api/builders/usage", {
     headers: activeBrandHeaders(),

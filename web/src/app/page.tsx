@@ -16,9 +16,11 @@ import {
   reportExport,
   getBattlecard,
   getBuilderProfiles,
+  getCatchmentSites,
   pollCatchment,
   submitCatchment,
   type BuilderProfile,
+  type DevelopmentSite,
 } from "@/lib/client";
 import {
   SIGNAL_TAGS,
@@ -194,6 +196,8 @@ export default function HomePage() {
   // Housebuilder intent (signposted on the New catchment page). "find_site" is
   // audience-led discovery; "appraise" is the default single-site flow.
   const [intent, setIntent] = useState<Intent>("appraise");
+  // Brownfield development sites overlaid on the map for Find a site.
+  const [sites, setSites] = useState<DevelopmentSite[]>([]);
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
 
@@ -402,6 +406,17 @@ export default function HomePage() {
   useEffect(() => {
     if (catchment?.status === "complete") setShowForm(false);
   }, [catchment?.id, catchment?.status]);
+
+  // On Find a site, overlay the brownfield development sites in the catchment.
+  useEffect(() => {
+    if (intent === "find_site" && catchment?.status === "complete") {
+      getCatchmentSites(catchment.id)
+        .then(setSites)
+        .catch(() => setSites([]));
+    } else {
+      setSites([]);
+    }
+  }, [intent, catchment?.id, catchment?.status]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1095,7 +1110,15 @@ export default function HomePage() {
           selectedAreaCode={selectedCode}
           matchedCodes={matchedCodes}
           tagContext={tagContext}
+          sites={intent === "find_site" ? sites : undefined}
         />
+        {activeRun && intent === "find_site" && (
+          <p className="text-xs text-neutral-500">
+            {sites.length > 0
+              ? `${sites.length} brownfield development site${sites.length === 1 ? "" : "s"} in this catchment (green markers), from the national land register.`
+              : "No brownfield register sites loaded for this catchment. An admin can load the Development sites dataset on the Reference data page."}
+          </p>
+        )}
         {activeRun &&
           (() => {
             const cfg = catchment?.input?.config;
