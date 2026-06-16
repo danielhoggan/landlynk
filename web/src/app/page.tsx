@@ -31,6 +31,7 @@ import {
 import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
 import { AreaProfilePanel } from "@/components/AreaProfilePanel";
+import { IntentCards, type Intent } from "@/components/IntentCards";
 import { segmentsForIndustry } from "@/lib/segments";
 import { OBJECTIVES, SIGNAL_LABELS } from "@/lib/objectives";
 import { useUser } from "@/lib/userContext";
@@ -189,6 +190,9 @@ export default function HomePage() {
   // The new-catchment form. Shown by default (the page is "New catchment"), then
   // collapsed once a run completes so its title and map lead, not the form.
   const [showForm, setShowForm] = useState(true);
+  // Housebuilder intent (signposted on the New catchment page). "find_site" is
+  // audience-led discovery; "appraise" is the default single-site flow.
+  const [intent, setIntent] = useState<Intent>("appraise");
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
 
@@ -232,6 +236,25 @@ export default function HomePage() {
     setFilter(new Set());
     setRangeInputs({});
   };
+
+  // Housebuilder intents are signposted only for residential brands; everyone
+  // else keeps the single, generic flow.
+  const isHousebuilder = activeBrand?.industry === "residential";
+  const audienceLabel = segmentOptions.find((s) => s.id === segment)?.label;
+  // Find-a-site needs a target audience and a search location; the other flows
+  // need a development name and a location.
+  const canSubmit =
+    intent === "find_site"
+      ? Boolean(value && segment)
+      : Boolean(value && developmentName);
+
+  function chooseIntent(next: Intent) {
+    setIntent(next);
+    // Discovery favours demand, scale and exit values: the land objective.
+    if (next === "find_site" && objective !== "land_acquisition") {
+      applyObjective("land_acquisition");
+    }
+  }
 
   // A completed run that has areas. Its title leads the page (development name
   // and the postcode or grid ref entered), falling back to the input alone.
@@ -403,10 +426,15 @@ export default function HomePage() {
         Object.entries(weights).map(([k, v]) => [k, Number(v)]),
       );
 
+      // Find-a-site has no named scheme yet, so label the run by its audience.
+      const developmentNameToSend =
+        intent === "find_site" && !developmentName
+          ? `${audienceLabel ?? "Audience"} search`
+          : developmentName;
       const { id } = await submitCatchment({
         kind,
         value,
-        developmentName,
+        developmentName: developmentNameToSend,
         areaType,
         town: town || undefined,
         strapline: strapline || undefined,
@@ -481,11 +509,44 @@ export default function HomePage() {
         </div>
       )}
 
+      {showForm && isHousebuilder && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+            What do you want to do?
+          </p>
+          <IntentCards value={intent} onChange={chooseIntent} />
+        </div>
+      )}
+
       {showForm && (
       <form
         onSubmit={onSubmit}
         className="space-y-5 rounded-card border border-neutral-200 bg-white p-5 sm:p-6"
       >
+        {intent === "find_site" && (
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+              Target audience
+            </span>
+            <select
+              value={segment}
+              onChange={(e) => setSegment(e.target.value)}
+              className="w-full rounded-card border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-light-accent focus:outline-none"
+            >
+              <option value="">Choose the buyer you are building for</option>
+              {segmentOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label} — {s.description}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-neutral-400">
+              We rank the areas in the search around the location below that best
+              fit this buyer.
+            </p>
+          </div>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <span className="mb-1.5 block text-xs font-medium text-neutral-500">
@@ -519,10 +580,14 @@ export default function HomePage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label="Development name"
+            label={
+              intent === "find_site" ? "Search label (optional)" : "Development name"
+            }
             value={developmentName}
             onChange={setDevelopmentName}
-            placeholder="e.g. Abbots Vale"
+            placeholder={
+              intent === "find_site" ? "e.g. Downsizer search" : "e.g. Abbots Vale"
+            }
           />
           <Field
             label={kind === "postcode" ? "Postcode" : "OS grid reference"}
@@ -793,10 +858,16 @@ export default function HomePage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="submit"
-            disabled={busy || !value || !developmentName}
+            disabled={busy || !canSubmit}
             className="w-full rounded-card bg-light-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-50 sm:w-auto"
           >
-            {busy ? "Building..." : "Build catchment"}
+            {busy
+              ? intent === "find_site"
+                ? "Finding areas..."
+                : "Building..."
+              : intent === "find_site"
+                ? "Find areas"
+                : "Build catchment"}
           </button>
           {status && <p className="text-xs text-neutral-500">{status}</p>}
         </div>
