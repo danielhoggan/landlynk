@@ -331,6 +331,8 @@ export interface DevelopmentSite {
   maxDwellings: number | null;
   lat: number;
   lng: number;
+  /** The MSOA/LA the site falls in, for per-area listing. */
+  areaCode: string | null;
 }
 
 // Brownfield development sites inside a catchment, for the Find a site overlay.

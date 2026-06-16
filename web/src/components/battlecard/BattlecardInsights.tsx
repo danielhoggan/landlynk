@@ -27,6 +27,7 @@ export function BattlecardInsights({
   contextMetrics,
   objectiveLabel,
   priceSet = true,
+  highlightSegment,
 }: {
   pricing?: PricingRationale;
   segments?: AddressableSegments;
@@ -37,7 +38,20 @@ export function BattlecardInsights({
   /** Whether the run set a target price. When false the pricing read is omitted
    * rather than judged against the engine default the user never entered. */
   priceSet?: boolean;
+  /** The searched audience segment id, so its addressable pool is emphasised. */
+  highlightSegment?: string;
 }) {
+  // The addressable pool that matches the searched audience, emphasised so the
+  // card speaks to the use case rather than reading generic.
+  const highlightKey =
+    highlightSegment === "first_time_buyer"
+      ? "ftb"
+      : highlightSegment === "downsizer"
+        ? "downsizer"
+        : highlightSegment === "growing_family" ||
+            highlightSegment === "second_stepper"
+          ? "family"
+          : null;
   // Older stored Battlecards predate these sections. Render what is present and
   // skip the rest rather than crashing the drawer on a partial payload.
   // Objective focus metrics first, so the data points that matter for the
@@ -123,14 +137,17 @@ export function BattlecardInsights({
             <Stat
               label="FTB pipeline"
               value={fmtValue(segments.firstTimeBuyerPipeline)}
+              highlight={highlightKey === "ftb"}
             />
             <Stat
               label="Downsizer pool"
               value={fmtValue(segments.downsizerPool)}
+              highlight={highlightKey === "downsizer"}
             />
             <Stat
               label="Family households"
               value={fmtValue(segments.familyHouseholds)}
+              highlight={highlightKey === "family"}
             />
           </dl>
         </section>
@@ -166,11 +183,29 @@ export function BattlecardInsights({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
   return (
-    <div className="rounded-card border border-neutral-200 p-3">
+    <div
+      className={`rounded-card border p-3 ${
+        highlight
+          ? "border-light-accent/40 bg-light-accent/5 ring-1 ring-light-accent/30"
+          : "border-neutral-200"
+      }`}
+    >
       <dt className="text-xs text-neutral-500">{label}</dt>
-      <dd className="mt-0.5 text-sm font-semibold">{value}</dd>
+      <dd
+        className={`mt-0.5 text-sm font-semibold ${highlight ? "text-light-accent" : ""}`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

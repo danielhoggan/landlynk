@@ -263,14 +263,38 @@ export default function HomePage() {
 
   function chooseIntent(next: Intent) {
     setIntent(next);
-    // Discovery favours demand, scale and exit values: the land objective.
-    if (next === "find_site" && objective !== "land_acquisition") {
-      applyObjective("land_acquisition");
+    // Find a site ranks by audience fit and development potential, so it weights
+    // the segment-driven signals (age, tenure, household) alongside scale, not
+    // the land objective's demand-only preset which ignores age and tenure and
+    // so would rank every audience identically. The land objective still frames
+    // the commentary.
+    if (next === "find_site") {
+      setObjective("land_acquisition");
+      setWeights({
+        age_skew: "0.25",
+        tenure_signal: "0.20",
+        household_type: "0.15",
+        addressable_scale: "0.25",
+        income_fit: "0.15",
+      });
     }
   }
 
   // Read from the run's stored config, so the drawer reflects what the run
   // actually used: whether a price was set and which audience it searched for.
+  // Brownfield plots grouped by area, for the Find a site ranking badges.
+  const plotsByArea = sites.reduce<Record<string, { count: number; homes: number }>>(
+    (acc, s) => {
+      if (!s.areaCode) return acc;
+      const cur = acc[s.areaCode] ?? { count: 0, homes: 0 };
+      cur.count += 1;
+      cur.homes += s.maxDwellings ?? 0;
+      acc[s.areaCode] = cur;
+      return acc;
+    },
+    {},
+  );
+
   const runConfig = catchment?.input?.config;
   const runPriceSet = Boolean(runConfig?.priceBand?.from);
   const runAudienceLabel = runConfig?.segment
@@ -997,7 +1021,10 @@ export default function HomePage() {
               <span className="text-xs font-medium text-neutral-500">
                 Filter
               </span>
-              {SIGNAL_TAGS.map((t) => {
+              {/* On Find a site the audience is already the lens, so the
+                  audience filter pills are redundant; keep just the ranges. */}
+              {intent !== "find_site" &&
+                SIGNAL_TAGS.map((t) => {
                 const active = filter.has(t.id);
                 return (
                   <button
@@ -1215,6 +1242,7 @@ export default function HomePage() {
               starredCodes={starred}
               onToggleStar={toggleStar}
               tagContext={tagContext}
+              plotsByArea={intent === "find_site" ? plotsByArea : undefined}
             />
           )}
         </div>
@@ -1237,6 +1265,12 @@ export default function HomePage() {
         }
         priceSet={runPriceSet}
         audienceLabel={runAudienceLabel}
+        sites={
+          intent === "find_site"
+            ? sites.filter((s) => s.areaCode === selectedCode)
+            : undefined
+        }
+        audienceSegment={runConfig?.segment}
       />
     </div>
   );

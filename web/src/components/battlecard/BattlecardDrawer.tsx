@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Download } from "lucide-react";
 import type { Battlecard } from "@/lib/types/battlecard";
+import type { DevelopmentSite } from "@/lib/client";
 import { OnLocationSummary } from "./OnLocationSummary";
 import { ScoreExplainer } from "./ScoreExplainer";
 import { BattlecardCharts } from "./BattlecardCharts";
@@ -22,6 +23,10 @@ interface BattlecardDrawerProps {
   priceSet?: boolean;
   /** The audience this run searched for, surfaced so the card is not generic. */
   audienceLabel?: string | null;
+  /** Brownfield development sites that fall in this area (Find a site). */
+  sites?: DevelopmentSite[];
+  /** Searched audience segment id, so its addressable pool is emphasised. */
+  audienceSegment?: string | null;
 }
 
 // Clicking a region opens its deep-dive in the slide-out drawer, never a full
@@ -36,6 +41,8 @@ export function BattlecardDrawer({
   pptxUrl,
   priceSet = true,
   audienceLabel,
+  sites,
+  audienceSegment,
 }: BattlecardDrawerProps) {
   // Mount gate so the portal target (document.body) exists before rendering.
   const [mounted, setMounted] = useState(false);
@@ -84,6 +91,52 @@ export function BattlecardDrawer({
           )}
           <OnLocationSummary battlecard={battlecard} areaName={areaName} />
 
+          {sites !== undefined && (
+            <section className="rounded-card border border-neutral-200 p-4">
+              <h3 className="mb-2 text-sm font-semibold">
+                Development sites in this area{" "}
+                <span className="font-normal text-neutral-400">
+                  ({sites.length})
+                </span>
+              </h3>
+              {sites.length === 0 ? (
+                <p className="text-xs text-neutral-500">
+                  No brownfield register sites here. Load the Development sites
+                  data (Reference data) and re-run to see buildable plots.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {sites.slice(0, 12).map((s, i) => {
+                    const cap =
+                      s.minDwellings != null && s.maxDwellings != null
+                        ? `${s.minDwellings} to ${s.maxDwellings} homes`
+                        : s.maxDwellings != null
+                          ? `${s.maxDwellings} homes`
+                          : null;
+                    return (
+                      <li
+                        key={s.reference ?? i}
+                        className="flex items-start justify-between gap-2 text-xs"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-neutral-700">
+                          {s.name ?? s.reference ?? "Site"}
+                        </span>
+                        <span className="shrink-0 font-semibold text-light-accent">
+                          {cap ?? (s.hectares != null ? `${s.hectares} ha` : "")}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {sites.length > 12 && (
+                    <li className="text-xs text-neutral-400">
+                      and {sites.length - 12} more on the map
+                    </li>
+                  )}
+                </ul>
+              )}
+            </section>
+          )}
+
           {(pdfUrl || pptxUrl) && (
             <div className="grid grid-cols-2 gap-2">
               {pdfUrl && (
@@ -122,6 +175,7 @@ export function BattlecardDrawer({
             contextMetrics={battlecard.contextMetrics}
             objectiveLabel={battlecard.objectiveLabel}
             priceSet={priceSet}
+            highlightSegment={audienceSegment ?? undefined}
           />
 
           {battlecard.visualSummary?.charts && (

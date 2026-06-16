@@ -1528,10 +1528,12 @@ def catchment_sites(
     try:
         with get_pool().connection() as conn:
             rows = conn.execute(
-                "SELECT reference, name, hectares, min_dwellings, max_dwellings, "
-                "lat, lng FROM development_site "
-                "WHERE ST_Within(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
-                "ORDER BY max_dwellings DESC NULLS LAST LIMIT 500",
+                "SELECT s.reference, s.name, s.hectares, s.min_dwellings, "
+                "s.max_dwellings, s.lat, s.lng, b.area_code "
+                "FROM development_site s "
+                "LEFT JOIN geo_boundaries b ON ST_Within(s.geom, b.geom) "
+                "WHERE ST_Within(s.geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
+                "ORDER BY s.max_dwellings DESC NULLS LAST LIMIT 1000",
                 [json.dumps(geom)],
             ).fetchall()
     except Exception:  # no DB, no dataset, or PostGIS missing
@@ -1546,6 +1548,7 @@ def catchment_sites(
                 "maxDwellings": r[4],
                 "lat": float(r[5]),
                 "lng": float(r[6]),
+                "areaCode": r[7],
             }
             for r in rows
         ]

@@ -12,6 +12,8 @@ interface RankingListProps {
   starredCodes?: Set<string>;
   onToggleStar?: (areaCode: string) => void;
   tagContext?: TagContext;
+  /** Brownfield plots per area code (count and total homes), for Find a site. */
+  plotsByArea?: Record<string, { count: number; homes: number }>;
 }
 
 // The shortlist: areas ordered by priority so the user sees where to focus, not
@@ -24,6 +26,7 @@ export function RankingList({
   starredCodes,
   onToggleStar,
   tagContext,
+  plotsByArea,
 }: RankingListProps) {
   if (areas.length === 0) return null;
   return (
@@ -55,6 +58,16 @@ export function RankingList({
                 </span>
                 <span className="block text-xs text-neutral-500">
                   {PRIORITY_LABELS[area.band]}
+                  {plotsByArea?.[area.areaCode] && (
+                    <span className="text-brand-green">
+                      {" · "}
+                      {plotsByArea[area.areaCode].count} plot
+                      {plotsByArea[area.areaCode].count === 1 ? "" : "s"}
+                      {plotsByArea[area.areaCode].homes > 0
+                        ? ` · ${plotsByArea[area.areaCode].homes.toLocaleString()} homes`
+                        : ""}
+                    </span>
+                  )}
                 </span>
                 {tagsForArea(area, tagContext).length > 0 && (
                   <span className="mt-1 flex flex-wrap gap-1">
