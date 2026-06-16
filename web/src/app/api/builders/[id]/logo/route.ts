@@ -21,7 +21,9 @@ export async function GET(
     status: 200,
     headers: {
       "content-type": res.headers.get("content-type") ?? "image/png",
-      "cache-control": "private, max-age=300",
+      // Revalidate so a replaced logo (served at the same URL) shows immediately
+      // rather than a stale cached copy.
+      "cache-control": "private, no-cache",
     },
   });
 }

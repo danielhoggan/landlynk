@@ -549,6 +549,20 @@ function BrandEditPanel({
   const [industry, setIndustry] = useState(brand.industry ?? "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [logoBusy, setLogoBusy] = useState(false);
+
+  async function replaceLogo(file: File) {
+    setLogoBusy(true);
+    setErr("");
+    try {
+      await uploadBrandLogo(brand.id, file.name, await fileToBase64(file));
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not upload logo");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -638,6 +652,40 @@ function BrandEditPanel({
         >
           Save brand
         </button>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-2">
+        {brand.logoPath ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/builders/${brand.id}/logo`}
+            alt={`${brand.name} logo`}
+            className="h-6 w-auto max-w-[80px] object-contain"
+          />
+        ) : (
+          <span className="text-xs text-neutral-500">No logo yet</span>
+        )}
+        <label
+          className={`cursor-pointer rounded-card border border-neutral-300 px-3 py-1.5 text-xs font-semibold ${
+            logoBusy ? "opacity-50" : "hover:bg-neutral-100"
+          }`}
+        >
+          {logoBusy
+            ? "Uploading..."
+            : brand.logoPath
+              ? "Replace logo"
+              : "Upload logo"}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/svg+xml"
+            disabled={logoBusy}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) replaceLogo(file);
+              e.target.value = "";
+            }}
+            className="hidden"
+          />
+        </label>
       </div>
       {err && <p className="mt-1 text-xs text-priority-low">{err}</p>}
     </div>
