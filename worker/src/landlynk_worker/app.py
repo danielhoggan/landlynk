@@ -679,7 +679,7 @@ def admin_delete_group(group_id: str, user: dict = Depends(current_user)) -> Res
 class BuilderRequest(BaseModel):
     group_id: str = Field(alias="groupId")
     name: str
-    theme_heading: str = Field(default="#4169E1", alias="themeHeading")
+    theme_heading: str = Field(default="#2F6B3A", alias="themeHeading")
     theme_secondary: str | None = Field(default=None, alias="themeSecondary")
     theme_accent: str | None = Field(default=None, alias="themeAccent")
     fonts: list[str] = []

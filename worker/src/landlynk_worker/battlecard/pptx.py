@@ -23,7 +23,7 @@ from pptx.util import Inches, Length, Pt
 
 from .schema import Battlecard, DataValue
 
-_DEFAULT_HEADING = "4169E1"  # Royal Blue, no leading hash for python-pptx
+_DEFAULT_HEADING = "2F6B3A"  # LandLynk green, no leading hash for python-pptx
 _FONT = "Poppins"  # named only; PowerPoint substitutes if the font is not installed
 
 _WHITE = RGBColor(0xFF, 0xFF, 0xFF)

@@ -81,7 +81,7 @@ Battlecard exports carry the client or developer brand, not the Mediaworks shell
 
 Consistent with house-standards.md:
 - Tenorite for documents, Tenor Sans for HTML.
-- Royal Blue #4169E1 for document headings where the client brand does not override.
+- LandLynk green #2F6B3A for document headings where the client brand does not override.
 - No em dashes. No Oxford commas. No markdown headers in generated prose.
 
 ## Accessibility

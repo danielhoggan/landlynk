@@ -23,13 +23,13 @@ export interface BrandTheme {
 
 /**
  * Default theme used when a client brand does not override. Headings fall back
- * to Royal Blue per the output conventions (house-standards.md).
+ * to the LandLynk green per the output conventions (house-standards.md).
  */
 export const DEFAULT_THEME: BrandTheme = {
   id: "landlynk-default",
   name: "LandLynk Default",
   colors: {
-    primary: "#4169E1", // Royal Blue, default document heading colour
+    primary: "#2F6B3A", // LandLynk green, default document heading colour
     secondary: "#0D0D0D",
     accent: "#DC167A",
   },

@@ -53,7 +53,7 @@ Mediaworks engineering and output standards for this build. Binding. If a standa
 These are firm standing Mediaworks conventions and apply to everything user-facing the build produces: generated commentary, Battlecards, exported documents and reports.
 
 - Font: Tenorite for documents (Word, PDF, decks). Tenor Sans for HTML and web outputs, as the web-safe equivalent.
-- Document headings: Royal Blue #4169E1.
+- Document headings: LandLynk green #2F6B3A, where a client brand does not override.
 - No em dashes. Use a spaced hyphen or restructure the sentence.
 - No Oxford commas.
 - No markdown headers in generated prose deliverables.

@@ -41,7 +41,7 @@ from reportlab.platypus import (
 from .schema import Battlecard, DataValue
 
 # Default document heading colour where a client brand does not override.
-_DEFAULT_HEADING = "#4169E1"  # Royal Blue
+_DEFAULT_HEADING = "#2F6B3A"  # LandLynk green
 _GOLD = colors.HexColor("#C9A24B")
 _GREY = colors.HexColor("#9AA3AD")
 _INK = colors.HexColor("#1E2A32")

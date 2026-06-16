@@ -49,7 +49,7 @@ Full version pinning and rationale in house-standards.md. Do not introduce a dif
 These apply to anything user-facing or document-like the build produces (generated commentary, exports, reports), not to source code.
 
 - Font: Tenorite for documents. Tenor Sans for HTML and web outputs.
-- Headings in generated documents: Royal Blue #4169E1.
+- Headings in generated documents: LandLynk green #2F6B3A, where a client brand does not override.
 - No em dashes. No Oxford commas. No markdown headers in generated prose deliverables.
 
 Code files, config and these control files use normal markdown and code conventions.
