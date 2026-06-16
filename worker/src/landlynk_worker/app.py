@@ -1561,10 +1561,21 @@ def catchment_sites(
         ]
     except Exception:  # no DB, no dataset, or PostGIS missing
         sites = []
-    # Competitor developments are live from PlanIt (national, no upload), tagged
-    # to the area they fall in so they list per area too.
-    sites.extend(_competitor_sites(catchment_id, geom))
     return {"sites": sites}
+
+
+@app.get("/catchments/{catchment_id}/competitors")
+def catchment_competitors(
+    catchment_id: str, user: dict = Depends(current_user)
+) -> dict:
+    """Competitor developments (live PlanIt residential applications) in the
+    catchment. Separate from /sites so the fast brownfield overlay is not held
+    up by the live national query."""
+    _require_access(catchment_id, user)
+    geom = _catchment_geometry(catchment_id)
+    if not geom:
+        return {"sites": []}
+    return {"sites": _competitor_sites(catchment_id, geom)}
 
 
 def _live_competitors(geom: dict) -> list[dict]:

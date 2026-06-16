@@ -361,6 +361,19 @@ export async function getCatchmentSites(
   return data?.sites ?? [];
 }
 
+// Competitor developments (live national planning applications) in a catchment.
+// Separate from getCatchmentSites so the fast brownfield overlay is not blocked.
+export async function getCatchmentCompetitors(
+  catchmentId: string,
+): Promise<DevelopmentSite[]> {
+  const res = await fetch(`/api/catchments/${catchmentId}/competitors`, {
+    headers: activeBrandHeaders(),
+  });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({ sites: [] }));
+  return data?.sites ?? [];
+}
+
 export async function getUsage(): Promise<LlmUsage> {
   const res = await fetch("/api/builders/usage", {
     headers: activeBrandHeaders(),

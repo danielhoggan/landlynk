@@ -17,6 +17,7 @@ import {
   getBattlecard,
   getBuilderProfiles,
   getCatchmentSites,
+  getCatchmentCompetitors,
   pollCatchment,
   submitCatchment,
   type BuilderProfile,
@@ -202,8 +203,11 @@ export default function HomePage() {
   // Housebuilder intent (signposted on the New catchment page). "find_site" is
   // audience-led discovery; "appraise" is the default single-site flow.
   const [intent, setIntent] = useState<Intent>("appraise");
-  // Brownfield development sites overlaid on the map for Find a site.
+  // Brownfield development sites overlaid on the map for Find a site, plus the
+  // competitor developments fetched separately (live, slower) so brownfield is
+  // not held up.
   const [sites, setSites] = useState<DevelopmentSite[]>([]);
+  const [competitors, setCompetitors] = useState<DevelopmentSite[]>([]);
   // Find a site: weight the ranking toward areas with more brownfield capacity.
   const [weightByLand, setWeightByLand] = useState(false);
   // Find a site: order the ranking by audience fit (score) or by buildable land.
@@ -290,17 +294,21 @@ export default function HomePage() {
 
   // Read from the run's stored config, so the drawer reflects what the run
   // actually used: whether a price was set and which audience it searched for.
+  // Brownfield plus live competitor developments, the full overlay set.
+  const overlaySites = [...sites, ...competitors];
   // Which site layers are shown on the map and list. Buildable land is on by
   // default; competitor permissions are opt-in context.
-  const visibleSites = sites.filter((s) => siteLayers[s.sourceType] ?? true);
-  const siteCounts = sites.reduce<Record<string, number>>((acc, s) => {
+  const visibleSites = overlaySites.filter((s) => siteLayers[s.sourceType] ?? true);
+  const siteCounts = overlaySites.reduce<Record<string, number>>((acc, s) => {
     acc[s.sourceType] = (acc[s.sourceType] ?? 0) + 1;
     return acc;
   }, {});
 
-  // Buildable plots (brownfield and allocations, not competitor permissions)
-  // grouped by area, for the Find a site ranking badges and the land sort.
-  const plotsByArea = sites.reduce<Record<string, { count: number; homes: number }>>(
+  // Buildable plots (brownfield, not competitor permissions) grouped by area,
+  // for the Find a site ranking badges and the land sort.
+  const plotsByArea = overlaySites.reduce<
+    Record<string, { count: number; homes: number }>
+  >(
     (acc, s) => {
       if (!s.areaCode || s.sourceType === "permission") return acc;
       const cur = acc[s.areaCode] ?? { count: 0, homes: 0 };
@@ -473,14 +481,20 @@ export default function HomePage() {
     if (catchment?.status === "complete") setShowForm(false);
   }, [catchment?.id, catchment?.status]);
 
-  // On Find a site, overlay the brownfield development sites in the catchment.
+  // On Find a site, overlay the brownfield sites (fast) and the competitor
+  // developments (live, separate so it does not block the brownfield markers).
   useEffect(() => {
     if (intent === "find_site" && catchment?.status === "complete") {
-      getCatchmentSites(catchment.id)
+      const id = catchment.id;
+      getCatchmentSites(id)
         .then(setSites)
         .catch(() => setSites([]));
+      getCatchmentCompetitors(id)
+        .then(setCompetitors)
+        .catch(() => setCompetitors([]));
     } else {
       setSites([]);
+      setCompetitors([]);
     }
   }, [intent, catchment?.id, catchment?.status]);
 
@@ -1275,7 +1289,7 @@ export default function HomePage() {
           sites={intent === "find_site" ? visibleSites : undefined}
         />
         {activeRun && intent === "find_site" &&
-          (sites.length > 0 ? (
+          (overlaySites.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-medium text-neutral-500">Land layers</span>
               {(
@@ -1405,7 +1419,7 @@ export default function HomePage() {
             ? visibleSites.filter((s) => s.areaCode === selectedCode)
             : undefined
         }
-        catchmentHasSites={sites.length > 0}
+        catchmentHasSites={overlaySites.length > 0}
         audienceSegment={runConfig?.segment}
         areaGeometry={
           intent === "find_site"

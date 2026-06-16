@@ -49,11 +49,10 @@ def _residential_sites_from_geojson(data: dict, poly: BaseGeometry) -> list[dict
         if not poly.contains(Point(pt.x, pt.y)):
             continue
         props = f.get("properties") or {}
-        size = str(props.get("app_size", "")).lower()
         text = " ".join(
             str(props.get(k, "")) for k in ("description", "app_type", "name")
         ).lower()
-        if size != "large" and not any(k in text for k in _RESIDENTIAL):
+        if not any(k in text for k in _RESIDENTIAL):
             continue
         name = (
             props.get("address")
@@ -88,16 +87,20 @@ def fetch_competitor_sites(
     except Exception:
         return []
     minx, miny, maxx, maxy = poly.bounds  # lng_min, lat_min, lng_max, lat_max
-    # PlanIt bbox is west,south,east,north (lng,lat,lng,lat).
+    # PlanIt bbox is west,south,east,north (lng,lat,lng,lat). Restrict to major
+    # schemes (app_size=Large) and recent applications: that is what competitor
+    # developments means, and it keeps a catchment-sized query fast enough that
+    # the national data source does not time out.
     params = {
         "bbox": f"{minx},{miny},{maxx},{maxy}",
-        "pg_sz": min(limit, 400),
+        "pg_sz": min(limit, 200),
+        "app_size": "Large",
         "start_date": (date.today() - timedelta(days=lookback_days)).isoformat(),
     }
     url = f"{base_url.rstrip('/')}/api/applics/geojson"
     try:
         with httpx.Client(
-            timeout=20.0, headers={"User-Agent": "LandLynk/1.0 (+catchment overlay)"}
+            timeout=35.0, headers={"User-Agent": "LandLynk/1.0 (+catchment overlay)"}
         ) as client:
             resp = client.get(url, params=params)
             resp.raise_for_status()

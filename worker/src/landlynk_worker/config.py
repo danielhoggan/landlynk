@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     # applications shown are.
     planit_enabled: bool = True
     planit_base_url: str = "https://www.planit.org.uk"
-    planit_lookback_days: int = 1095
+    planit_lookback_days: int = 730
 
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}

@@ -173,7 +173,7 @@ def test_planit_filters_residential_inside_polygon():
                 "geometry": {"type": "Point", "coordinates": [-0.6, 51.6]},
                 "properties": {
                     "app_size": "Large",
-                    "description": "Mixed use",
+                    "description": "Erection of 150 dwellings",
                     "address": "Big site",
                 },
             },
