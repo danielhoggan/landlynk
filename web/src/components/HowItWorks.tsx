@@ -96,24 +96,24 @@ const GENERIC: Tailored = {
 
 const BY_INDUSTRY: Record<string, Tailored> = {
   residential: {
-    title: "Turn a site into a sales and marketing strategy",
+    title: "Find, appraise and build out residential sites",
     intro: (b) =>
-      `Paste a development postcode or an OS grid reference. LandLynk builds a catchment${forPhrase(b)} by drive time or radius, scores and ranks every area on how worth targeting it is, and generates a Battlecard per area that says who to target, how to price and what to say.`,
+      `Start from a target buyer or paste a development postcode or OS grid reference. LandLynk builds a catchment${forPhrase(b)} by drive time or radius, scores and ranks every area on how worth targeting it is, and generates a Battlecard per area that says who to target, how to price and what to say. Use it to find where to build, appraise a plot before you buy, and plan the mix for the next phase.`,
     useCases: [
       {
         icon: Building2,
-        title: "New-build launch",
-        body: "Find the areas whose income, tenure and age profile fit the price band and bed mix, and rank them so launch spend goes where demand is strongest.",
+        title: "Find a site",
+        body: "Start from a target buyer, from first-time buyers to downsizers, and rank the areas that best fit them, so you know where to look for land.",
       },
       {
         icon: Target,
-        title: "Pricing and product mix",
-        body: "See which audiences each area skews towards, from first-time buyers to downsizers, to sense-check the price band and bed mix for the scheme.",
+        title: "Appraise a site",
+        body: "Paste a plot you are considering and see its catchment buyers, whether local incomes support your price and how deep demand is, before you commit.",
       },
       {
         icon: Presentation,
-        title: "Phasing and messaging",
-        body: "Tailor the message area by area and phase release around the neighbourhoods most likely to reserve early.",
+        title: "Plan the next phase",
+        body: "On a site you already own, see which audiences are under-served nearby and which product mix to lean the last phase toward when other types are slow.",
       },
     ],
   },
