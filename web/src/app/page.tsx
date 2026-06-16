@@ -257,6 +257,14 @@ export default function HomePage() {
     }
   }
 
+  // Read from the run's stored config, so the drawer reflects what the run
+  // actually used: whether a price was set and which audience it searched for.
+  const runConfig = catchment?.input?.config;
+  const runPriceSet = Boolean(runConfig?.priceBand?.from);
+  const runAudienceLabel = runConfig?.segment
+    ? (segmentOptions.find((s) => s.id === runConfig.segment)?.label ?? null)
+    : null;
+
   // A completed run that has areas. Its title leads the page (development name
   // and the postcode or grid ref entered), falling back to the input alone.
   const activeRun = catchment?.status === "complete" && areas.length > 0;
@@ -1150,6 +1158,8 @@ export default function HomePage() {
             ? `/api/catchments/${catchment.id}/battlecards/${selectedCode}/pptx`
             : undefined
         }
+        priceSet={runPriceSet}
+        audienceLabel={runAudienceLabel}
       />
     </div>
   );

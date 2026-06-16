@@ -26,6 +26,7 @@ export function BattlecardInsights({
   confidence,
   contextMetrics,
   objectiveLabel,
+  priceSet = true,
 }: {
   pricing?: PricingRationale;
   segments?: AddressableSegments;
@@ -33,6 +34,9 @@ export function BattlecardInsights({
   confidence?: DataConfidence;
   contextMetrics?: ContextMetric[];
   objectiveLabel?: string | null;
+  /** Whether the run set a target price. When false the pricing read is omitted
+   * rather than judged against the engine default the user never entered. */
+  priceSet?: boolean;
 }) {
   // Older stored Battlecards predate these sections. Render what is present and
   // skip the rest rather than crashing the drawer on a partial payload.
@@ -95,9 +99,18 @@ export function BattlecardInsights({
               </span>
             )}
           </div>
-          <p className="output-prose text-sm leading-relaxed">
-            {pricing.positioning}
-          </p>
+          {priceSet ? (
+            <p className="output-prose text-sm leading-relaxed">
+              {pricing.positioning}
+            </p>
+          ) : (
+            <p className="text-sm leading-relaxed text-neutral-500">
+              No target price was set for this run, so there is no pricing read
+              for this site. Add a price band when you build to see the
+              affordability and price story. Local incomes and sale prices are in
+              the stats and charts.
+            </p>
+          )}
         </section>
       )}
 

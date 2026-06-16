@@ -18,6 +18,10 @@ interface BattlecardDrawerProps {
   pdfUrl?: string;
   /** Download URL for the PPTX deck export. */
   pptxUrl?: string;
+  /** Whether the run set a target price (else the pricing read is omitted). */
+  priceSet?: boolean;
+  /** The audience this run searched for, surfaced so the card is not generic. */
+  audienceLabel?: string | null;
 }
 
 // Clicking a region opens its deep-dive in the slide-out drawer, never a full
@@ -30,6 +34,8 @@ export function BattlecardDrawer({
   onClose,
   pdfUrl,
   pptxUrl,
+  priceSet = true,
+  audienceLabel,
 }: BattlecardDrawerProps) {
   // Mount gate so the portal target (document.body) exists before rendering.
   const [mounted, setMounted] = useState(false);
@@ -71,6 +77,11 @@ export function BattlecardDrawer({
 
       {battlecard ? (
         <div className="space-y-6">
+          {audienceLabel && (
+            <span className="inline-block rounded-full bg-light-accent/10 px-3 py-1 text-xs font-semibold text-light-accent">
+              Fit for {audienceLabel.toLowerCase()} in this area
+            </span>
+          )}
           <OnLocationSummary battlecard={battlecard} areaName={areaName} />
 
           {(pdfUrl || pptxUrl) && (
@@ -110,6 +121,7 @@ export function BattlecardDrawer({
             confidence={battlecard.dataConfidence}
             contextMetrics={battlecard.contextMetrics}
             objectiveLabel={battlecard.objectiveLabel}
+            priceSet={priceSet}
           />
 
           {battlecard.visualSummary?.charts && (
