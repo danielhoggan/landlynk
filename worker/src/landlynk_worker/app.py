@@ -1532,21 +1532,20 @@ def catchment_sites(
     geom = _catchment_geometry(catchment_id)
     if not geom:
         return {"sites": []}
+    sites: list[dict] = []
     try:
         with get_pool().connection() as conn:
             rows = conn.execute(
                 "SELECT s.reference, s.name, s.hectares, s.min_dwellings, "
-                "s.max_dwellings, s.lat, s.lng, b.area_code, s.source_type "
+                "s.max_dwellings, s.lat, s.lng, b.area_code "
                 "FROM development_site s "
                 "LEFT JOIN geo_boundaries b ON ST_Within(s.geom, b.geom) "
                 "WHERE ST_Within(s.geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
+                "AND s.source_type = 'brownfield' "
                 "ORDER BY s.max_dwellings DESC NULLS LAST LIMIT 1500",
                 [json.dumps(geom)],
             ).fetchall()
-    except Exception:  # no DB, no dataset, or PostGIS missing
-        return {"sites": []}
-    return {
-        "sites": [
+        sites = [
             {
                 "reference": r[0],
                 "name": r[1],
@@ -1556,17 +1555,78 @@ def catchment_sites(
                 "lat": float(r[5]),
                 "lng": float(r[6]),
                 "areaCode": r[7],
-                "sourceType": r[8],
+                "sourceType": "brownfield",
             }
             for r in rows
         ]
-    }
+    except Exception:  # no DB, no dataset, or PostGIS missing
+        sites = []
+    # Competitor developments are live from PlanIt (national, no upload), tagged
+    # to the area they fall in so they list per area too.
+    sites.extend(_competitor_sites(catchment_id, geom))
+    return {"sites": sites}
+
+
+def _live_competitors(geom: dict) -> list[dict]:
+    """Residential planning applications in the catchment, live from PlanIt."""
+    if not settings.planit_enabled:
+        return []
+    from .pipeline.planit import fetch_competitor_sites
+
+    return fetch_competitor_sites(
+        geom, settings.planit_base_url, settings.planit_lookback_days
+    )
+
+
+def _competitor_sites(catchment_id: str, geom: dict) -> list[dict]:
+    raw = _live_competitors(geom)
+    if not raw:
+        return []
+    # Tag each application to the area (MSOA/LA) it falls in, for the per-area
+    # list, by point-in-polygon against the catchment's areas.
+    catchment = get_store().get_catchment(catchment_id)
+    polys: list[tuple[str, object]] = []
+    try:
+        from shapely.geometry import shape
+
+        for a in (catchment or {}).get("areas", []):
+            if a.get("geometry"):
+                polys.append((a["areaCode"], shape(a["geometry"])))
+    except Exception:
+        polys = []
+
+    def area_for(lng: float, lat: float) -> str | None:
+        from shapely.geometry import Point
+
+        p = Point(lng, lat)
+        for code, poly in polys:
+            try:
+                if poly.contains(p):
+                    return code
+            except Exception:
+                continue
+        return None
+
+    return [
+        {
+            "reference": s["reference"],
+            "name": s["name"],
+            "hectares": None,
+            "minDwellings": None,
+            "maxDwellings": None,
+            "lat": s["lat"],
+            "lng": s["lng"],
+            "areaCode": area_for(s["lng"], s["lat"]),
+            "sourceType": "permission",
+        }
+        for s in raw
+    ]
 
 
 def _site_supply(geom: dict | None) -> dict:
-    """Buildable supply (brownfield + allocations) and competitor schemes
-    (residential permissions) in the catchment. Best effort: zeros without the
-    datasets or a database."""
+    """Buildable supply (brownfield, from the loaded register) and competitor
+    schemes (live residential planning applications) in the catchment. Best
+    effort: zeros without the data or a database."""
     out = {
         "buildablePlots": 0,
         "buildableHomes": 0,
@@ -1577,22 +1637,19 @@ def _site_supply(geom: dict | None) -> dict:
         return out
     try:
         with get_pool().connection() as conn:
-            rows = conn.execute(
-                "SELECT source_type, count(*), COALESCE(SUM(max_dwellings), 0) "
+            row = conn.execute(
+                "SELECT count(*), COALESCE(SUM(max_dwellings), 0) "
                 "FROM development_site "
-                "WHERE ST_Within(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
-                "GROUP BY source_type",
+                "WHERE source_type = 'brownfield' "
+                "AND ST_Within(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))",
                 [json.dumps(geom)],
-            ).fetchall()
+            ).fetchone()
+        if row:
+            out["buildablePlots"] = int(row[0])
+            out["buildableHomes"] = int(row[1] or 0)
     except Exception:  # no DB, no dataset, or PostGIS missing
-        return out
-    for source_type, n, homes in rows:
-        if source_type in ("brownfield", "allocation"):
-            out["buildablePlots"] += int(n)
-            out["buildableHomes"] += int(homes or 0)
-        elif source_type == "permission":
-            out["competitorSchemes"] += int(n)
-            out["competitorHomes"] += int(homes or 0)
+        pass
+    out["competitorSchemes"] = len(_live_competitors(geom))
     return out
 
 

@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     github_repo: str = "danielhoggan/landlynk"
     github_branch: str = "main"
 
+    # PlanIt aggregates UK planning applications nationally (open, free), used as
+    # the live competitor-developments overlay so no per-authority upload is
+    # needed. Base URL is overridable; the lookback caps how recent the
+    # applications shown are.
+    planit_enabled: bool = True
+    planit_base_url: str = "https://www.planit.org.uk"
+    planit_lookback_days: int = 1095
+
     def admin_email_set(self) -> set[str]:
         return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 

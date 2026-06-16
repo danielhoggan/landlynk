@@ -1623,8 +1623,7 @@ def _load_sites(
                 ],
             )
         # Per-area buildable dwelling capacity, for the land-supply scoring signal
-        # and Local context. Counts available and allocated land, not competitor
-        # permissions. Best effort: needs boundaries loaded.
+        # and Local context. Best effort: needs boundaries loaded.
         conn.execute("DELETE FROM area_metric WHERE metric_key = 'site_capacity'")
         conn.execute(
             "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
@@ -1632,7 +1631,7 @@ def _load_sites(
             "  COALESCE(SUM(s.max_dwellings), 0) "
             "FROM geo_boundaries b JOIN development_site s "
             "  ON ST_Within(s.geom, b.geom) "
-            "WHERE b.area_type = %s AND s.source_type IN ('brownfield', 'allocation') "
+            "WHERE b.area_type = %s AND s.source_type = 'brownfield' "
             "GROUP BY b.area_code",
             [area_type, area_type],
         )
@@ -1642,18 +1641,6 @@ def _load_sites(
 def load_development_sites(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
     """Brownfield land register (available previously-developed land)."""
     return _load_sites(pool, url, "brownfield", area_type)
-
-
-def load_site_allocations(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
-    """Local Plan housing allocations (allocated, often greenfield, land)."""
-    return _load_sites(pool, url, "allocation", area_type)
-
-
-def load_planning_permissions(
-    pool: ConnectionPool, url: str, area_type: str = "MSOA"
-) -> int:
-    """Residential planning permissions, shown as competitor developments."""
-    return _load_sites(pool, url, "permission", area_type)
 
 
 def load_income(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:

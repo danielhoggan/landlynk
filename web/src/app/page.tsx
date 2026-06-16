@@ -208,10 +208,10 @@ export default function HomePage() {
   const [weightByLand, setWeightByLand] = useState(false);
   // Find a site: order the ranking by audience fit (score) or by buildable land.
   const [rankSort, setRankSort] = useState<"fit" | "land">("fit");
-  // Which development-site layers are drawn. Buildable land on, competitor off.
+  // Which development-site layers are drawn. Brownfield (buildable) on,
+  // competitor (live planning applications) off by default as it is context.
   const [siteLayers, setSiteLayers] = useState<Record<string, boolean>>({
     brownfield: true,
-    allocation: true,
     permission: false,
   });
 
@@ -1273,7 +1273,6 @@ export default function HomePage() {
               {(
                 [
                   ["brownfield", "Brownfield", "#1F5A3C"],
-                  ["allocation", "Allocated", "#C9A24B"],
                   ["permission", "Competitor", "#C04A1F"],
                 ] as const
               ).map(([key, label, colour]) => {
@@ -1311,9 +1310,9 @@ export default function HomePage() {
             </div>
           ) : (
             <p className="text-xs text-neutral-500">
-              No development sites loaded for this catchment. An admin can load
-              the Development sites, Local Plan allocations and Competitor
-              developments datasets on the Reference data page.
+              No buildable plots here yet. Load the Development sites (brownfield)
+              dataset on the Reference data page and re-run. Competitor schemes
+              load automatically from national planning applications.
             </p>
           ))}
         {activeRun &&

@@ -418,15 +418,16 @@ export function HowItWorks() {
             so they describe the area not a single street.
           </Card>
           <Card icon={Info} title="Buildable land">
-            Brownfield land register is national and the most complete. Local
-            Plan allocations add the greenfield sites brownfield misses, but
-            allocation coverage varies by local authority, so a given area may
-            show fewer plots than truly exist.
+            The national brownfield land register: previously-developed sites
+            with dwelling capacity, loaded once and shown within a catchment. It
+            skews to urban regeneration, so it is the best open national source
+            of available land rather than a complete picture of every site.
           </Card>
           <Card icon={Info} title="Competitor developments">
-            Residential planning permissions are shown as a separate, optional
-            overlay. Coverage is patchy by authority, so read it as a guide to
-            visible competing pipeline, not a complete register.
+            Residential planning applications, pulled live and nationally from
+            PlanIt, so the competitor overlay needs no upload and stays current.
+            It shows where rivals are active; it is a guide to visible pipeline,
+            not a complete or capacity-verified register.
           </Card>
           <Card icon={ShieldCheck} title="Reproducible and refreshable">
             Every dataset loads through a versioned, dated loader, and every score

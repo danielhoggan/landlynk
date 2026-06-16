@@ -136,6 +136,56 @@ def test_development_site_rows_from_brownfield_csv():
     assert site["hectares"] == 1.2
 
 
+def test_planit_filters_residential_inside_polygon():
+    # PlanIt parser keeps residential applications inside the catchment polygon,
+    # drops non-residential and those outside, with no network.
+    from shapely.geometry import shape
+
+    from landlynk_worker.pipeline.planit import _residential_sites_from_geojson
+
+    poly = shape(
+        {
+            "type": "Polygon",
+            "coordinates": [[[-1, 51], [-1, 52], [0, 52], [0, 51], [-1, 51]]],
+        }
+    )
+    data = {
+        "features": [
+            {
+                "geometry": {"type": "Point", "coordinates": [-0.5, 51.5]},
+                "properties": {
+                    "description": "Erection of 20 dwellings",
+                    "address": "Mill Road",
+                },
+            },
+            {
+                "geometry": {"type": "Point", "coordinates": [-0.5, 51.5]},
+                "properties": {
+                    "description": "Single storey extension",
+                    "address": "1 High St",
+                },
+            },
+            {
+                "geometry": {"type": "Point", "coordinates": [5, 51.5]},
+                "properties": {"description": "50 homes", "address": "Far away"},
+            },
+            {
+                "geometry": {"type": "Point", "coordinates": [-0.6, 51.6]},
+                "properties": {
+                    "app_size": "Large",
+                    "description": "Mixed use",
+                    "address": "Big site",
+                },
+            },
+        ]
+    }
+    names = [s["name"] for s in _residential_sites_from_geojson(data, poly)]
+    assert "Mill Road" in names  # residential keyword, inside
+    assert "Big site" in names  # large application, inside
+    assert "1 High St" not in names  # not residential
+    assert "Far away" not in names  # outside the polygon
+
+
 def test_median_age_and_bands():
     counts = {age: 10 for age in range(0, 91)}
     assert t.aggregate_age_bands(counts)["age_0_15"] == 160

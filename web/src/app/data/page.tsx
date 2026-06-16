@@ -312,36 +312,6 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
-  {
-    id: "site_allocations",
-    title: "Local Plan allocations",
-    blurb:
-      "Sites allocated for housing in adopted Local Plans, including greenfield land the brownfield register misses. Shown as buildable land alongside brownfield on Find a site. Paste a planning.data.gov.uk allocation CSV with a point column and net dwellings.",
-    source: "https://www.planning.data.gov.uk/",
-    sourceLabel: "planning.data.gov.uk",
-    fields: [
-      {
-        key: "url",
-        label: "Allocations CSV URL",
-        placeholder: "planning.data.gov.uk allocation CSV with point and dwellings",
-      },
-    ],
-  },
-  {
-    id: "planning_permissions",
-    title: "Competitor developments",
-    blurb:
-      "Residential planning permissions, shown as a toggleable competitor-developments overlay on Find a site (where rivals are already building), not counted as your buildable land. Paste a CSV with a point column (or lat/long) and net dwellings.",
-    source: "https://www.planning.data.gov.uk/",
-    sourceLabel: "planning.data.gov.uk",
-    fields: [
-      {
-        key: "url",
-        label: "Permissions CSV URL",
-        placeholder: "residential permissions CSV with point and dwellings",
-      },
-    ],
-  },
 ];
 
 export default function DataPage() {
