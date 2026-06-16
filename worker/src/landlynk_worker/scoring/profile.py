@@ -88,6 +88,10 @@ class ScoringConfig:
         }
     )
     price_band: PriceBand = field(default_factory=lambda: PriceBand(250_000, 400_000))
+    # Whether the caller set an explicit price. When False the price band is a
+    # neutral default used for ranking only, and outputs must not present a price
+    # story the user never chose.
+    price_set: bool = True
     bed_range: str = "2 to 5"
     overlap_threshold: float = 0.10
     drive_time_minutes: int = 30

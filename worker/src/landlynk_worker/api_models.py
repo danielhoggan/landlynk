@@ -8,6 +8,8 @@ and the Battlecard payload).
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from pydantic import BaseModel, Field
 
 from .battlecard import DevelopmentInfo
@@ -66,7 +68,7 @@ def to_scoring_config(req: CatchmentJobRequest) -> ScoringConfig:
     base = ScoringConfig()
     cfg = req.config
     if cfg is None:
-        return base
+        return replace(base, price_set=False)
     price_band = (
         PriceBand(frm=cfg.price_band.frm, to=cfg.price_band.to)
         if cfg.price_band
@@ -75,6 +77,7 @@ def to_scoring_config(req: CatchmentJobRequest) -> ScoringConfig:
     config = ScoringConfig(
         weights=cfg.weights or base.weights,
         price_band=price_band,
+        price_set=cfg.price_band is not None,
         bed_range=cfg.bed_range or base.bed_range,
         overlap_threshold=(
             cfg.overlap_threshold

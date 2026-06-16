@@ -142,6 +142,7 @@ def _config_from_dict(d: dict | None) -> ScoringConfig:
             frm=pb.get("from", base.price_band.frm),
             to=pb.get("to", base.price_band.to),
         ),
+        price_set=bool(d.get("priceBand")),
         bed_range=d.get("bedRange", base.bed_range),
         overlap_threshold=d.get("overlapThreshold", base.overlap_threshold),
         drive_time_minutes=d.get("driveTimeMinutes", base.drive_time_minutes),

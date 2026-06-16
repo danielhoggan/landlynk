@@ -83,6 +83,26 @@ def _assemble(profile: AreaProfile) -> Battlecard:
     )
 
 
+def test_no_price_set_suppresses_pricing():
+    # A run with no target price ranks on a neutral default but must not present
+    # a price story: price from is null and the rationale says so.
+    from dataclasses import replace
+
+    profile = make_profile()
+    config = replace(ScoringConfig(), price_set=False)
+    card = assemble_battlecard(
+        profile,
+        config,
+        compute_score(profile, config),
+        rank=1,
+        development=_development(),
+        income_context=_income_context(),
+    )
+    assert card.visual_summary.key_statistics.price_from.value is None
+    assert card.pricing_rationale.price_from.value is None
+    assert "no pricing read" in card.pricing_rationale.positioning.lower()
+
+
 def test_assembles_a_valid_battlecard():
     card = _assemble(make_profile())
     # Re-validate through the schema to prove the payload is contract-clean.

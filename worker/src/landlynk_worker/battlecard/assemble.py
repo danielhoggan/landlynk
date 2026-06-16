@@ -134,7 +134,7 @@ def _key_statistics(profile: AreaProfile, config: ScoringConfig) -> KeyStatistic
         bed_range=config.bed_range,
         average_household_income=_dv(profile.mean_income),
         owner_occupied_percentage=_dv(_owner_occupied_pct(profile)),
-        price_from=_dv(config.price_band.frm),
+        price_from=_dv(config.price_band.frm if config.price_set else None),
         median_age=_dv(profile.median_age),
         population_catchment=_dv(None if pop_inside is None else round(pop_inside)),
         households_catchment=_dv(None if hh_inside is None else round(hh_inside)),
@@ -311,12 +311,25 @@ def _pricing_rationale(profile: AreaProfile, config: ScoringConfig) -> PricingRa
     Prefers median income, falling back to mean (ONS small-area income is mean
     only at MSOA level), so a present mean does not read as "incomplete".
     """
+    mult = config.affordability_multiple
+    # No target price set: rank on a neutral default but do not assert a price
+    # story the user never chose.
+    if not config.price_set:
+        return PricingRationale(
+            implied_affordable_price=_dv(None),
+            affordability_multiple=mult,
+            price_from=_dv(None),
+            positioning=(
+                "No target price was set for this run, so there is no pricing "
+                "read. Add a price band to see affordability against local "
+                "incomes and sale prices."
+            ),
+        )
     income = profile.median_income
     income_label = "median income"
     if income is None:
         income = profile.mean_income
         income_label = "average income"
-    mult = config.affordability_multiple
     price_from = config.price_band.frm
     implied = None if income is None else round(income * mult)
 

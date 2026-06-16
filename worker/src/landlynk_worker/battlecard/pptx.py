@@ -360,10 +360,15 @@ def _messaging_columns(slide: Slide, card: Battlecard, navy: RGBColor) -> None:
             names = ", ".join(a.name for a in items[:6])
             _line(tf, f"{cat}: {names}", size=9, color=_INK)
     else:
-        summary = (
-            f"{vs.key_statistics.bed_range} bed homes from "
-            f"{_fmt(vs.key_statistics.price_from, money=True)} in {vs.header.town}"
-        )
+        ks = vs.key_statistics
+        where = f" in {vs.header.town}" if vs.header.town else ""
+        if ks.price_from.value is not None:
+            summary = (
+                f"{ks.bed_range} bed homes from "
+                f"{_fmt(ks.price_from, money=True)}{where}"
+            )
+        else:
+            summary = f"{ks.bed_range} bed homes{where}"
         _line(tf, summary, size=10.5, color=_INK, bold=True, first=True)
         for feature in vs.development_features[:7]:
             _line(tf, feature, size=10, color=_INK)

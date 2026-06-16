@@ -455,9 +455,11 @@ def _card_flowables(
             main.append(Paragraph(f"<b>{cat}:</b> {names}", st["bullet"]))
     else:
         main.append(Paragraph("THE DEVELOPMENT &amp; LOCATION", st["header"]))
+        where = f" in {h.town}" if h.town else ""
         summary = (
-            f"{stats.bed_range} bed homes from {_short_money(stats.price_from.value)} "
-            f"in {h.town}"
+            f"{stats.bed_range} bed homes from {_short_money(stats.price_from.value)}{where}"
+            if stats.price_from.value is not None
+            else f"{stats.bed_range} bed homes{where}"
         )
         main.append(Paragraph(summary, st["bullet_bold"]))
         for feature in vs.development_features[:7]:
