@@ -291,6 +291,36 @@ export async function getCosts(filters: {
   return res.json();
 }
 
+export interface CatchmentVerdict {
+  priceFit: "within" | "stretch" | "above" | "unknown";
+  priceFrom: number | null;
+  impliedAffordablePrice: number | null;
+  positioning: string;
+  population: number | null;
+  households: number | null;
+  medianHousePrice: number | null;
+  segments: {
+    firstTimeBuyer: number | null;
+    downsizer: number | null;
+    family: number | null;
+  };
+  confidence: "high" | "medium" | "low";
+}
+
+// The whole-catchment appraisal verdict (price fit + addressable demand), used
+// by the housebuilder appraise and next-phase intents.
+export async function getCatchmentVerdict(
+  catchmentId: string,
+): Promise<CatchmentVerdict | null> {
+  const res = await fetch(`/api/catchments/${catchmentId}/verdict`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...activeBrandHeaders() },
+    body: JSON.stringify({ scope: "whole" }),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function getUsage(): Promise<LlmUsage> {
   const res = await fetch("/api/builders/usage", {
     headers: activeBrandHeaders(),

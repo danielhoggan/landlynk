@@ -290,6 +290,27 @@ def test_admin_is_unmetered_for_runs(client):
     assert client.post("/jobs/catchment", json=body).status_code == 202
 
 
+def test_catchment_verdict(client, monkeypatch):
+    # The appraise/next-phase verdict: a price fit and addressable demand for the
+    # whole catchment, derived from the combined card.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job = client.post(
+        "/jobs/catchment",
+        json={
+            "kind": "postcode",
+            "value": "IP1 1AA",
+            "developmentName": "D",
+            "config": {"priceBand": {"from": 250000, "to": 400000}},
+        },
+    ).json()["id"]
+    v = client.post(f"/catchments/{job}/verdict", json={"scope": "whole"})
+    assert v.status_code == 200
+    body = v.json()
+    assert body["priceFit"] in {"within", "stretch", "above", "unknown"}
+    assert "firstTimeBuyer" in body["segments"]
+    assert body["confidence"] in {"high", "medium", "low"}
+
+
 def test_cached_area_profile_is_read_only(client, monkeypatch):
     # GET returns a snapshot only after one is generated, and never generates
     # itself (so a historic run can auto-show without spending the allowance).

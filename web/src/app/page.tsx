@@ -32,6 +32,7 @@ import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
 import { AreaProfilePanel } from "@/components/AreaProfilePanel";
 import { IntentCards, type Intent } from "@/components/IntentCards";
+import { VerdictPanel, MixPanel } from "@/components/AppraisalPanels";
 import { segmentsForIndustry } from "@/lib/segments";
 import { OBJECTIVES, SIGNAL_LABELS } from "@/lib/objectives";
 import { useUser } from "@/lib/userContext";
@@ -890,6 +891,14 @@ export default function HomePage() {
 
       {catchment?.status === "complete" && areas.length > 0 && (
         <RunAssumptions config={catchment.input?.config} />
+      )}
+
+      {activeRun && isHousebuilder && intent === "appraise" && (
+        <VerdictPanel catchmentId={catchment!.id} />
+      )}
+
+      {activeRun && isHousebuilder && intent === "next_phase" && (
+        <MixPanel catchmentId={catchment!.id} />
       )}
 
       {catchment?.status === "complete" && areas.length > 0 && (

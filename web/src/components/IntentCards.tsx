@@ -30,7 +30,6 @@ const CARDS: {
     title: "Plan the next phase",
     blurb: "Choose the product mix for the rest of a site you already own.",
     icon: Layers,
-    soon: true,
   },
 ];
 

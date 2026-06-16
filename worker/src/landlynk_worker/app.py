@@ -1477,6 +1477,50 @@ def report_pptx(
     )
 
 
+def _appraisal_verdict(card: Battlecard) -> dict:
+    """A compact whole-catchment verdict for the housebuilder appraise and
+    next-phase intents: does local income support the price, how deep is demand,
+    and the addressable pool by segment. Derived from the combined card, so it
+    uses the same reproducible engine as the Battlecard."""
+    pr = card.pricing_rationale
+    implied = pr.implied_affordable_price.value
+    price_from = pr.price_from.value
+    if implied is None or price_from is None:
+        fit = "unknown"
+    elif price_from <= implied:
+        fit = "within"
+    elif price_from <= implied * 1.2:
+        fit = "stretch"
+    else:
+        fit = "above"
+    seg = card.addressable_segments
+    ks = card.visual_summary.key_statistics
+    return {
+        "priceFit": fit,
+        "priceFrom": price_from,
+        "impliedAffordablePrice": implied,
+        "positioning": pr.positioning,
+        "population": ks.population_catchment.value,
+        "households": ks.households_catchment.value,
+        "medianHousePrice": ks.median_house_price.value,
+        "segments": {
+            "firstTimeBuyer": seg.first_time_buyer_pipeline.value,
+            "downsizer": seg.downsizer_pool.value,
+            "family": seg.family_households.value,
+        },
+        "confidence": card.data_confidence.level,
+    }
+
+
+@app.post("/catchments/{catchment_id}/verdict")
+def catchment_verdict(
+    catchment_id: str, request: CombineRequest, user: dict = Depends(current_user)
+) -> dict:
+    """Whole-catchment appraisal verdict (price fit and addressable demand)."""
+    _require_access(catchment_id, user)
+    return _appraisal_verdict(_combined_card(catchment_id, request))
+
+
 @app.post("/catchments/{catchment_id}/combined/pptx")
 def combined_pptx(
     catchment_id: str, request: CombineRequest, user: dict = Depends(current_user)
