@@ -25,7 +25,7 @@ export default function HistoryPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <h1 className="flex items-center gap-2 text-lg font-semibold">
-        <History size={20} /> Catchment history
+        <History size={20} /> Previous catchments
       </h1>
 
       {error && <p className="text-sm text-priority-low">{error}</p>}

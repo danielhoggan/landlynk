@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { TopBar } from "./TopBar";
 import { DrawerNav } from "./DrawerNav";
 import { Sidebar } from "./Sidebar";
+import { MobileTabBar } from "./MobileTabBar";
 import { ReferenceWarning } from "./ReferenceWarning";
 import { BrandTheme } from "./BrandTheme";
 
@@ -30,8 +31,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="md:pl-60">
         <TopBar onOpenDrawer={() => setDrawerOpen(true)} />
         <ReferenceWarning />
-        <main>{children}</main>
+        {/* Pad the bottom on mobile so content clears the fixed tab bar. */}
+        <main className="pb-20 md:pb-0">{children}</main>
       </div>
+      <MobileTabBar />
     </div>
   );
 }

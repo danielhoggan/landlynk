@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Download } from "lucide-react";
 import type { Battlecard } from "@/lib/types/battlecard";
 import { OnLocationSummary } from "./OnLocationSummary";
@@ -30,6 +31,10 @@ export function BattlecardDrawer({
   pdfUrl,
   pptxUrl,
 }: BattlecardDrawerProps) {
+  // Mount gate so the portal target (document.body) exists before rendering.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -38,13 +43,18 @@ export function BattlecardDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  if (!mounted) return null;
+
+  // Portal to the body so the fixed drawer is anchored to the viewport (full
+  // height, top to bottom) regardless of any transformed or scrolled ancestor,
+  // and sits above the mobile top bar and bottom tab bar.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Area Battlecard"
       aria-hidden={!open}
-      className={`fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-neutral-200 bg-white p-5 shadow-none transition-transform duration-[280ms] ease-drawer ${
+      className={`fixed inset-y-0 right-0 z-[60] w-full max-w-md overflow-y-auto border-l border-neutral-200 bg-white p-5 shadow-none transition-transform duration-[280ms] ease-drawer ${
         open ? "translate-x-0" : "translate-x-full"
       }`}
     >
@@ -129,6 +139,7 @@ export function BattlecardDrawer({
       ) : (
         <p className="text-sm text-neutral-500">Loading Battlecard...</p>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -30,7 +30,7 @@ export interface NavItem {
 // Battlecards are reached inside a catchment, so not a top-level item.
 export const NAV_ITEMS: NavItem[] = [
   { label: "New catchment", icon: Map, href: "/", section: "catchments" },
-  { label: "History", icon: History, href: "/history", section: "catchments" },
+  { label: "Previous catchments", icon: History, href: "/history", section: "catchments" },
   { label: "Archived", icon: Archive, href: "/archived", section: "catchments" },
   { label: "How it works", icon: Compass, href: "/how-it-works", section: "info" },
   { label: "Settings", icon: Settings, href: "/settings", section: "info" },
