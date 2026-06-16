@@ -1518,6 +1518,105 @@ def load_tenure(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
     )
 
 
+def _wkt_point(value: object) -> tuple[float | None, float | None]:
+    """Longitude, latitude from a WKT point like 'POINT (-1.23 52.10)'."""
+    m = re.search(r"POINT\s*\(\s*(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s*\)", str(value or ""))
+    if not m:
+        return None, None
+    return float(m.group(1)), float(m.group(2))
+
+
+def _to_int(value: float | None) -> int | None:
+    return None if value is None else int(round(value))
+
+
+def _development_site_rows(text: str) -> list[dict]:
+    """Brownfield land register rows as development site points.
+
+    Reads the planning.data.gov.uk brownfield-land CSV: a 'point' column carries
+    the WKT centroid, with hectares and minimum/maximum net dwellings. Tolerant
+    of column-name variants so a plain lat/long file also parses.
+    """
+    records = _csv_rows(text)
+    if not records:
+        return []
+    f = list(records[0].keys())
+    point_c = t.find_column(f, ("point",))
+    lat_c = t.find_column(f, ("latitude", "lat"))
+    lng_c = t.find_column(f, ("longitude", "long", "lng"))
+    ref_c = t.find_column(f, ("reference", "site reference", "slug"))
+    name_c = t.find_column(f, ("name", "site-address", "site address", "address"))
+    ha_c = t.find_column(f, ("hectares", "site area", "area"))
+    maxd_c = t.find_column(
+        f, ("maximum-net-dwellings", "maximum net dwellings", "max dwellings")
+    )
+    mind_c = t.find_column(
+        f, ("minimum-net-dwellings", "minimum net dwellings", "min dwellings")
+    )
+    rows: list[dict] = []
+    for r in records:
+        lng = lat = None
+        if point_c:
+            lng, lat = _wkt_point(r.get(point_c))
+        if (lat is None or lng is None) and lat_c and lng_c:
+            lat = t.parse_number(r.get(lat_c))
+            lng = t.parse_number(r.get(lng_c))
+        if lat is None or lng is None or (lat == 0 and lng == 0):
+            continue
+        rows.append(
+            {
+                "reference": (str(r.get(ref_c)).strip() if ref_c else None) or None,
+                "name": (str(r.get(name_c)).strip() if name_c else None) or None,
+                "hectares": t.parse_number(r.get(ha_c)) if ha_c else None,
+                "min_dwellings": _to_int(t.parse_number(r.get(mind_c)))
+                if mind_c
+                else None,
+                "max_dwellings": _to_int(t.parse_number(r.get(maxd_c)))
+                if maxd_c
+                else None,
+                "lat": lat,
+                "lng": lng,
+            }
+        )
+    return rows
+
+
+def load_development_sites(
+    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+) -> int:  # pragma: no cover - PostGIS insert, exercised live
+    rows = _development_site_rows(_fetch_csv_text(url, area_type))
+    if not rows:
+        raise ValueError(
+            "Parsed zero development sites. Check the URL points to the "
+            "planning.data.gov.uk brownfield-land CSV (it should carry a 'point' "
+            "column, or latitude and longitude)."
+        )
+    with pool.connection() as conn, conn.transaction():
+        conn.execute("TRUNCATE development_site")
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO development_site "
+                "(reference, name, hectares, min_dwellings, max_dwellings, lat, "
+                "lng, geom) VALUES "
+                "(%s, %s, %s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+                [
+                    (
+                        r["reference"],
+                        r["name"],
+                        r["hectares"],
+                        r["min_dwellings"],
+                        r["max_dwellings"],
+                        r["lat"],
+                        r["lng"],
+                        r["lng"],
+                        r["lat"],
+                    )
+                    for r in rows
+                ],
+            )
+    return len(rows)
+
+
 def load_income(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
     if url.lower().endswith((".xlsx", ".xlsm")):
         records = _read_xlsx(_get_bytes(url))

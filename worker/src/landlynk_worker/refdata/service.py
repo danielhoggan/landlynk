@@ -30,6 +30,7 @@ DATASETS = (
     "crime",
     "postcodes",
     "hospitals",
+    "development_sites",
 )
 
 # dataset -> {status, rows, error, areaType, updatedAt}. Mirror of the table for
@@ -198,6 +199,8 @@ def run_load(pool: ConnectionPool, dataset: str, params: dict) -> None:
             n = loaders.load_postcodes(pool, params["url"])
         elif dataset == "hospitals":
             n = loaders.load_hospitals(pool, params["url"], area_type)
+        elif dataset == "development_sites":
+            n = loaders.load_development_sites(pool, params["url"], area_type)
         else:
             raise ValueError(f"Unknown dataset: {dataset}")
         _set(dataset, "loaded", pool=pool, rows=n, area_type=area_type)

@@ -119,6 +119,23 @@ def test_income_rows_detect_columns():
     assert row["median_income"] == 48000.0
 
 
+def test_development_site_rows_from_brownfield_csv():
+    # planning.data.gov.uk brownfield-land shape: a WKT point plus dwelling
+    # capacity. Rows without a usable point are dropped.
+    csv_text = (
+        "reference,name,point,hectares,minimum-net-dwellings,maximum-net-dwellings\n"
+        'BF1,Mill Road,POINT (-0.75 52.40),1.2,10,25\n'
+        "BF2,No geometry,,0.5,5,8\n"
+    )
+    rows = loaders._development_site_rows(csv_text)
+    assert len(rows) == 1
+    site = rows[0]
+    assert site["reference"] == "BF1"
+    assert site["lat"] == 52.40 and site["lng"] == -0.75
+    assert site["min_dwellings"] == 10 and site["max_dwellings"] == 25
+    assert site["hectares"] == 1.2
+
+
 def test_median_age_and_bands():
     counts = {age: 10 for age in range(0, 91)}
     assert t.aggregate_age_bands(counts)["age_0_15"] == 160
