@@ -36,6 +36,7 @@ import { AreaProfilePanel } from "@/components/AreaProfilePanel";
 import { IntentCards, type Intent } from "@/components/IntentCards";
 import { VerdictPanel, MixPanel } from "@/components/AppraisalPanels";
 import { segmentsForIndustry } from "@/lib/segments";
+import { INDUSTRIES } from "@/lib/industries";
 import { OBJECTIVES, SIGNAL_LABELS } from "@/lib/objectives";
 import { useUser } from "@/lib/userContext";
 
@@ -44,7 +45,12 @@ import { useUser } from "@/lib/userContext";
 // (SCOPING.md Section 3.2).
 export default function HomePage() {
   const { isAdmin, activeBrand } = useUser();
-  const segmentOptions = segmentsForIndustry(activeBrand?.industry);
+  // Internal users and admins have no brand, so they pick a sector here; branded
+  // users inherit their brand's industry. The effective industry drives the
+  // segments and the housebuilder intents.
+  const [pickedIndustry, setPickedIndustry] = useState("");
+  const effectiveIndustry = activeBrand?.industry ?? (pickedIndustry || null);
+  const segmentOptions = segmentsForIndustry(effectiveIndustry);
   const [kind, setKind] = useState<InputKind>("postcode");
   const [value, setValue] = useState("");
   const [developmentName, setDevelopmentName] = useState("");
@@ -246,7 +252,7 @@ export default function HomePage() {
 
   // Housebuilder intents are signposted only for residential brands; everyone
   // else keeps the single, generic flow.
-  const isHousebuilder = activeBrand?.industry === "residential";
+  const isHousebuilder = effectiveIndustry === "residential";
   const audienceLabel = segmentOptions.find((s) => s.id === segment)?.label;
   // Find-a-site needs a target audience and a search location; the other flows
   // need a development name and a location.
@@ -537,6 +543,32 @@ export default function HomePage() {
           >
             New catchment
           </button>
+        </div>
+      )}
+
+      {showForm && !activeBrand?.industry && (
+        <div className="rounded-card border border-neutral-200 bg-white p-4">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+              Sector
+            </span>
+            <select
+              value={pickedIndustry}
+              onChange={(e) => setPickedIndustry(e.target.value)}
+              className="w-full rounded-card border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-light-accent focus:outline-none"
+            >
+              <option value="">Choose a sector</option>
+              {INDUSTRIES.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-neutral-400">
+              Tailors the audience segments, and for housebuilding the Find,
+              Appraise and Next-phase options.
+            </p>
+          </label>
         </div>
       )}
 
