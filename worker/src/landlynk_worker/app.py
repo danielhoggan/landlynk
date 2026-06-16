@@ -1402,6 +1402,10 @@ class CombineRequest(BaseModel):
 
     area_codes: list[str] = []
     scope: str = "selection"  # "selection" or "whole"
+    # The housebuilder journey the export is for, so the document frames itself
+    # as finding, appraising or planning the next phase of a site.
+    intent: str | None = None
+    audience_label: str | None = None
 
 
 def _combined_card(catchment_id: str, request: CombineRequest) -> Battlecard:
@@ -1468,6 +1472,9 @@ def report_pptx(
         _brand_secondary(catchment_id),
         _map_png(_catchment_geometry(catchment_id), catchment_id),
         _development_context(catchment_id),
+        intent=request.intent,
+        audience_label=request.audience_label,
+        supply=_site_supply(_catchment_geometry(catchment_id)),
     )
     return Response(
         content=pptx,

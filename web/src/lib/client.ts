@@ -107,7 +107,12 @@ export async function removeShare(id: string, email: string): Promise<void> {
 /** Download the full multi-slide report deck (selection or whole catchment). */
 export async function reportExport(
   id: string,
-  body: { areaCodes?: string[]; scope: "selection" | "whole" },
+  body: {
+    areaCodes?: string[];
+    scope: "selection" | "whole";
+    intent?: string;
+    audienceLabel?: string | null;
+  },
 ): Promise<Blob> {
   const res = await fetch(`/api/catchments/${id}/report/pptx`, {
     method: "POST",

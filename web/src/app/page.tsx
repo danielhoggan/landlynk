@@ -426,6 +426,8 @@ export default function HomePage() {
       const blob = await reportExport(catchment.id, {
         scope,
         areaCodes: scope === "selection" ? Array.from(starred) : undefined,
+        intent,
+        audienceLabel: runAudienceLabel,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

@@ -18,6 +18,9 @@ export async function POST(
   const body = {
     area_codes: Array.isArray(payload?.areaCodes) ? payload.areaCodes : [],
     scope: payload?.scope === "selection" ? "selection" : "whole",
+    intent: typeof payload?.intent === "string" ? payload.intent : null,
+    audience_label:
+      typeof payload?.audienceLabel === "string" ? payload.audienceLabel : null,
   };
   const res = await fetch(`${WORKER_BASE_URL}/catchments/${params.id}/report/pptx`, {
     method: "POST",

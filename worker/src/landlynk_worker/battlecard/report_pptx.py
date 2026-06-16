@@ -72,6 +72,27 @@ def _money(value: float | None) -> str:
     return f"£{value:,.0f}"
 
 
+# Each housebuilder intent frames the deck: a cover eyebrow, a one-line purpose
+# (formatted with the audience), and the strategy slide title.
+_INTENTS: dict[str, dict[str, str]] = {
+    "find_site": {
+        "eyebrow": "SITE FINDING REPORT",
+        "purpose": "Where to build for {audience} across the search area",
+        "plan": "Where to build",
+    },
+    "appraise": {
+        "eyebrow": "SITE APPRAISAL",
+        "purpose": "Is this site worth acquiring, and who would buy here",
+        "plan": "Site appraisal summary",
+    },
+    "next_phase": {
+        "eyebrow": "NEXT-PHASE PLAN",
+        "purpose": "What to build for the remaining phase of this site",
+        "plan": "Next-phase product plan",
+    },
+}
+
+
 def render_report_pptx(
     card: Battlecard,
     heading_color: str | None = None,
@@ -80,6 +101,9 @@ def render_report_pptx(
     secondary: str | None = None,
     map_image: bytes | None = None,
     development_context: dict | None = None,
+    intent: str | None = None,
+    audience_label: str | None = None,
+    supply: dict | None = None,
 ) -> bytes:
     """Render the full report deck for one Battlecard payload."""
     navy = _hex(heading_color)
@@ -90,7 +114,15 @@ def render_report_pptx(
     prs.slide_height = Inches(7.5)
     blank = prs.slide_layouts[6]
 
-    theme = {"navy": navy, "accent": accent_rgb, "secondary": secondary_rgb}
+    framing = _INTENTS.get(intent or "")
+    theme = {
+        "navy": navy,
+        "accent": accent_rgb,
+        "secondary": secondary_rgb,
+        "framing": framing,
+        "audience": audience_label,
+        "supply": supply,
+    }
     _cover(prs.slides.add_slide(blank), card, theme, logo)
     # Content slides, each branded with a footer mark (brand logo or wordmark).
     for build in (
@@ -333,33 +365,36 @@ def _donut(
 
 def _cover(slide: Slide, card: Battlecard, theme: dict, logo: bytes | None) -> None:
     h = card.visual_summary.header
+    framing = theme.get("framing")
+    audience = theme.get("audience") or "the target buyer"
+    eyebrow = (
+        framing["eyebrow"] if framing else "HOUSING DEVELOPMENT INTELLIGENCE"
+    )
     _rect(slide, 0, 0, Inches(13.333), Inches(7.5), theme["navy"])
     _rect(slide, 0, Inches(3.5), Inches(13.333), Inches(0.06), theme["accent"])
     _text(
         slide,
         Inches(0.9),
-        Inches(2.0),
+        Inches(1.9),
         Inches(11.5),
         Inches(0.4),
-        [("HOUSING DEVELOPMENT INTELLIGENCE", 13, theme["accent"], True, False)],
+        [(eyebrow, 13, theme["accent"], True, False)],
     )
     _text(
         slide,
         Inches(0.9),
-        Inches(2.5),
+        Inches(2.4),
         Inches(11.5),
         Inches(1.0),
         [(h.development_name, 40, _WHITE, True, False)],
     )
     location = ", ".join(p for p in [h.town, h.postcode] if p)
-    _text(
-        slide,
-        Inches(0.9),
-        Inches(3.7),
-        Inches(11.5),
-        Inches(0.5),
-        [(location or "Area analysis report", 16, _WHITE, False, False)],
-    )
+    lines: list[tuple] = [(location or "Area analysis report", 16, _WHITE, False, False)]
+    if framing:
+        lines.append(
+            (framing["purpose"].format(audience=audience), 13, _WHITE, False, True)
+        )
+    _text(slide, Inches(0.9), Inches(3.6), Inches(11.5), Inches(0.9), lines)
     _text(
         slide,
         Inches(0.9),
@@ -603,13 +638,15 @@ def _plan(slide: Slide, card: Battlecard, theme: dict) -> None:
         Inches(0.4),
         [("STRATEGIC INTELLIGENCE", 11, theme["accent"], True, False)],
     )
+    framing = theme.get("framing")
+    title = framing["plan"] if framing else "Marketing development plan"
     _text(
         slide,
         Inches(0.6),
         Inches(0.9),
         Inches(12),
         Inches(0.6),
-        [("Marketing development plan", 26, _WHITE, True, False)],
+        [(title, 26, _WHITE, True, False)],
     )
 
     tiers = card.audience_and_demographics.audience_tiers
@@ -617,6 +654,16 @@ def _plan(slide: Slide, card: Battlecard, theme: dict) -> None:
     messages: list[str] = []
     for m in card.visual_summary.audience_messaging:
         messages.extend(m.message_lines)
+    # Fold buildable supply and competitor schemes into the demand line when the
+    # land layers are loaded, so the plan reflects the land journey.
+    demand = _segments_line(card)
+    supply = theme.get("supply")
+    if supply and (supply.get("buildablePlots") or supply.get("competitorSchemes")):
+        demand += (
+            f"  •  Buildable land {supply['buildablePlots']:,} plots "
+            f"({supply['buildableHomes']:,} homes)  •  Competitor schemes "
+            f"{supply['competitorSchemes']:,} ({supply['competitorHomes']:,} homes)"
+        )
     cards = [
         ("PRIMARY TARGET SEGMENTS", segments),
         (
@@ -625,7 +672,7 @@ def _plan(slide: Slide, card: Battlecard, theme: dict) -> None:
             + card.pricing_rationale.positioning,
         ),
         ("KEY MARKETING MESSAGES", "  •  ".join(messages[:5]) or "n/a"),
-        ("ADDRESSABLE SEGMENTS", _segments_line(card)),
+        ("ADDRESSABLE DEMAND AND LAND", demand),
     ]
     panel = _darken(theme["navy"], 0.6)
     for i, (label, body) in enumerate(cards):
