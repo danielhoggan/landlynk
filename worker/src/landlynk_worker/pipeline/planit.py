@@ -88,9 +88,9 @@ def fetch_competitor_sites(
     except Exception:
         return []
     minx, miny, maxx, maxy = poly.bounds  # lng_min, lat_min, lng_max, lat_max
-    # PlanIt bbox is sw_lat,sw_lng,ne_lat,ne_lng.
+    # PlanIt bbox is west,south,east,north (lng,lat,lng,lat).
     params = {
-        "bbox": f"{miny},{minx},{maxy},{maxx}",
+        "bbox": f"{minx},{miny},{maxx},{maxy}",
         "pg_sz": min(limit, 400),
         "start_date": (date.today() - timedelta(days=lookback_days)).isoformat(),
     }
