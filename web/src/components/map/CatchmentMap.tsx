@@ -198,7 +198,7 @@ export function CatchmentMap({
         type: "circle",
         source: "sites",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 12, 7],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 5, 10, 7, 14, 10],
           "circle-color": [
             "match",
             ["get", "sourceType"],
@@ -254,7 +254,14 @@ export function CatchmentMap({
 
   function syncData() {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
+    // Sources are added on style load; if the style is not ready yet (data can
+    // arrive after the async run, e.g. the sites overlay), retry once it is,
+    // otherwise the layer silently never gets its data.
+    if (!map.isStyleLoaded() || !map.getSource("sites")) {
+      map.once("idle", syncData);
+      return;
+    }
 
     const areaSource = map.getSource("areas") as
       | maplibregl.GeoJSONSource

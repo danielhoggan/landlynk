@@ -691,6 +691,37 @@ export default function HomePage() {
           </div>
         )}
 
+        {(intent === "appraise" || intent === "next_phase") && isHousebuilder && (
+          <div>
+            <span className="mb-1.5 block text-xs font-medium text-neutral-500">
+              Target price (optional)
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label="From"
+                prefix="£"
+                value={priceFrom}
+                onChange={setPriceFrom}
+                placeholder="250000"
+                type="number"
+              />
+              <Field
+                label="To"
+                prefix="£"
+                value={priceTo}
+                onChange={setPriceTo}
+                placeholder="400000"
+                type="number"
+              />
+            </div>
+            <p className="mt-1 text-xs text-neutral-400">
+              {intent === "appraise"
+                ? "We check whether local incomes and sale prices support this price. Leave blank to see the audience and demand without a price read."
+                : "Used for the pricing read on the remaining phase. Optional."}
+            </p>
+          </div>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <span className="mb-1.5 block text-xs font-medium text-neutral-500">
