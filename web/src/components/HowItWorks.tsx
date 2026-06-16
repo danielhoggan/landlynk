@@ -20,6 +20,8 @@ import {
   Sparkles,
   Palette,
   Presentation,
+  Database,
+  Info,
   type LucideIcon,
 } from "lucide-react";
 import { AdminHowTo } from "@/components/AdminHowTo";
@@ -386,6 +388,51 @@ export function HowItWorks() {
               {u.body}
             </Card>
           ))}
+        </div>
+      </section>
+
+      {/* Data sources and honest limits */}
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold">The data, and its limits</h2>
+        <p className="max-w-3xl text-sm leading-relaxed text-neutral-600">
+          Everything is built on open public data, so rankings are reproducible
+          and there is no per-client data licence. Coverage is strongest for the
+          national datasets and thinner for the land layers, which we are honest
+          about so you can read the outputs with the right confidence.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card icon={Database} title="Demographics and tenure">
+            ONS Census 2021: age, household composition and tenure, full national
+            coverage at MSOA and LA level. Small cells can be suppressed by ONS;
+            where they are, the Battlecard flags lower data confidence rather than
+            guessing.
+          </Card>
+          <Card icon={Database} title="Income and house prices">
+            ONS small-area income is modelled, so treat it as a reliable
+            indicator rather than an exact figure. Median house prices are the
+            latest ONS paid prices by area.
+          </Card>
+          <Card icon={Database} title="Local context">
+            Deprivation, green space, schools, crime and nearest hospital, from
+            open government sources. Some are aggregated up from a finer geography,
+            so they describe the area not a single street.
+          </Card>
+          <Card icon={Info} title="Buildable land">
+            Brownfield land register is national and the most complete. Local
+            Plan allocations add the greenfield sites brownfield misses, but
+            allocation coverage varies by local authority, so a given area may
+            show fewer plots than truly exist.
+          </Card>
+          <Card icon={Info} title="Competitor developments">
+            Residential planning permissions are shown as a separate, optional
+            overlay. Coverage is patchy by authority, so read it as a guide to
+            visible competing pipeline, not a complete register.
+          </Card>
+          <Card icon={ShieldCheck} title="Reproducible and refreshable">
+            Every dataset loads through a versioned, dated loader, and every score
+            shows its signals, so any output traces back to the data and config
+            that produced it and refreshes when the source updates.
+          </Card>
         </div>
       </section>
 

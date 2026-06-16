@@ -654,10 +654,23 @@ export default function HomePage() {
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-neutral-400">
-              We rank the areas in the search around the location below that best
-              fit this buyer.
-            </p>
+            {segment ? (
+              <div className="mt-2 rounded-card bg-light-accent/5 p-2.5 text-xs text-neutral-600">
+                <span className="font-semibold text-neutral-700">
+                  {audienceLabel} look for:{" "}
+                </span>
+                {segmentOptions.find((s) => s.id === segment)?.description}
+                <span className="mt-1 block text-neutral-400">
+                  We rank the areas around the location below by how well their
+                  age, tenure and household mix fit this buyer.
+                </span>
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-neutral-400">
+                We rank the areas in the search around the location below that
+                best fit this buyer.
+              </p>
+            )}
             <label className="mt-2 flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
