@@ -199,7 +199,15 @@ export function CatchmentMap({
         source: "sites",
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 12, 7],
-          "circle-color": "#1F5A3C",
+          "circle-color": [
+            "match",
+            ["get", "sourceType"],
+            "allocation",
+            "#C9A24B",
+            "permission",
+            "#C04A1F",
+            "#1F5A3C",
+          ],
           "circle-stroke-color": "#FFFFFF",
           "circle-stroke-width": 1.5,
           "circle-opacity": 0.9,
@@ -210,12 +218,19 @@ export function CatchmentMap({
         if (!p) return;
         map.getCanvas().style.cursor = "pointer";
         const cap = p.capacity ? String(p.capacity) : "";
+        const typeLabel =
+          p.sourceType === "allocation"
+            ? "Allocated land"
+            : p.sourceType === "permission"
+              ? "Competitor development"
+              : "Brownfield land";
         popup
           .setLngLat(e.lngLat)
           .setHTML(
             `<div class="text-xs">
                <div class="font-semibold text-sm">${escapeHtml(String(p.name || "Development site"))}</div>
-               ${cap ? `<div class="text-neutral-500">${escapeHtml(cap)} dwellings</div>` : ""}
+               <div class="text-neutral-500">${typeLabel}</div>
+               ${cap ? `<div>${escapeHtml(cap)} dwellings</div>` : ""}
                ${p.hectares ? `<div>${escapeHtml(String(p.hectares))} ha</div>` : ""}
              </div>`,
           )
@@ -320,6 +335,7 @@ function sitesToFeatures(
         name: s.name ?? "Development site",
         capacity: capacity(s),
         hectares: s.hectares,
+        sourceType: s.sourceType,
       },
     })),
   };

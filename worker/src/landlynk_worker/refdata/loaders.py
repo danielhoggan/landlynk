@@ -1583,24 +1583,29 @@ def _development_site_rows(text: str) -> list[dict]:
     return rows
 
 
-def load_development_sites(
-    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+def _load_sites(
+    pool: ConnectionPool, url: str, source_type: str, area_type: str
 ) -> int:  # pragma: no cover - PostGIS insert, exercised live
+    """Load development sites of one source type (brownfield, allocation or
+    permission), replacing only that type so the layers coexist in one table."""
     rows = _development_site_rows(_fetch_csv_text(url, area_type))
     if not rows:
         raise ValueError(
-            "Parsed zero development sites. Check the URL points to the "
-            "planning.data.gov.uk brownfield-land CSV (it should carry a 'point' "
-            "column, or latitude and longitude)."
+            "Parsed zero sites. Check the URL points to a planning.data.gov.uk "
+            "CSV with a 'point' column (or latitude and longitude) and net "
+            "dwellings."
         )
     with pool.connection() as conn, conn.transaction():
-        conn.execute("TRUNCATE development_site")
+        conn.execute(
+            "DELETE FROM development_site WHERE source_type = %s", [source_type]
+        )
         with conn.cursor() as cur:
             cur.executemany(
                 "INSERT INTO development_site "
                 "(reference, name, hectares, min_dwellings, max_dwellings, lat, "
-                "lng, geom) VALUES "
-                "(%s, %s, %s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+                "lng, source_type, geom) VALUES "
+                "(%s, %s, %s, %s, %s, %s, %s, %s, "
+                "ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
                 [
                     (
                         r["reference"],
@@ -1610,14 +1615,16 @@ def load_development_sites(
                         r["max_dwellings"],
                         r["lat"],
                         r["lng"],
+                        source_type,
                         r["lng"],
                         r["lat"],
                     )
                     for r in rows
                 ],
             )
-        # Per-area brownfield dwelling capacity, for the optional land-supply
-        # scoring signal and Local context. Best effort: needs boundaries loaded.
+        # Per-area buildable dwelling capacity, for the land-supply scoring signal
+        # and Local context. Counts available and allocated land, not competitor
+        # permissions. Best effort: needs boundaries loaded.
         conn.execute("DELETE FROM area_metric WHERE metric_key = 'site_capacity'")
         conn.execute(
             "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
@@ -1625,10 +1632,28 @@ def load_development_sites(
             "  COALESCE(SUM(s.max_dwellings), 0) "
             "FROM geo_boundaries b JOIN development_site s "
             "  ON ST_Within(s.geom, b.geom) "
-            "WHERE b.area_type = %s GROUP BY b.area_code",
+            "WHERE b.area_type = %s AND s.source_type IN ('brownfield', 'allocation') "
+            "GROUP BY b.area_code",
             [area_type, area_type],
         )
     return len(rows)
+
+
+def load_development_sites(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
+    """Brownfield land register (available previously-developed land)."""
+    return _load_sites(pool, url, "brownfield", area_type)
+
+
+def load_site_allocations(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
+    """Local Plan housing allocations (allocated, often greenfield, land)."""
+    return _load_sites(pool, url, "allocation", area_type)
+
+
+def load_planning_permissions(
+    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+) -> int:
+    """Residential planning permissions, shown as competitor developments."""
+    return _load_sites(pool, url, "permission", area_type)
 
 
 def load_income(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:

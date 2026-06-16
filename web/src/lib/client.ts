@@ -333,6 +333,8 @@ export interface DevelopmentSite {
   lng: number;
   /** The MSOA/LA the site falls in, for per-area listing. */
   areaCode: string | null;
+  /** "brownfield" | "allocation" | "permission". */
+  sourceType: string;
 }
 
 // Brownfield development sites inside a catchment, for the Find a site overlay.

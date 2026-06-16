@@ -118,13 +118,26 @@ export function BattlecardDrawer({
                         : s.maxDwellings != null
                           ? `${s.maxDwellings} homes`
                           : null;
+                    const dot =
+                      s.sourceType === "allocation"
+                        ? "#C9A24B"
+                        : s.sourceType === "permission"
+                          ? "#C04A1F"
+                          : "#1F5A3C";
                     return (
                       <li
                         key={s.reference ?? i}
                         className="flex items-start justify-between gap-2 text-xs"
                       >
-                        <span className="min-w-0 flex-1 truncate text-neutral-700">
-                          {s.name ?? s.reference ?? "Site"}
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <span
+                            className="inline-block h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: dot }}
+                            aria-hidden
+                          />
+                          <span className="min-w-0 truncate text-neutral-700">
+                            {s.name ?? s.reference ?? "Site"}
+                          </span>
                         </span>
                         <span className="shrink-0 font-semibold text-light-accent">
                           {cap ?? (s.hectares != null ? `${s.hectares} ha` : "")}

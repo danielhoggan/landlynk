@@ -35,6 +35,7 @@ def test_migrations_dir_ships_with_the_package():
         "0019_brand_heading_green_default.sql",
         "0020_job_cap.sql",
         "0021_development_sites.sql",
+        "0022_site_source_type.sql",
     ]
 
 

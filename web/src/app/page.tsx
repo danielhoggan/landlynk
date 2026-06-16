@@ -208,6 +208,12 @@ export default function HomePage() {
   const [weightByLand, setWeightByLand] = useState(false);
   // Find a site: order the ranking by audience fit (score) or by buildable land.
   const [rankSort, setRankSort] = useState<"fit" | "land">("fit");
+  // Which development-site layers are drawn. Buildable land on, competitor off.
+  const [siteLayers, setSiteLayers] = useState<Record<string, boolean>>({
+    brownfield: true,
+    allocation: true,
+    permission: false,
+  });
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
 
@@ -284,10 +290,19 @@ export default function HomePage() {
 
   // Read from the run's stored config, so the drawer reflects what the run
   // actually used: whether a price was set and which audience it searched for.
-  // Brownfield plots grouped by area, for the Find a site ranking badges.
+  // Which site layers are shown on the map and list. Buildable land is on by
+  // default; competitor permissions are opt-in context.
+  const visibleSites = sites.filter((s) => siteLayers[s.sourceType] ?? true);
+  const siteCounts = sites.reduce<Record<string, number>>((acc, s) => {
+    acc[s.sourceType] = (acc[s.sourceType] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  // Buildable plots (brownfield and allocations, not competitor permissions)
+  // grouped by area, for the Find a site ranking badges and the land sort.
   const plotsByArea = sites.reduce<Record<string, { count: number; homes: number }>>(
     (acc, s) => {
-      if (!s.areaCode) return acc;
+      if (!s.areaCode || s.sourceType === "permission") return acc;
       const cur = acc[s.areaCode] ?? { count: 0, homes: 0 };
       cur.count += 1;
       cur.homes += s.maxDwellings ?? 0;
@@ -654,7 +669,7 @@ export default function HomePage() {
                 Weight toward areas with more buildable land
                 <span className="text-neutral-400">
                   {" "}
-                  (brownfield register capacity; load the Development sites data)
+                  (ranks on brownfield and allocated dwelling capacity per area)
                 </span>
               </span>
             </label>
@@ -1203,15 +1218,51 @@ export default function HomePage() {
           selectedAreaCode={selectedCode}
           matchedCodes={matchedCodes}
           tagContext={tagContext}
-          sites={intent === "find_site" ? sites : undefined}
+          sites={intent === "find_site" ? visibleSites : undefined}
         />
-        {activeRun && intent === "find_site" && (
-          <p className="text-xs text-neutral-500">
-            {sites.length > 0
-              ? `${sites.length} brownfield development site${sites.length === 1 ? "" : "s"} in this catchment (green markers), from the national land register.`
-              : "No brownfield register sites loaded for this catchment. An admin can load the Development sites dataset on the Reference data page."}
-          </p>
-        )}
+        {activeRun && intent === "find_site" &&
+          (sites.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-medium text-neutral-500">Land layers</span>
+              {(
+                [
+                  ["brownfield", "Brownfield", "#1F5A3C"],
+                  ["allocation", "Allocated", "#C9A24B"],
+                  ["permission", "Competitor", "#C04A1F"],
+                ] as const
+              ).map(([key, label, colour]) => {
+                const n = siteCounts[key] ?? 0;
+                const on = siteLayers[key];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={n === 0}
+                    onClick={() =>
+                      setSiteLayers((s) => ({ ...s, [key]: !s[key] }))
+                    }
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition disabled:opacity-40 ${
+                      on
+                        ? "border-neutral-300 text-neutral-700"
+                        : "border-neutral-200 text-neutral-400"
+                    }`}
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: on ? colour : "#CBD5E1" }}
+                    />
+                    {label} ({n})
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-neutral-500">
+              No development sites loaded for this catchment. An admin can load
+              the Development sites, Local Plan allocations and Competitor
+              developments datasets on the Reference data page.
+            </p>
+          ))}
         {activeRun &&
           (() => {
             const cfg = catchment?.input?.config;
@@ -1291,7 +1342,7 @@ export default function HomePage() {
         audienceLabel={runAudienceLabel}
         sites={
           intent === "find_site"
-            ? sites.filter((s) => s.areaCode === selectedCode)
+            ? visibleSites.filter((s) => s.areaCode === selectedCode)
             : undefined
         }
         catchmentHasSites={sites.length > 0}
