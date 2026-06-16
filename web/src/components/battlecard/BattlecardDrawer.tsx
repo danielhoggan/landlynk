@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Download } from "lucide-react";
 import type { Battlecard } from "@/lib/types/battlecard";
+import type { GeoJsonGeometry } from "@/lib/types/catchment";
 import type { DevelopmentSite } from "@/lib/client";
 import { OnLocationSummary } from "./OnLocationSummary";
+import { AreaMiniMap } from "./AreaMiniMap";
 import { ScoreExplainer } from "./ScoreExplainer";
 import { BattlecardCharts } from "./BattlecardCharts";
 import { BattlecardInsights } from "./BattlecardInsights";
@@ -30,6 +32,8 @@ interface BattlecardDrawerProps {
   catchmentHasSites?: boolean;
   /** Searched audience segment id, so its addressable pool is emphasised. */
   audienceSegment?: string | null;
+  /** Geometry of this area, for the in-drawer plots map. */
+  areaGeometry?: GeoJsonGeometry | null;
 }
 
 // Clicking a region opens its deep-dive in the slide-out drawer, never a full
@@ -47,6 +51,7 @@ export function BattlecardDrawer({
   sites,
   catchmentHasSites,
   audienceSegment,
+  areaGeometry,
 }: BattlecardDrawerProps) {
   // Mount gate so the portal target (document.body) exists before rendering.
   const [mounted, setMounted] = useState(false);
@@ -103,6 +108,15 @@ export function BattlecardDrawer({
                   ({sites.length})
                 </span>
               </h3>
+              {open && sites.length > 0 && (
+                <div className="mb-3">
+                  <AreaMiniMap
+                    key={battlecard.areaCode}
+                    geometry={areaGeometry ?? null}
+                    sites={sites}
+                  />
+                </div>
+              )}
               {sites.length === 0 ? (
                 <p className="text-xs text-neutral-500">
                   {catchmentHasSites

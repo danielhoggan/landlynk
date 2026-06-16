@@ -1284,6 +1284,13 @@ export default function HomePage() {
                     key={key}
                     type="button"
                     disabled={n === 0}
+                    title={
+                      n === 0
+                        ? `No ${label.toLowerCase()} data loaded for this catchment. Load it on Reference data and re-run.`
+                        : on
+                          ? `Hide ${label.toLowerCase()} plots`
+                          : `Show ${label.toLowerCase()} plots`
+                    }
                     onClick={() =>
                       setSiteLayers((s) => ({ ...s, [key]: !s[key] }))
                     }
@@ -1393,6 +1400,11 @@ export default function HomePage() {
         }
         catchmentHasSites={sites.length > 0}
         audienceSegment={runConfig?.segment}
+        areaGeometry={
+          intent === "find_site"
+            ? (areas.find((a) => a.areaCode === selectedCode)?.geometry ?? null)
+            : null
+        }
       />
     </div>
   );
