@@ -1614,6 +1614,18 @@ def load_development_sites(
                     for r in rows
                 ],
             )
+        # Per-area brownfield dwelling capacity, for the optional land-supply
+        # scoring signal and Local context. Best effort: needs boundaries loaded.
+        conn.execute("DELETE FROM area_metric WHERE metric_key = 'site_capacity'")
+        conn.execute(
+            "INSERT INTO area_metric (area_code, area_type, metric_key, value) "
+            "SELECT b.area_code, %s, 'site_capacity', "
+            "  COALESCE(SUM(s.max_dwellings), 0) "
+            "FROM geo_boundaries b JOIN development_site s "
+            "  ON ST_Within(s.geom, b.geom) "
+            "WHERE b.area_type = %s GROUP BY b.area_code",
+            [area_type, area_type],
+        )
     return len(rows)
 
 

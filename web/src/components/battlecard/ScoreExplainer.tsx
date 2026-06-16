@@ -15,6 +15,7 @@ const SIGNAL_LABELS: Record<string, string> = {
   lowCrime: "Low crime",
   healthcareAccess: "Healthcare access",
   lookalike: "Similar to best locations",
+  landSupply: "Available land",
 };
 
 // Every area's deep-dive shows why it scored as it did (SCOPING.md Section 8).

@@ -364,6 +364,20 @@ def relative_band(rank: int, total: int) -> str:
     return "low"
 
 
+def score_land_supply(profile: AreaProfile, config: ScoringConfig) -> SignalScore:
+    """More brownfield development capacity scores higher (saturating).
+
+    Lets a land-finding run favour areas with more buildable supply, from the
+    brownfield register dwelling capacity summed for the area."""
+    capacity = _context(profile, "site_capacity")
+    if capacity is None:
+        return SignalScore("land_supply", 0.0, "No brownfield land data for this area")
+    raw = _clamp01(1.0 - math.exp(-capacity / 250.0))
+    return SignalScore(
+        "land_supply", raw, f"About {capacity:,.0f} dwellings of brownfield capacity"
+    )
+
+
 SCORERS = (
     ("income_fit", score_income_fit),
     ("tenure_signal", score_tenure_signal),
@@ -378,6 +392,7 @@ SCORERS = (
     ("low_crime", score_low_crime),
     ("healthcare_access", score_healthcare_access),
     ("lookalike", score_lookalike),
+    ("land_supply", score_land_supply),
 )
 
 

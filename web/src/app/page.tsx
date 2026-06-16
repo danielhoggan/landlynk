@@ -198,6 +198,8 @@ export default function HomePage() {
   const [intent, setIntent] = useState<Intent>("appraise");
   // Brownfield development sites overlaid on the map for Find a site.
   const [sites, setSites] = useState<DevelopmentSite[]>([]);
+  // Find a site: weight the ranking toward areas with more brownfield capacity.
+  const [weightByLand, setWeightByLand] = useState(false);
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
 
@@ -446,9 +448,14 @@ export default function HomePage() {
       }
       if (affordability) config.affordabilityMultiple = Number(affordability);
       config.overlapThreshold = Number(overlap);
-      config.weights = Object.fromEntries(
-        Object.entries(weights).map(([k, v]) => [k, Number(v)]),
-      );
+      const weightEntries = Object.entries(weights).map(([k, v]) => [
+        k,
+        Number(v),
+      ]) as [string, number][];
+      const weightMap = Object.fromEntries(weightEntries);
+      // Find a site can weight the ranking toward brownfield land supply.
+      if (intent === "find_site" && weightByLand) weightMap.land_supply = 0.2;
+      config.weights = weightMap;
 
       // Find-a-site has no named scheme yet, so label the run by its audience.
       const developmentNameToSend =
@@ -568,6 +575,21 @@ export default function HomePage() {
               We rank the areas in the search around the location below that best
               fit this buyer.
             </p>
+            <label className="mt-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={weightByLand}
+                onChange={(e) => setWeightByLand(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Weight toward areas with more buildable land
+                <span className="text-neutral-400">
+                  {" "}
+                  (brownfield register capacity; load the Development sites data)
+                </span>
+              </span>
+            </label>
           </div>
         )}
 

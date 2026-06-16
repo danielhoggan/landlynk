@@ -41,6 +41,9 @@ CONTEXT_METRICS: tuple[ContextMetricDef, ...] = (
         "crime_per_1k", "Crime rate", "per 1,000 residents", "Lower is better", 0
     ),
     ContextMetricDef("hospital_km", "Nearest hospital", "km", "Lower is better", 1),
+    ContextMetricDef(
+        "site_capacity", "Brownfield capacity", "dwellings", "Higher is better", 0
+    ),
 )
 
 _BY_KEY = {m.key: m for m in CONTEXT_METRICS}

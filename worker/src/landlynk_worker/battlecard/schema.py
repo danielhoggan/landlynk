@@ -151,6 +151,7 @@ class ScoreContribution(BaseModel):
         "lowCrime",
         "healthcareAccess",
         "lookalike",
+        "landSupply",
     ]
     weight: float
     raw_score: float = Field(alias="rawScore")

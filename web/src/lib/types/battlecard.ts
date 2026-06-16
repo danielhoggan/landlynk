@@ -147,7 +147,8 @@ export interface ScoreContribution {
     | "schools"
     | "lowCrime"
     | "healthcareAccess"
-    | "lookalike";
+    | "lookalike"
+    | "landSupply";
   weight: number;
   /** Normalised 0 to 1 score for this signal before weighting. */
   rawScore: number;
