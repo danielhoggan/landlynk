@@ -108,7 +108,9 @@ export function CatchmentMap({
       "top-right",
     );
     const popup = new maplibregl.Popup({
-      closeButton: false,
+      // A close button so a tapped plot popup can be dismissed on mobile, where
+      // there is no hover to clear it.
+      closeButton: true,
       closeOnClick: false,
       offset: 12,
       className: "ll-popup",
@@ -159,6 +161,14 @@ export function CatchmentMap({
       });
 
       map.on("click", "areas-fill", (e) => {
+        // A tap on a plot dot should show the plot, not open the area beneath
+        // it (the dots sit on top of the area fill, but a tap falls through).
+        if (
+          map.getLayer("sites-circle") &&
+          map.queryRenderedFeatures(e.point, { layers: ["sites-circle"] }).length
+        ) {
+          return;
+        }
         const code = e.features?.[0]?.properties?.areaCode as
           | string
           | undefined;
@@ -213,10 +223,9 @@ export function CatchmentMap({
           "circle-opacity": 0.9,
         },
       });
-      map.on("mousemove", "sites-circle", (e) => {
+      const showSitePopup = (e: maplibregl.MapLayerMouseEvent) => {
         const p = e.features?.[0]?.properties as Record<string, unknown>;
         if (!p) return;
-        map.getCanvas().style.cursor = "pointer";
         const cap = p.capacity ? String(p.capacity) : "";
         const typeLabel =
           p.sourceType === "allocation"
@@ -235,11 +244,18 @@ export function CatchmentMap({
              </div>`,
           )
           .addTo(map);
+      };
+      map.on("mousemove", "sites-circle", (e) => {
+        map.getCanvas().style.cursor = "pointer";
+        showSitePopup(e);
       });
       map.on("mouseleave", "sites-circle", () => {
         map.getCanvas().style.cursor = "";
         popup.remove();
       });
+      // Tap a plot (mobile, where there is no hover) to see it, instead of the
+      // tap falling through to the area beneath.
+      map.on("click", "sites-circle", showSitePopup);
 
       mapRef.current = map;
       syncData();
