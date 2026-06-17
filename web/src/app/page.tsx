@@ -35,6 +35,7 @@ import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
 import { AreaProfilePanel } from "@/components/AreaProfilePanel";
 import { IntentCards, type Intent } from "@/components/IntentCards";
+import { RankingExplainer } from "@/components/RankingExplainer";
 import { VerdictPanel, MixPanel } from "@/components/AppraisalPanels";
 import { segmentsForIndustry } from "@/lib/segments";
 import { INDUSTRIES } from "@/lib/industries";
@@ -1429,6 +1430,13 @@ export default function HomePage() {
               onToggleStar={toggleStar}
               tagContext={tagContext}
               plotsByArea={intent === "find_site" ? plotsByArea : undefined}
+            />
+          )}
+          {activeRun && isHousebuilder && (
+            <RankingExplainer
+              intent={intent}
+              audienceLabel={runAudienceLabel}
+              affordabilityMultiple={runConfig?.affordabilityMultiple}
             />
           )}
         </div>
