@@ -18,10 +18,12 @@ import {
   getBuilderProfiles,
   getCatchmentSites,
   getCatchmentCompetitors,
+  getCatchmentBenchmarks,
   pollCatchment,
   submitCatchment,
   type BuilderProfile,
   type DevelopmentSite,
+  type CatchmentBenchmarks,
 } from "@/lib/client";
 import {
   SIGNAL_TAGS,
@@ -212,6 +214,8 @@ export default function HomePage() {
   // Competitor data is a live national query and can take 10-20s, so the pill
   // shows a spinner while it loads.
   const [competitorsLoading, setCompetitorsLoading] = useState(false);
+  // Catchment and national benchmarks, so the deep-dive can compare an area.
+  const [benchmarks, setBenchmarks] = useState<CatchmentBenchmarks | null>(null);
   // Find a site: weight the ranking toward areas with more brownfield capacity.
   const [weightByLand, setWeightByLand] = useState(false);
   // Find a site: order the ranking by audience fit (score) or by buildable land.
@@ -497,6 +501,17 @@ export default function HomePage() {
   // Once a run completes, collapse the form so the run title and results lead.
   useEffect(() => {
     if (catchment?.status === "complete") setShowForm(false);
+  }, [catchment?.id, catchment?.status]);
+
+  // Fetch the catchment and national benchmarks for the deep-dive comparisons.
+  useEffect(() => {
+    if (catchment?.status === "complete") {
+      getCatchmentBenchmarks(catchment.id)
+        .then(setBenchmarks)
+        .catch(() => setBenchmarks(null));
+    } else {
+      setBenchmarks(null);
+    }
   }, [catchment?.id, catchment?.status]);
 
   // On Find a site, overlay the brownfield sites (fast) and the competitor
@@ -1466,6 +1481,7 @@ export default function HomePage() {
         }
         catchmentHasSites={overlaySites.length > 0}
         audienceSegment={runConfig?.segment}
+        benchmarks={benchmarks}
         areaGeometry={
           intent === "find_site"
             ? (areas.find((a) => a.areaCode === selectedCode)?.geometry ?? null)

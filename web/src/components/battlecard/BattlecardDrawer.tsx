@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { X, Download } from "lucide-react";
 import type { Battlecard } from "@/lib/types/battlecard";
 import type { GeoJsonGeometry } from "@/lib/types/catchment";
-import type { DevelopmentSite } from "@/lib/client";
+import type { DevelopmentSite, CatchmentBenchmarks } from "@/lib/client";
 import { OnLocationSummary } from "./OnLocationSummary";
 import { AreaMiniMap } from "./AreaMiniMap";
 import { ScoreExplainer } from "./ScoreExplainer";
@@ -34,6 +34,8 @@ interface BattlecardDrawerProps {
   audienceSegment?: string | null;
   /** Geometry of this area, for the in-drawer plots map. */
   areaGeometry?: GeoJsonGeometry | null;
+  /** Catchment and national benchmarks, for good/bad comparisons. */
+  benchmarks?: CatchmentBenchmarks | null;
 }
 
 // Clicking a region opens its deep-dive in the slide-out drawer, never a full
@@ -52,6 +54,7 @@ export function BattlecardDrawer({
   catchmentHasSites,
   audienceSegment,
   areaGeometry,
+  benchmarks,
 }: BattlecardDrawerProps) {
   // Mount gate so the portal target (document.body) exists before rendering.
   const [mounted, setMounted] = useState(false);
@@ -98,7 +101,11 @@ export function BattlecardDrawer({
               Fit for {audienceLabel.toLowerCase()} in this area
             </span>
           )}
-          <OnLocationSummary battlecard={battlecard} areaName={areaName} />
+          <OnLocationSummary
+            battlecard={battlecard}
+            areaName={areaName}
+            incomeBenchmark={benchmarks?.income}
+          />
 
           {sites !== undefined && (
             <section className="rounded-card border border-neutral-200 p-4">
@@ -203,6 +210,7 @@ export function BattlecardDrawer({
             objectiveLabel={battlecard.objectiveLabel}
             priceSet={priceSet}
             highlightSegment={audienceSegment ?? undefined}
+            benchmarks={benchmarks?.metrics}
           />
 
           {battlecard.visualSummary?.charts && (

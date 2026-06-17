@@ -374,6 +374,23 @@ export async function getCatchmentCompetitors(
   return data?.sites ?? [];
 }
 
+export interface CatchmentBenchmarks {
+  metrics: Record<string, { national: number | null; catchment: number | null }>;
+  income: { national: number | null; catchment: number | null };
+}
+
+// Catchment and national averages for context metrics and income, so the
+// deep-dive can show an area against a benchmark.
+export async function getCatchmentBenchmarks(
+  catchmentId: string,
+): Promise<CatchmentBenchmarks | null> {
+  const res = await fetch(`/api/catchments/${catchmentId}/benchmarks`, {
+    headers: activeBrandHeaders(),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function getUsage(): Promise<LlmUsage> {
   const res = await fetch("/api/builders/usage", {
     headers: activeBrandHeaders(),

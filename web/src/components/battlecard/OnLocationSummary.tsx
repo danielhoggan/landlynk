@@ -8,6 +8,8 @@ interface OnLocationSummaryProps {
   battlecard: Battlecard;
   /** The area's name (e.g. the MSOA name); leads the header. */
   areaName?: string;
+  /** Catchment and national average household income, for comparison. */
+  incomeBenchmark?: { national: number | null; catchment: number | null };
 }
 
 // The compact breakdown shown before the full deep-dive (design-framework.md,
@@ -15,9 +17,18 @@ interface OnLocationSummaryProps {
 export function OnLocationSummary({
   battlecard,
   areaName,
+  incomeBenchmark,
 }: OnLocationSummaryProps) {
   const { visualSummary: vs, score, areaCode, rank } = battlecard;
   const stats = vs.keyStatistics;
+  const ukIncome =
+    incomeBenchmark?.national != null
+      ? `UK ${shortMoney(incomeBenchmark.national)}${
+          incomeBenchmark.catchment != null
+            ? ` · area ${shortMoney(incomeBenchmark.catchment)}`
+            : ""
+        }`
+      : undefined;
 
   return (
     <div className="space-y-4">
@@ -46,6 +57,7 @@ export function OnLocationSummary({
         <Stat
           label="Average household income"
           value={fmtCurrency(stats.averageHouseholdIncome)}
+          sub={ukIncome}
         />
         <Stat
           label="Local house price"
@@ -69,11 +81,26 @@ export function OnLocationSummary({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
   return (
     <div className="rounded-card border border-neutral-200 p-3">
       <dt className="text-xs text-neutral-500">{label}</dt>
       <dd className="mt-0.5 text-sm font-semibold">{value}</dd>
+      {sub && <p className="mt-0.5 text-[10px] text-neutral-400">{sub}</p>}
     </div>
   );
+}
+
+function shortMoney(v: number): string {
+  if (v >= 1_000_000) return `£${(v / 1_000_000).toFixed(1)}m`;
+  if (v >= 1_000) return `£${Math.round(v / 1_000)}k`;
+  return `£${Math.round(v)}`;
 }

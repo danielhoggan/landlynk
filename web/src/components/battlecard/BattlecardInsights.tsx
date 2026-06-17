@@ -28,6 +28,7 @@ export function BattlecardInsights({
   objectiveLabel,
   priceSet = true,
   highlightSegment,
+  benchmarks,
 }: {
   pricing?: PricingRationale;
   segments?: AddressableSegments;
@@ -40,6 +41,8 @@ export function BattlecardInsights({
   priceSet?: boolean;
   /** The searched audience segment id, so its addressable pool is emphasised. */
   highlightSegment?: string;
+  /** Catchment and national averages per context metric key, for comparison. */
+  benchmarks?: Record<string, { national: number | null; catchment: number | null }>;
 }) {
   // The addressable pool that matches the searched audience, emphasised so the
   // card speaks to the use case rather than reading generic.
@@ -74,28 +77,57 @@ export function BattlecardInsights({
             )}
           </div>
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {metrics.map((m) => (
-              <div
-                key={m.key}
-                className={
-                  m.highlight
-                    ? "rounded-card bg-light-accent/5 p-2 ring-1 ring-light-accent/30"
-                    : ""
-                }
-              >
-                <dt className="text-xs text-neutral-500">{m.label}</dt>
-                <dd
-                  className={`text-sm font-semibold tabular-nums ${
-                    m.highlight ? "text-light-accent" : ""
-                  }`}
+            {metrics.map((m) => {
+              const bm = benchmarks?.[m.key];
+              // Better/worse than the national average, using the metric's
+              // direction (higher or lower is better).
+              const sign =
+                m.direction === "Higher is better"
+                  ? 1
+                  : m.direction === "Lower is better"
+                    ? -1
+                    : 0;
+              const delta =
+                bm?.national != null && sign !== 0
+                  ? (m.value - bm.national) * sign
+                  : 0;
+              const tone =
+                delta > 0
+                  ? "text-priority-high"
+                  : delta < 0
+                    ? "text-priority-low"
+                    : "text-neutral-400";
+              return (
+                <div
+                  key={m.key}
+                  className={
+                    m.highlight
+                      ? "rounded-card bg-light-accent/5 p-2 ring-1 ring-light-accent/30"
+                      : ""
+                  }
                 >
-                  {m.value}
-                  <span className="ml-1 text-xs font-normal text-neutral-400">
-                    {m.unit}
-                  </span>
-                </dd>
-              </div>
-            ))}
+                  <dt className="text-xs text-neutral-500">{m.label}</dt>
+                  <dd
+                    className={`text-sm font-semibold tabular-nums ${
+                      m.highlight ? "text-light-accent" : ""
+                    }`}
+                  >
+                    {m.value}
+                    <span className="ml-1 text-xs font-normal text-neutral-400">
+                      {m.unit}
+                    </span>
+                  </dd>
+                  {bm?.national != null && (
+                    <p className="mt-0.5 text-[10px] text-neutral-400">
+                      <span className={tone}>
+                        {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} UK {bm.national}
+                      </span>
+                      {bm.catchment != null ? ` · area ${bm.catchment}` : ""}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </dl>
         </section>
       )}

@@ -1564,6 +1564,65 @@ def catchment_sites(
     return {"sites": sites}
 
 
+@app.get("/catchments/{catchment_id}/benchmarks")
+def catchment_benchmarks(
+    catchment_id: str, user: dict = Depends(current_user)
+) -> dict:
+    """Catchment and national averages for the context metrics and income, so the
+    deep-dive can show whether an area is good or bad against a benchmark. Best
+    effort: empty without a database."""
+    _require_access(catchment_id, user)
+    catchment = get_store().get_catchment(catchment_id)
+    codes = [a["areaCode"] for a in (catchment or {}).get("areas", [])]
+    out: dict = {"metrics": {}, "income": {}}
+
+    def f1(v: object) -> float | None:
+        return None if v is None else round(float(v), 1)
+
+    try:
+        with get_pool().connection() as conn:
+            nat = dict(
+                conn.execute(
+                    "SELECT metric_key, AVG(value) FROM area_metric GROUP BY metric_key"
+                ).fetchall()
+            )
+            cat = (
+                dict(
+                    conn.execute(
+                        "SELECT metric_key, AVG(value) FROM area_metric "
+                        "WHERE area_code = ANY(%s) GROUP BY metric_key",
+                        [codes],
+                    ).fetchall()
+                )
+                if codes
+                else {}
+            )
+            nat_inc = conn.execute(
+                "SELECT AVG(mean_income) FROM income_estimates"
+            ).fetchone()
+            cat_inc = (
+                conn.execute(
+                    "SELECT AVG(mean_income) FROM income_estimates "
+                    "WHERE area_code = ANY(%s)",
+                    [codes],
+                ).fetchone()
+                if codes
+                else None
+            )
+    except Exception:  # no DB or tables not loaded
+        return out
+    for key in set(nat) | set(cat):
+        out["metrics"][key] = {
+            "national": f1(nat.get(key)),
+            "catchment": f1(cat.get(key)),
+        }
+    out["income"] = {
+        "national": f1(nat_inc[0]) if nat_inc else None,
+        "catchment": f1(cat_inc[0]) if cat_inc else None,
+    }
+    return out
+
+
 @app.get("/catchments/{catchment_id}/competitors")
 def catchment_competitors(
     catchment_id: str, user: dict = Depends(current_user)
