@@ -215,6 +215,9 @@ export default function HomePage() {
   const [weightByLand, setWeightByLand] = useState(false);
   // Find a site: order the ranking by audience fit (score) or by buildable land.
   const [rankSort, setRankSort] = useState<"fit" | "land">("fit");
+  // Find a site: show only areas that fit the audience (drop the low-fit band),
+  // so the ranking is a shortlist of where to build, not every area.
+  const [suitableOnly, setSuitableOnly] = useState(true);
   // Which development-site layers are drawn. Brownfield (buildable) on,
   // competitor (live planning applications) off by default as it is context.
   const [siteLayers, setSiteLayers] = useState<Record<string, boolean>>({
@@ -252,11 +255,16 @@ export default function HomePage() {
   }
   const activeFilterCount = filter.size + Object.keys(ranges).length;
   const tagContext = buildTagContext(areas);
-  const filteredAreas = areas.filter((a) =>
-    areaMatchesFilters(a, filter, ranges, tagContext),
+  // On Find a site, optionally keep only the areas that fit the chosen audience
+  // (the high and mid bands), so the table is a shortlist of where to build.
+  const suitabilityActive = intent === "find_site" && suitableOnly;
+  const filteredAreas = areas.filter(
+    (a) =>
+      areaMatchesFilters(a, filter, ranges, tagContext) &&
+      (!suitabilityActive || a.band !== "low"),
   );
   const matchedCodes =
-    activeFilterCount === 0
+    activeFilterCount === 0 && !suitabilityActive
       ? null
       : new Set(filteredAreas.map((a) => a.areaCode));
 
@@ -1375,21 +1383,31 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-neutral-500">
               Priority ranking
-              {activeFilterCount > 0 && (
+              {(activeFilterCount > 0 || suitabilityActive) && (
                 <span className="ml-1 font-normal text-neutral-400">
                   ({filteredAreas.length} of {areas.length})
                 </span>
               )}
             </h2>
             {intent === "find_site" && areas.length > 0 && (
-              <Segmented
-                options={[
-                  { value: "fit", label: "Best fit" },
-                  { value: "land", label: "Most land" },
-                ]}
-                value={rankSort}
-                onChange={(v) => setRankSort(v as "fit" | "land")}
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Segmented
+                  options={[
+                    { value: "suitable", label: "Suitable" },
+                    { value: "all", label: "All areas" },
+                  ]}
+                  value={suitableOnly ? "suitable" : "all"}
+                  onChange={(v) => setSuitableOnly(v === "suitable")}
+                />
+                <Segmented
+                  options={[
+                    { value: "fit", label: "Best fit" },
+                    { value: "land", label: "Most land" },
+                  ]}
+                  value={rankSort}
+                  onChange={(v) => setRankSort(v as "fit" | "land")}
+                />
+              </div>
             )}
           </div>
           {areas.length === 0 ? (
