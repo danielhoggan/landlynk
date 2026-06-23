@@ -195,6 +195,13 @@ def _require_admin(user: dict) -> None:
         raise HTTPException(status_code=403, detail="Admin role required")
 
 
+def _require_internal(user: dict) -> None:
+    """Internal-staff gate: admins and internal users, never external (client)
+    users. Guards staff-only tools such as the Marketing Activation pipeline."""
+    if user.get("role") == "external-user":
+        raise HTTPException(status_code=403, detail="Internal users only")
+
+
 def _audit(
     user: dict,
     action: str,
@@ -1175,6 +1182,141 @@ def cached_area_profile(
     if cached is None:
         return {"profile": None}
     return {"profile": {"model": model, **cached, "cached": True}}
+
+
+def _marketing_key(codes: list[str], model: str, intent: str | None) -> str:
+    """Cache identity for a Marketing Activation playbook: the catchment area set,
+    the model and the housebuilder intent (which colours the plan). Namespaced so
+    it never collides with an area-profile key in the shared config store."""
+    import hashlib
+
+    key_src = "|".join(sorted(codes)) + "::" + model + "::" + (intent or "")
+    return "marketing::" + hashlib.sha256(key_src.encode()).hexdigest()
+
+
+def _dev_location(catchment: dict, codes: list[str], names: dict) -> tuple[str, str]:
+    """The development name and a location string for prompting, anchored on the
+    scheme's own postcode (or its home area for a grid reference)."""
+    inp = catchment.get("input") or {}
+    dev_name = inp.get("developmentName") or "the development"
+    postcode = inp.get("value") if inp.get("kind") == "postcode" else None
+    if postcode:
+        return dev_name, f"{dev_name}, {postcode}"
+    home = names.get(codes[0], codes[0]) if codes else dev_name
+    return dev_name, f"{dev_name}, {home}"
+
+
+class MarketingRequest(BaseModel):
+    model: str | None = None
+    intent: str | None = None
+    refresh: bool = False
+
+
+@app.post("/catchments/{catchment_id}/marketing")
+def marketing_activation(
+    catchment_id: str,
+    request: MarketingRequest,
+    user: dict = Depends(current_user),
+) -> dict:
+    """Generate (or return cached) a Marketing Activation playbook for a catchment.
+
+    Internal staff only: this is a separate, optional pipeline that costs an LLM
+    call, so it is never exposed to external (client) users and the caller flags
+    the cost before running. The plan is built from the same reproducible combined
+    Battlecard the exports use, then cached and metered like the area profile."""
+    from .enrichment import build_facts, generate_marketing_activation, token_cost
+
+    _require_access(catchment_id, user)
+    _require_internal(user)
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    areas = catchment.get("areas", [])
+    codes = [a["areaCode"] for a in areas]
+    if not codes:
+        raise HTTPException(status_code=404, detail="No areas for the playbook")
+    names = {a["areaCode"]: a.get("name", a["areaCode"]) for a in areas}
+
+    model = request.model or _default_model()
+    if not model:
+        raise HTTPException(
+            status_code=503, detail="No AI model configured. Add a provider key."
+        )
+
+    intent = request.intent or ((catchment.get("input") or {}).get("config") or {}).get(
+        "intent"
+    )
+    cache_key = _marketing_key(codes, model, intent)
+    if not request.refresh:
+        cached = store.get_config(cache_key)
+        if cached is not None:
+            return {**cached, "cached": True}
+
+    # Internal users are unmetered, so this is a no-op for them; kept for parity
+    # and in case an admin later meters internal AI use.
+    _enforce_llm_quota(user)
+
+    card = _combined_card(catchment_id, CombineRequest(scope="whole", intent=intent))
+    dev_name, location = _dev_location(catchment, codes, names)
+    facts = build_facts(card, development=dev_name, location=location, intent=intent)
+    try:
+        payload = generate_marketing_activation(facts, model)
+    except Exception as exc:
+        _log.exception("Marketing activation generation failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    usage = payload.pop("usage", {}) or {}
+    in_tok = int(usage.get("input", 0) or 0)
+    out_tok = int(usage.get("output", 0) or 0)
+    total_tok = int(usage.get("total", in_tok + out_tok) or 0)
+    cost = token_cost(model, in_tok, out_tok)
+
+    record = {"model": model, "intent": intent, **payload}
+    active_group = _active_group(user)
+    store.record_llm_usage(user.get("email"), active_group, model, _usage_period())
+    store.set_config(cache_key, record)
+    _audit(
+        user,
+        "ai.marketing",
+        target_type="catchment",
+        target_id=catchment_id,
+        detail={
+            "model": model,
+            "intent": intent,
+            "groupId": active_group,
+            "tokens": total_tok,
+            "inputTokens": in_tok,
+            "outputTokens": out_tok,
+        },
+        cost=cost,
+    )
+    return {**record, "cached": False}
+
+
+@app.get("/catchments/{catchment_id}/marketing")
+def cached_marketing_activation(
+    catchment_id: str,
+    user: dict = Depends(current_user),
+) -> dict:
+    """Return an already-generated Marketing Activation playbook for the catchment,
+    or {"playbook": None}. Internal staff only. Read-only: never calls the provider,
+    so reopening a run shows its cached plan without spending an LLM call."""
+    _require_access(catchment_id, user)
+    _require_internal(user)
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    codes = [a["areaCode"] for a in catchment.get("areas", [])]
+    model = _default_model()
+    if not codes or not model:
+        return {"playbook": None}
+    intent = ((catchment.get("input") or {}).get("config") or {}).get("intent")
+    cached = store.get_config(_marketing_key(codes, model, intent))
+    if cached is None:
+        return {"playbook": None}
+    return {"playbook": {**cached, "cached": True}}
 
 
 class RoleRequest(BaseModel):

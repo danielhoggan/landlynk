@@ -36,6 +36,7 @@ import {
 import { loadSettings } from "@/lib/settings";
 import { RunAssumptions } from "@/components/RunAssumptions";
 import { AreaProfilePanel } from "@/components/AreaProfilePanel";
+import { MarketingActivationPanel } from "@/components/MarketingActivationPanel";
 import { IntentCards, type Intent } from "@/components/IntentCards";
 import { RankingExplainer } from "@/components/RankingExplainer";
 import { VerdictPanel, MixPanel } from "@/components/AppraisalPanels";
@@ -48,7 +49,7 @@ import { useUser } from "@/lib/userContext";
 // catchment, and the interactive map with ranked clickable areas renders here
 // (SCOPING.md Section 3.2).
 export default function HomePage() {
-  const { isAdmin, activeBrand } = useUser();
+  const { isAdmin, isInternal, activeBrand } = useUser();
   // Internal users and admins have no brand, so they pick a sector here; branded
   // users inherit their brand's industry. The effective industry drives the
   // segments and the housebuilder intents.
@@ -1142,6 +1143,15 @@ export default function HomePage() {
         <AreaProfilePanel
           catchmentId={catchment.id}
           starred={Array.from(starred)}
+        />
+      )}
+
+      {/* Marketing activation: a separate, optional AI pipeline for internal
+          staff only. Hidden entirely from external (client) users. */}
+      {catchment?.status === "complete" && areas.length > 0 && isInternal && (
+        <MarketingActivationPanel
+          catchmentId={catchment.id}
+          intent={isHousebuilder ? intent : null}
         />
       )}
 

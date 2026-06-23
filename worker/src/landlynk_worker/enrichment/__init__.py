@@ -1,6 +1,8 @@
-"""AI enrichment: Local Area Profiles from a choice of LLM providers."""
+"""AI enrichment: Local Area Profiles and Marketing Activation playbooks from a
+choice of LLM providers."""
 
 from .area_profile import generate_area_profile
+from .marketing import build_facts, generate_marketing_activation
 from .models import (
     MODELS,
     available_models,
@@ -16,4 +18,6 @@ __all__ = [
     "model_cost",
     "token_cost",
     "generate_area_profile",
+    "build_facts",
+    "generate_marketing_activation",
 ]

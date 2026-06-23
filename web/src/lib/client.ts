@@ -391,6 +391,59 @@ export async function getCatchmentBenchmarks(
   return res.json();
 }
 
+export interface MarketingPlaybook {
+  summary: string;
+  budgetTiers: {
+    tier: string;
+    audience: string;
+    sharePct: number | null;
+    rationale: string;
+  }[];
+  channelMix: {
+    tier: string;
+    channels: { channel: string; sharePct: number | null; role: string }[];
+  }[];
+  searchThemes: { theme: string; exampleKeywords: string[]; intent: string }[];
+  metaAudiences: { name: string; definition: string; creativeAngle: string }[];
+  watchOuts: string[];
+  kpis: { metric: string; target: string; why: string }[];
+  model?: string;
+  intent?: string | null;
+  cached?: boolean;
+}
+
+// Read an already-generated Marketing Activation playbook without spending an
+// LLM call. Internal staff only; returns null when none is cached or the user is
+// external, so the panel can decide whether to offer the Generate action.
+export async function getMarketingPlaybook(
+  id: string,
+): Promise<MarketingPlaybook | null> {
+  const res = await fetch(`/api/catchments/${id}/marketing`, {
+    headers: activeBrandHeaders(),
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({ playbook: null }));
+  return data?.playbook ?? null;
+}
+
+// Generate (or refresh) the Marketing Activation playbook. This spends an LLM
+// call, so the caller confirms the cost first. Internal staff only.
+export async function generateMarketingPlaybook(
+  id: string,
+  body: { intent?: string | null; model?: string; refresh?: boolean } = {},
+): Promise<MarketingPlaybook> {
+  const res = await fetch(`/api/catchments/${id}/marketing`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...activeBrandHeaders() },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Could not generate playbook (${res.status})`);
+  }
+  return data;
+}
+
 export async function getUsage(): Promise<LlmUsage> {
   const res = await fetch("/api/builders/usage", {
     headers: activeBrandHeaders(),

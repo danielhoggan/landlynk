@@ -14,6 +14,9 @@ import { DEFAULT_SETTINGS, saveSettingsLocal } from "@/lib/settings";
 interface UserContextValue {
   user: AppUser | null;
   isAdmin: boolean;
+  /** Internal staff (admin or internal-user), never an external client user.
+   * Gates staff-only tools such as the Marketing Activation pipeline. */
+  isInternal: boolean;
   loading: boolean;
   /** Brands the user may switch between. */
   brands: Brand[];
@@ -25,6 +28,7 @@ interface UserContextValue {
 const UserContext = createContext<UserContextValue>({
   user: null,
   isAdmin: false,
+  isInternal: false,
   loading: true,
   brands: [],
   activeBrand: null,
@@ -126,6 +130,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isAdmin: user?.role === "admin",
+        isInternal: user != null && user.role !== "external-user",
         loading,
         brands,
         activeBrand,

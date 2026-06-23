@@ -278,6 +278,64 @@ def test_models_admin_and_area_profile(client, monkeypatch):
     assert calls["n"] == 1  # second served from cache, not regenerated
 
 
+def test_marketing_activation_internal_only_and_cached(client, monkeypatch):
+    # Internal staff generate a marketing playbook once, then it serves from
+    # cache; external (client) users are blocked even on their own catchment.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    monkeypatch.setattr(app_module.settings, "openai_api_key", "sk-test")
+    client.put("/admin/models/default", json={"model": "gpt-4o"})
+
+    calls = {"n": 0}
+
+    def fake_generate(facts, model, transport=None):
+        calls["n"] += 1
+        return {
+            "summary": "Lead with FTB.",
+            "budgetTiers": [
+                {"tier": "Core", "audience": "FTB", "sharePct": 60, "rationale": "r"}
+            ],
+            "channelMix": [],
+            "searchThemes": [],
+            "metaAudiences": [],
+            "watchOuts": [],
+            "kpis": [],
+        }
+
+    monkeypatch.setattr(
+        "landlynk_worker.enrichment.generate_marketing_activation", fake_generate
+    )
+
+    job_id = _submit(client)
+    first = client.post(f"/catchments/{job_id}/marketing", json={}).json()
+    assert first["summary"] == "Lead with FTB."
+    assert first["cached"] is False
+    second = client.post(f"/catchments/{job_id}/marketing", json={}).json()
+    assert second["cached"] is True
+    assert calls["n"] == 1  # cache hit, not regenerated
+
+    # The cached-only GET returns the same playbook without spending a call.
+    got = client.get(f"/catchments/{job_id}/marketing").json()
+    assert got["playbook"]["summary"] == "Lead with FTB."
+    assert calls["n"] == 1
+
+    # An external (client) user is blocked even on a run they own.
+    ext = _user_headers("client@builder.com")
+    ext_job = _submit(client, ext)
+    assert (
+        client.put(
+            "/admin/users/client@builder.com/role", json={"role": "external-user"}
+        ).status_code
+        == 204
+    )
+    assert (
+        client.post(f"/catchments/{ext_job}/marketing", json={}, headers=ext).status_code
+        == 403
+    )
+    assert (
+        client.get(f"/catchments/{ext_job}/marketing", headers=ext).status_code == 403
+    )
+
+
 def test_account_settings_roundtrip(client):
     alice = _user_headers("alice@x.com")
     client.get("/me", headers=alice)  # upsert the user first (settings FK)
