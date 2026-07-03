@@ -279,25 +279,32 @@ export function CatchmentMap({
       return;
     }
 
+    const areaFc = areasToFeatures(areas, matchedCodes, tagContextRef.current);
     const areaSource = map.getSource("areas") as
       | maplibregl.GeoJSONSource
       | undefined;
-    areaSource?.setData(areasToFeatures(areas, matchedCodes, tagContextRef.current));
+    areaSource?.setData(areaFc);
 
     const isoSource = map.getSource("isochrone") as
       | maplibregl.GeoJSONSource
       | undefined;
+    // Frame the catchment: prefer the isochrone outline, but fall back to the
+    // area polygons when there is no isochrone (radius-mode or older runs),
+    // otherwise the map stays at the UK-wide default zoom and the segments,
+    // though drawn, are too small to see.
+    let frame: maplibregl.LngLatBoundsLike | null = null;
     if (isochrone) {
       isoSource?.setData({
         type: "Feature",
         geometry: isochrone as GeoJSON.Geometry,
         properties: {},
       });
-      const b = bounds(isochrone as GeoJSON.Geometry);
-      if (b) map.fitBounds(b, { padding: 40, duration: 600 });
+      frame = bounds(isochrone as GeoJSON.Geometry);
     } else {
       isoSource?.setData(emptyFc());
     }
+    if (!frame) frame = boundsOfFeatures(areaFc);
+    if (frame) map.fitBounds(frame, { padding: 40, duration: 600 });
 
     const sitesSource = map.getSource("sites") as
       | maplibregl.GeoJSONSource
@@ -386,5 +393,19 @@ function bounds(
   };
   if ("coordinates" in geometry)
     walk((geometry as { coordinates: unknown }).coordinates);
+  return b.isEmpty() ? null : b;
+}
+
+// Combined bounds of every feature in a collection, so the map can frame the
+// ranked areas when there is no isochrone outline to fit to.
+function boundsOfFeatures(
+  fc: GeoJSON.FeatureCollection,
+): maplibregl.LngLatBoundsLike | null {
+  const b = new maplibregl.LngLatBounds();
+  for (const f of fc.features) {
+    if (!f.geometry) continue;
+    const sub = bounds(f.geometry);
+    if (sub) b.extend(sub as maplibregl.LngLatBounds);
+  }
   return b.isEmpty() ? null : b;
 }
