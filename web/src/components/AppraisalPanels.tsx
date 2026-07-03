@@ -119,8 +119,8 @@ export function VerdictPanel({ catchmentId }: { catchmentId: string }) {
                 value={`${count(verdict.supply.buildablePlots)} · ${count(verdict.supply.buildableHomes)}`}
               />
               <Stat
-                label="Competitor schemes (· homes)"
-                value={`${count(verdict.supply.competitorSchemes)} · ${count(verdict.supply.competitorHomes)}`}
+                label="Competitor schemes"
+                value={count(verdict.supply.competitorSchemes)}
               />
             </div>
           </>
