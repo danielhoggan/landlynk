@@ -23,9 +23,9 @@ export function OnLocationSummary({
   const stats = vs.keyStatistics;
   const ukIncome =
     incomeBenchmark?.national != null
-      ? `UK ${shortMoney(incomeBenchmark.national)}${
+      ? `UK avg ${shortMoney(incomeBenchmark.national)}${
           incomeBenchmark.catchment != null
-            ? ` · area ${shortMoney(incomeBenchmark.catchment)}`
+            ? ` · catchment avg ${shortMoney(incomeBenchmark.catchment)}`
             : ""
         }`
       : undefined;
@@ -68,14 +68,18 @@ export function OnLocationSummary({
           value={fmtPercent(stats.ownerOccupiedPercentage)}
         />
         <Stat label="Median age" value={fmtValue(stats.medianAge)} />
-        <Stat
-          label="Income vs catchment"
-          value={
-            battlecard.catchmentContext.incomeIndex.value == null
-              ? "n/a"
-              : `${battlecard.catchmentContext.incomeIndex.value} (100=avg)`
-          }
-        />
+        {/* Older stored Battlecards predate catchmentContext; the drawer's
+            "predates" notice handles them, so this tile must not crash. */}
+        {battlecard.catchmentContext && (
+          <Stat
+            label="Income vs catchment"
+            value={
+              battlecard.catchmentContext.incomeIndex?.value == null
+                ? "n/a"
+                : `${battlecard.catchmentContext.incomeIndex.value} (100=avg)`
+            }
+          />
+        )}
       </dl>
     </div>
   );

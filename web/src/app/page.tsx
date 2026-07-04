@@ -261,9 +261,21 @@ export default function HomePage() {
   }
   const activeFilterCount = filter.size + Object.keys(ranges).length;
   const tagContext = buildTagContext(areas);
+  // The intent of the run being displayed, from its stored config. Older runs
+  // predate stored intent, so a land-objective config with an audience reads as
+  // Find a site. The form's intent card selection only governs the next
+  // submission; clicking another card must not mutate results already on
+  // screen, so everything below the form keys off runIntent.
+  const runCfg = catchment?.input?.config;
+  const storedRunIntent =
+    (runCfg?.intent as Intent | undefined) ??
+    (runCfg?.objective === "land_acquisition" && runCfg?.segment
+      ? ("find_site" as Intent)
+      : undefined);
+  const runIntent: Intent = storedRunIntent ?? intent;
   // On Find a site, optionally keep only the areas that fit the chosen audience
   // (the high and mid bands), so the table is a shortlist of where to build.
-  const suitabilityActive = intent === "find_site" && suitableOnly;
+  const suitabilityActive = runIntent === "find_site" && suitableOnly;
   const filteredAreas = areas.filter(
     (a) =>
       areaMatchesFilters(a, filter, ranges, tagContext) &&
@@ -280,8 +292,11 @@ export default function HomePage() {
   };
 
   // Housebuilder intents are signposted only for residential brands; everyone
-  // else keeps the single, generic flow.
-  const isHousebuilder = effectiveIndustry === "residential";
+  // else keeps the single, generic flow. A stored run intent also counts: an
+  // internal user reopening a housebuilder run gets its panels back even
+  // before picking a sector.
+  const isHousebuilder =
+    effectiveIndustry === "residential" || Boolean(storedRunIntent);
   const audienceLabel = segmentOptions.find((s) => s.id === segment)?.label;
   // Find-a-site needs a target audience and a search location; the other flows
   // need a development name and a location.
@@ -305,7 +320,18 @@ export default function HomePage() {
         household_type: "0.15",
         addressable_scale: "0.25",
         income_fit: "0.15",
+        ...(useLookalike ? { lookalike: "0.25" } : {}),
       });
+    } else if (objective === "land_acquisition") {
+      // Leaving Find a site must not carry its objective and weights into an
+      // appraise or next-phase run: restore the saved default assumptions.
+      setObjective("");
+      const s = loadSettings();
+      const base = Object.fromEntries(
+        Object.entries(s.weights).map(([k, v]) => [k, String(v)]),
+      );
+      if (useLookalike) base.lookalike = "0.25";
+      setWeights(base);
     }
   }
 
@@ -339,7 +365,7 @@ export default function HomePage() {
 
   // Find a site can lead with the most buildable land instead of pure fit.
   const rankedAreas =
-    intent === "find_site" && rankSort === "land"
+    runIntent === "find_site" && rankSort === "land"
       ? [...filteredAreas].sort(
           (a, b) =>
             (plotsByArea[b.areaCode]?.homes ?? 0) -
@@ -347,8 +373,18 @@ export default function HomePage() {
         )
       : filteredAreas;
 
-  const runConfig = catchment?.input?.config;
-  const runPriceSet = Boolean(runConfig?.priceBand?.from);
+  const runConfig = runCfg;
+  // Whether the run carried an explicit target price. Configs persisted since
+  // priceSet landed carry the flag; older ones fall back to whether the stored
+  // band differs from the engine default the user never chose.
+  const runPriceSet =
+    runConfig?.priceSet != null
+      ? Boolean(runConfig.priceSet)
+      : Boolean(runConfig?.priceBand?.from) &&
+        !(
+          runConfig?.priceBand?.from === 250000 &&
+          runConfig?.priceBand?.to === 400000
+        );
   const runAudienceLabel = runConfig?.segment
     ? (segmentOptions.find((s) => s.id === runConfig.segment)?.label ?? null)
     : null;
@@ -451,7 +487,8 @@ export default function HomePage() {
       const blob = await reportExport(catchment.id, {
         scope,
         areaCodes: scope === "selection" ? Array.from(starred) : undefined,
-        intent,
+        // Frame the deck to the run's own journey, not the live card selection.
+        intent: runIntent,
         audienceLabel: runAudienceLabel,
       });
       const url = URL.createObjectURL(blob);
@@ -485,8 +522,16 @@ export default function HomePage() {
         if (!savedIntent && cfg?.objective === "land_acquisition" && cfg?.segment) {
           savedIntent = "find_site";
         }
-        if (savedIntent === "find_site" || savedIntent === "next_phase") {
+        if (
+          savedIntent === "find_site" ||
+          savedIntent === "appraise" ||
+          savedIntent === "next_phase"
+        ) {
           setIntent(savedIntent);
+          // The stored intent proves this was a housebuilder run; restore the
+          // sector for internal users so a follow-up New catchment keeps the
+          // housebuilder form (branded users already carry their industry).
+          setPickedIndustry((cur) => cur || "residential");
         }
         setStatus(
           c.status === "complete"
@@ -517,8 +562,10 @@ export default function HomePage() {
 
   // On Find a site, overlay the brownfield sites (fast) and the competitor
   // developments (live, separate so it does not block the brownfield markers).
+  // Keyed to the run's own intent so clicking another intent card while these
+  // results are on screen does not add or strip the overlays.
   useEffect(() => {
-    if (intent === "find_site" && catchment?.status === "complete") {
+    if (runIntent === "find_site" && catchment?.status === "complete") {
       const id = catchment.id;
       getCatchmentSites(id)
         .then(setSites)
@@ -533,12 +580,18 @@ export default function HomePage() {
       setCompetitors([]);
       setCompetitorsLoading(false);
     }
-  }, [intent, catchment?.id, catchment?.status]);
+  }, [runIntent, catchment?.id, catchment?.status]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setCatchment(null);
+    // Close any Battlecard from the previous run: it would otherwise sit over
+    // the new map with export links pointing at the wrong catchment.
+    setDrawerOpen(false);
+    setSelected(null);
+    setSelectedCode(undefined);
+    setSelectedName(undefined);
     setStatus("Submitting catchment job...");
     try {
       const config: Record<string, unknown> = {};
@@ -608,16 +661,22 @@ export default function HomePage() {
     }
   }
 
+  const [drawerError, setDrawerError] = useState<string | null>(null);
   async function onSelectArea(area: CatchmentArea) {
     if (!catchment) return;
     setSelectedCode(area.areaCode);
     setSelectedName(area.name);
     setDrawerOpen(true);
     setSelected(null);
+    setDrawerError(null);
     try {
       setSelected(await getBattlecard(catchment.id, area.areaCode));
     } catch {
-      setStatus("Could not load that Battlecard.");
+      // Surface the failure inside the drawer itself; the form status line is
+      // hidden once a run completes, so it cannot carry this.
+      setDrawerError(
+        "Could not load this area's Battlecard. Close the panel and try again.",
+      );
     }
   }
 
@@ -743,7 +802,7 @@ export default function HomePage() {
                 Weight toward areas with more buildable land
                 <span className="text-neutral-400">
                   {" "}
-                  (ranks on brownfield and allocated dwelling capacity per area)
+                  (ranks on brownfield register dwelling capacity per area)
                 </span>
               </span>
             </label>
@@ -1117,7 +1176,7 @@ export default function HomePage() {
         <div className="rounded-card border border-priority-mid/40 bg-priority-mid/10 p-4 text-sm">
           <p className="font-semibold">No areas found in this catchment.</p>
           <p className="mt-1 text-neutral-600">
-            The drive-time zone was built, but no boundaries matched. Load the
+            The catchment zone was built, but no boundaries matched. Load the
             MSOA boundaries on the{" "}
             <a href="/data" className="font-medium text-light-accent underline">
               Reference data
@@ -1131,11 +1190,11 @@ export default function HomePage() {
         <RunAssumptions config={catchment.input?.config} />
       )}
 
-      {activeRun && isHousebuilder && intent === "appraise" && (
+      {activeRun && isHousebuilder && runIntent === "appraise" && (
         <VerdictPanel catchmentId={catchment!.id} />
       )}
 
-      {activeRun && isHousebuilder && intent === "next_phase" && (
+      {activeRun && isHousebuilder && runIntent === "next_phase" && (
         <MixPanel catchmentId={catchment!.id} />
       )}
 
@@ -1151,7 +1210,7 @@ export default function HomePage() {
       {catchment?.status === "complete" && areas.length > 0 && isInternal && (
         <MarketingActivationPanel
           catchmentId={catchment.id}
-          intent={isHousebuilder ? intent : null}
+          intent={isHousebuilder ? runIntent : null}
         />
       )}
 
@@ -1164,7 +1223,7 @@ export default function HomePage() {
               </span>
               {/* On Find a site the audience is already the lens, so the
                   audience filter pills are redundant; keep just the ranges. */}
-              {intent !== "find_site" &&
+              {runIntent !== "find_site" &&
                 SIGNAL_TAGS.map((t) => {
                 const active = filter.has(t.id);
                 return (
@@ -1320,6 +1379,11 @@ export default function HomePage() {
               ))}
             </div>
           )}
+          {/* The form's status line is hidden once a run completes, so export
+              failures must surface here beside the buttons that caused them. */}
+          {status && !showForm && (
+            <p className="text-xs text-neutral-500">{status}</p>
+          )}
         </div>
       )}
 
@@ -1332,9 +1396,9 @@ export default function HomePage() {
           selectedAreaCode={selectedCode}
           matchedCodes={matchedCodes}
           tagContext={tagContext}
-          sites={intent === "find_site" ? visibleSites : undefined}
+          sites={runIntent === "find_site" ? visibleSites : undefined}
         />
-        {activeRun && intent === "find_site" &&
+        {activeRun && runIntent === "find_site" &&
           (overlaySites.length > 0 || competitorsLoading ? (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="font-medium text-neutral-500">Land layers</span>
@@ -1356,7 +1420,9 @@ export default function HomePage() {
                       loading
                         ? "Finding competitor developments..."
                         : n === 0
-                          ? `No ${label.toLowerCase()} data loaded for this catchment. Load it on Reference data and re-run.`
+                          ? key === "permission"
+                            ? "No recent residential planning applications found in this catchment. Competitor schemes load live from national planning data, no upload needed."
+                            : "No brownfield register sites in this catchment. An admin can load or refresh the Development sites dataset on Reference data."
                           : on
                             ? `Hide ${label.toLowerCase()} plots`
                             : `Show ${label.toLowerCase()} plots`
@@ -1385,9 +1451,10 @@ export default function HomePage() {
             </div>
           ) : (
             <p className="text-xs text-neutral-500">
-              No buildable plots here yet. Load the Development sites (brownfield)
-              dataset on the Reference data page and re-run. Competitor schemes
-              load automatically from national planning applications.
+              No buildable plots here yet. An admin can load the Development
+              sites (brownfield) dataset on the Reference data page; then
+              re-run. Competitor schemes load automatically from national
+              planning applications.
             </p>
           ))}
         {activeRun &&
@@ -1415,7 +1482,7 @@ export default function HomePage() {
                 </span>
               )}
             </h2>
-            {intent === "find_site" && areas.length > 0 && (
+            {runIntent === "find_site" && areas.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <Segmented
                   options={[
@@ -1454,12 +1521,12 @@ export default function HomePage() {
               starredCodes={starred}
               onToggleStar={toggleStar}
               tagContext={tagContext}
-              plotsByArea={intent === "find_site" ? plotsByArea : undefined}
+              plotsByArea={runIntent === "find_site" ? plotsByArea : undefined}
             />
           )}
           {activeRun && isHousebuilder && (
             <RankingExplainer
-              intent={intent}
+              intent={runIntent}
               audienceLabel={runAudienceLabel}
               affordabilityMultiple={runConfig?.affordabilityMultiple}
             />
@@ -1472,6 +1539,7 @@ export default function HomePage() {
         areaName={selectedName}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        error={drawerError}
         pdfUrl={
           catchment && selectedCode
             ? `/api/catchments/${catchment.id}/battlecards/${selectedCode}/pdf`
@@ -1485,7 +1553,7 @@ export default function HomePage() {
         priceSet={runPriceSet}
         audienceLabel={runAudienceLabel}
         sites={
-          intent === "find_site"
+          runIntent === "find_site"
             ? visibleSites.filter((s) => s.areaCode === selectedCode)
             : undefined
         }
@@ -1493,7 +1561,7 @@ export default function HomePage() {
         audienceSegment={runConfig?.segment}
         benchmarks={benchmarks}
         areaGeometry={
-          intent === "find_site"
+          runIntent === "find_site"
             ? (areas.find((a) => a.areaCode === selectedCode)?.geometry ?? null)
             : null
         }

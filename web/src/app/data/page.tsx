@@ -617,7 +617,8 @@ function StatusBadge({ status }: { status?: ReferenceStatus }) {
   if (status.status === "loaded") {
     return (
       <span className="flex items-center gap-1 text-xs text-priority-high">
-        <CheckCircle2 size={14} /> {status.rows?.toLocaleString()} rows
+        <CheckCircle2 size={14} />{" "}
+        {status.rows != null ? `${status.rows.toLocaleString()} rows` : "Loaded"}
       </span>
     );
   }

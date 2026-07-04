@@ -541,19 +541,42 @@ def _analysis(slide: Slide, body: str) -> None:
     )
 
 
+def _no_chart_data(slide: Slide, message: str) -> None:
+    """Explanatory text where a chart would sit, so suppressed or missing data
+    never renders as zero bars (null is never zero, per the house rules)."""
+    _text(
+        slide,
+        Inches(0.6),
+        Inches(3.2),
+        Inches(7.2),
+        Inches(1.6),
+        [(message, 14, _GREY, False, True)],
+        shrink=True,
+    )
+
+
 def _age(slide: Slide, card: Battlecard, theme: dict) -> None:
     _section(slide, "Chart 01", "Age demographic distribution", theme["navy"])
     charts = card.visual_summary.charts
-    _bar(
-        slide,
-        Inches(0.6),
-        Inches(1.7),
-        Inches(7.2),
-        Inches(4.8),
-        [b.label for b in charts.age_demographics],
-        [_num(b.percentage) for b in charts.age_demographics],
-        theme["secondary"],
-    )
+    # Only bands with data; a suppressed band must not chart as 0%.
+    bands = [b for b in charts.age_demographics if b.percentage.value is not None]
+    if bands:
+        _bar(
+            slide,
+            Inches(0.6),
+            Inches(1.7),
+            Inches(7.2),
+            Inches(4.8),
+            [b.label for b in bands],
+            [_num(b.percentage) for b in bands],
+            theme["secondary"],
+        )
+    else:
+        _no_chart_data(
+            slide,
+            "Age data is not available for this catchment. Load the ONS "
+            "demographics dataset to populate this chart.",
+        )
     cohorts = card.audience_and_demographics.age_cohorts
     body = cohorts[0].body if cohorts else ""
     _analysis(slide, body)
@@ -562,27 +585,35 @@ def _age(slide: Slide, card: Battlecard, theme: dict) -> None:
 def _income(slide: Slide, card: Battlecard, theme: dict) -> None:
     _section(slide, "Chart 02", "Household income distribution", theme["navy"])
     inc = card.visual_summary.charts.household_income
-    _bar(
-        slide,
-        Inches(0.6),
-        Inches(1.7),
-        Inches(7.2),
-        Inches(4.8),
-        [
-            "Mean",
-            "Median",
-            inc.lowest_la.name or "Lowest",
-            inc.highest_la.name or "Highest",
-        ],
-        [
-            _num(inc.mean),
-            _num(inc.median),
-            _num(inc.lowest_la.value),
-            _num(inc.highest_la.value),
-        ],
-        theme["secondary"],
-        value_format='"£"#,##0',
-    )
+    # Only the figures that exist; suppressed income must not chart as £0.
+    pairs = [
+        (label, value)
+        for label, value in [
+            ("Mean", inc.mean.value),
+            ("Median", inc.median.value),
+            (inc.lowest_la.name or "Lowest", inc.lowest_la.value.value),
+            (inc.highest_la.name or "Highest", inc.highest_la.value.value),
+        ]
+        if value is not None
+    ]
+    if pairs:
+        _bar(
+            slide,
+            Inches(0.6),
+            Inches(1.7),
+            Inches(7.2),
+            Inches(4.8),
+            [p[0] for p in pairs],
+            [float(p[1]) for p in pairs],
+            theme["secondary"],
+            value_format='"£"#,##0',
+        )
+    else:
+        _no_chart_data(
+            slide,
+            "Income data is not available for this catchment. Load the ONS "
+            "small-area income dataset to populate this chart.",
+        )
     _analysis(slide, card.income_and_tenure.income_commentary)
 
 

@@ -32,9 +32,11 @@ const SEGMENTS: {
   label: string;
   product: string;
 }[] = [
-  { key: "firstTimeBuyer", label: "First-time buyers", product: "2 to 3 bed homes and apartments" },
+  // Labels match the audience picker (lib/segments.ts) so the same pool never
+  // appears under two names mid-flow.
+  { key: "firstTimeBuyer", label: "First time buyers", product: "2 to 3 bed homes and apartments" },
   { key: "downsizer", label: "Downsizers", product: "2 to 3 bed bungalows and low-maintenance homes" },
-  { key: "family", label: "Families", product: "3 to 4 bed family homes" },
+  { key: "family", label: "Growing families", product: "3 to 4 bed family homes" },
 ];
 
 function useVerdict(catchmentId: string) {

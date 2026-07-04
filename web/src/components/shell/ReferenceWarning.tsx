@@ -18,6 +18,7 @@ const NAMES: Record<string, string> = {
   crime: "Crime",
   postcodes: "Postcodes",
   hospitals: "Hospitals",
+  development_sites: "Development sites (brownfield)",
 };
 
 const DISMISS_KEY = "landlynk.staleDismissed";

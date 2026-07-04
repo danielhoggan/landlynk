@@ -94,6 +94,9 @@ export function CatchmentMap({
   tagContextRef.current = tagContext;
   const sitesRef = useRef(sites);
   sitesRef.current = sites;
+  // The last run framed by fitBounds, so re-syncs (filters, overlays) never
+  // re-zoom a view the user has adjusted.
+  const framedKeyRef = useRef<string>("");
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -212,8 +215,6 @@ export function CatchmentMap({
           "circle-color": [
             "match",
             ["get", "sourceType"],
-            "allocation",
-            "#C9A24B",
             "permission",
             "#C04A1F",
             "#1F5A3C",
@@ -228,11 +229,9 @@ export function CatchmentMap({
         if (!p) return;
         const cap = p.capacity ? String(p.capacity) : "";
         const typeLabel =
-          p.sourceType === "allocation"
-            ? "Allocated land"
-            : p.sourceType === "permission"
-              ? "Competitor development"
-              : "Brownfield land";
+          p.sourceType === "permission"
+            ? "Competitor development"
+            : "Brownfield land";
         popup
           .setLngLat(e.lngLat)
           .setHTML(
@@ -288,23 +287,34 @@ export function CatchmentMap({
     const isoSource = map.getSource("isochrone") as
       | maplibregl.GeoJSONSource
       | undefined;
-    // Frame the catchment: prefer the isochrone outline, but fall back to the
-    // area polygons when there is no isochrone (radius-mode or older runs),
-    // otherwise the map stays at the UK-wide default zoom and the segments,
-    // though drawn, are too small to see.
-    let frame: maplibregl.LngLatBoundsLike | null = null;
     if (isochrone) {
       isoSource?.setData({
         type: "Feature",
         geometry: isochrone as GeoJSON.Geometry,
         properties: {},
       });
-      frame = bounds(isochrone as GeoJSON.Geometry);
     } else {
       isoSource?.setData(emptyFc());
     }
-    if (!frame) frame = boundsOfFeatures(areaFc);
-    if (frame) map.fitBounds(frame, { padding: 40, duration: 600 });
+
+    // Frame the catchment: prefer the isochrone outline, falling back to the
+    // area polygons when there is none (radius-mode or older runs), otherwise
+    // the map stays at the UK-wide default zoom. Re-frame only when the run
+    // itself changes, never on filter toggles or when the competitor overlay
+    // arrives seconds later, so a zoom the user has set is not yanked away.
+    const frameKey = `${areas.map((a) => a.areaCode).join(",")}|${
+      isochrone ? "iso" : "none"
+    }`;
+    if (frameKey !== framedKeyRef.current) {
+      let frame: maplibregl.LngLatBoundsLike | null = isochrone
+        ? bounds(isochrone as GeoJSON.Geometry)
+        : null;
+      if (!frame) frame = boundsOfFeatures(areaFc);
+      if (frame) {
+        map.fitBounds(frame, { padding: 40, duration: 600 });
+        framedKeyRef.current = frameKey;
+      }
+    }
 
     const sitesSource = map.getSource("sites") as
       | maplibregl.GeoJSONSource

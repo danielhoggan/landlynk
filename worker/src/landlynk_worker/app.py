@@ -404,9 +404,11 @@ def submit_catchment_job(
     )
     # Record the run against the allowance now, on submission. This is an
     # append-only tally, so deleting or archiving the catchment later never
-    # reclaims the run.
+    # reclaims the run. Only external users count against the group's pool;
+    # internal and admin runs (demos, rehearsals) are logged without a group
+    # so they never drain a client's allowance.
     get_store().record_job_usage(
-        user.get("email"), _active_group(user), job_id, _usage_period()
+        user.get("email"), _quota_group(user), job_id, _usage_period()
     )
     background.add_task(_run_job, job_id, request, config)
     _audit(
@@ -542,6 +544,16 @@ def _active_group(user: dict) -> str | None:
     return user.get("builderGroupId")
 
 
+def _quota_group(user: dict) -> str | None:
+    """The group a usage record counts against: the active group for external
+    users, none for internal staff and admins, whose runs and AI lookups must
+    never drain a client's pooled monthly allowance. Cost auditing still keeps
+    the group in the audit detail."""
+    if user.get("role") != "external-user":
+        return None
+    return _active_group(user)
+
+
 def _scope_group(user: dict) -> str | None:
     """The group a user is restricted to, or None to see all profiles.
 
@@ -587,7 +599,10 @@ def _llm_usage_summary(user: dict) -> dict:
     model = _default_model()
     est_cost = model_cost(model) if model else 0.0
     group_id = _active_group(user)
-    if user.get("role") == "admin" or not group_id:
+    # Only external (client) users are metered. Internal staff and admins are
+    # unmetered even with a client brand active, so a demo or an internal job
+    # never hits, or drains, the client's allowance.
+    if user.get("role") != "external-user" or not group_id:
         return {
             "period": period,
             "metered": False,
@@ -641,7 +656,9 @@ def _job_usage_summary(user: dict) -> dict:
     active brand's group, resets on the 1st, unmetered for internal users."""
     period = _usage_period()
     group_id = _active_group(user)
-    if user.get("role") == "admin" or not group_id:
+    # External users only, matching the AI allowance: internal staff never hit
+    # a client's run cap.
+    if user.get("role") != "external-user" or not group_id:
         return {
             "period": period,
             "metered": False,
@@ -1138,7 +1155,7 @@ def area_profile(
     cost = token_cost(model, in_tok, out_tok)
 
     active_group = _active_group(user)
-    store.record_llm_usage(user.get("email"), active_group, model, _usage_period())
+    store.record_llm_usage(user.get("email"), _quota_group(user), model, _usage_period())
     store.save_area_profile(cache_key, model, payload)
     _audit(
         user,
@@ -1244,9 +1261,12 @@ def marketing_activation(
             status_code=503, detail="No AI model configured. Add a provider key."
         )
 
-    intent = request.intent or ((catchment.get("input") or {}).get("config") or {}).get(
+    # Key the cache on the run's persisted intent (falling back to the request
+    # only when none is stored), exactly as the cached-only GET derives it, so
+    # a generated plan is always found again on reopen.
+    intent = ((catchment.get("input") or {}).get("config") or {}).get(
         "intent"
-    )
+    ) or request.intent
     cache_key = _marketing_key(codes, model, intent)
     if not request.refresh:
         cached = store.get_config(cache_key)
@@ -1274,7 +1294,7 @@ def marketing_activation(
 
     record = {"model": model, "intent": intent, **payload}
     active_group = _active_group(user)
-    store.record_llm_usage(user.get("email"), active_group, model, _usage_period())
+    store.record_llm_usage(user.get("email"), _quota_group(user), model, _usage_period())
     store.set_config(cache_key, record)
     _audit(
         user,
@@ -1674,6 +1694,12 @@ def catchment_sites(
     geom = _catchment_geometry(catchment_id)
     if not geom:
         return {"sites": []}
+    # geo_boundaries holds both MSOA and LA polygons; joining without the run's
+    # area type matches each site to both, duplicating every pin and tagging
+    # areas the run does not use.
+    catchment = get_store().get_catchment(catchment_id)
+    areas = (catchment or {}).get("areas", [])
+    area_type = areas[0].get("areaType", "MSOA") if areas else "MSOA"
     sites: list[dict] = []
     try:
         with get_pool().connection() as conn:
@@ -1681,11 +1707,12 @@ def catchment_sites(
                 "SELECT s.reference, s.name, s.hectares, s.min_dwellings, "
                 "s.max_dwellings, s.lat, s.lng, b.area_code "
                 "FROM development_site s "
-                "LEFT JOIN geo_boundaries b ON ST_Within(s.geom, b.geom) "
+                "LEFT JOIN geo_boundaries b "
+                "ON b.area_type = %s AND ST_Within(s.geom, b.geom) "
                 "WHERE ST_Within(s.geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
                 "AND s.source_type = 'brownfield' "
                 "ORDER BY s.max_dwellings DESC NULLS LAST LIMIT 1500",
-                [json.dumps(geom)],
+                [area_type, json.dumps(geom)],
             ).fetchall()
         sites = [
             {
@@ -1715,7 +1742,11 @@ def catchment_benchmarks(
     effort: empty without a database."""
     _require_access(catchment_id, user)
     catchment = get_store().get_catchment(catchment_id)
-    codes = [a["areaCode"] for a in (catchment or {}).get("areas", [])]
+    areas = (catchment or {}).get("areas", [])
+    codes = [a["areaCode"] for a in areas]
+    # National averages over the run's own area level only; MSOA and LA rows
+    # both live in these tables and blending them skews the benchmark.
+    area_type = areas[0].get("areaType", "MSOA") if areas else "MSOA"
     out: dict = {"metrics": {}, "income": {}}
 
     def f1(v: object) -> float | None:
@@ -1725,7 +1756,10 @@ def catchment_benchmarks(
         with get_pool().connection() as conn:
             nat = dict(
                 conn.execute(
-                    "SELECT metric_key, AVG(value) FROM area_metric GROUP BY metric_key"
+                    "SELECT am.metric_key, AVG(am.value) FROM area_metric am "
+                    "JOIN geo_boundaries gb ON gb.area_code = am.area_code "
+                    "WHERE gb.area_type = %s GROUP BY am.metric_key",
+                    [area_type],
                 ).fetchall()
             )
             cat = (
@@ -1740,7 +1774,10 @@ def catchment_benchmarks(
                 else {}
             )
             nat_inc = conn.execute(
-                "SELECT AVG(mean_income) FROM income_estimates"
+                "SELECT AVG(ie.mean_income) FROM income_estimates ie "
+                "JOIN geo_boundaries gb ON gb.area_code = ie.area_code "
+                "WHERE gb.area_type = %s",
+                [area_type],
             ).fetchone()
             cat_inc = (
                 conn.execute(
@@ -1910,11 +1947,17 @@ def catchment_verdict(
     verdict = _appraisal_verdict(_combined_card(catchment_id, request))
     verdict["supply"] = _site_supply(_catchment_geometry(catchment_id))
     # Whether the run carried an explicit target price. When it did not, the
-    # price from is the engine default, so the UI must not present the price fit
-    # as if the user chose that price.
+    # stored band is the engine default, so the UI must not present the price
+    # fit as if the user chose that price.
+    from .storage import stored_price_set
+
     catchment = get_store().get_catchment(catchment_id)
     config = ((catchment or {}).get("input") or {}).get("config") or {}
-    verdict["priceSet"] = bool((config.get("priceBand") or {}).get("from"))
+    verdict["priceSet"] = stored_price_set(config)
+    if not verdict["priceSet"]:
+        # No chosen price: report demand and supply, never a fabricated fit.
+        verdict["priceFit"] = "unknown"
+        verdict["priceFrom"] = None
     return verdict
 
 

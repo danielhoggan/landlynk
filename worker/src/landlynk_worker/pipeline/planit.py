@@ -134,8 +134,11 @@ def fetch_competitor_sites(
             "start_date": start_date,
         }
         try:
+            # Tiles normally answer in 2 to 5 seconds; a tight timeout keeps a
+            # struggling PlanIt from pinning the verdict or an export for the
+            # full worst case (tiles x waves). A slow tile just drops out.
             with httpx.Client(
-                timeout=25.0, headers={"User-Agent": "LandLynk/1.0 (+catchment)"}
+                timeout=10.0, headers={"User-Agent": "LandLynk/1.0 (+catchment)"}
             ) as client:
                 resp = client.get(url, params=params)
                 resp.raise_for_status()

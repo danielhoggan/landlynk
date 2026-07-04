@@ -16,9 +16,7 @@ clearly AI-generated for review and never feeds the scoring.
 
 from __future__ import annotations
 
-import json
-
-from .area_profile import _TRANSPORTS, Transport
+from .area_profile import _TRANSPORTS, Transport, extract_json
 from .models import model_provider
 
 # The structured shape we ask the model for. Keeping the keys explicit in the
@@ -110,11 +108,16 @@ def _coerce_share(value: object) -> int | None:
         return None
 
 
+def _dicts(items: object) -> list[dict]:
+    """Only the dict entries of a model-supplied list, so a stray string in an
+    otherwise valid reply does not fail the whole parse."""
+    return [i for i in (items if isinstance(items, list) else []) if isinstance(i, dict)]
+
+
 def _parse(text: str) -> dict:
-    clean = text.replace("```json", "").replace("```", "").strip()
-    parsed = json.loads(clean)
+    parsed = extract_json(text)
     budget_tiers = []
-    for t in parsed.get("budgetTiers", []) or []:
+    for t in _dicts(parsed.get("budgetTiers")):
         budget_tiers.append(
             {
                 "tier": t.get("tier", ""),
@@ -124,14 +127,14 @@ def _parse(text: str) -> dict:
             }
         )
     channel_mix = []
-    for m in parsed.get("channelMix", []) or []:
+    for m in _dicts(parsed.get("channelMix")):
         channels = [
             {
                 "channel": c.get("channel", ""),
                 "sharePct": _coerce_share(c.get("sharePct")),
                 "role": c.get("role", ""),
             }
-            for c in (m.get("channels", []) or [])
+            for c in _dicts(m.get("channels"))
         ]
         channel_mix.append({"tier": m.get("tier", ""), "channels": channels})
     search_themes = [
@@ -140,7 +143,7 @@ def _parse(text: str) -> dict:
             "exampleKeywords": [str(k) for k in (s.get("exampleKeywords", []) or [])],
             "intent": s.get("intent", ""),
         }
-        for s in (parsed.get("searchThemes", []) or [])
+        for s in _dicts(parsed.get("searchThemes"))
     ]
     meta_audiences = [
         {
@@ -148,7 +151,7 @@ def _parse(text: str) -> dict:
             "definition": a.get("definition", ""),
             "creativeAngle": a.get("creativeAngle", ""),
         }
-        for a in (parsed.get("metaAudiences", []) or [])
+        for a in _dicts(parsed.get("metaAudiences"))
     ]
     return {
         "summary": parsed.get("summary", ""),
@@ -163,7 +166,7 @@ def _parse(text: str) -> dict:
                 "target": k.get("target", ""),
                 "why": k.get("why", ""),
             }
-            for k in (parsed.get("kpis", []) or [])
+            for k in _dicts(parsed.get("kpis"))
         ],
     }
 

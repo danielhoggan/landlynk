@@ -36,6 +36,8 @@ interface BattlecardDrawerProps {
   areaGeometry?: GeoJsonGeometry | null;
   /** Catchment and national benchmarks, for good/bad comparisons. */
   benchmarks?: CatchmentBenchmarks | null;
+  /** Load failure message, so the drawer is not stuck on "Loading" forever. */
+  error?: string | null;
 }
 
 // Clicking a region opens its deep-dive in the slide-out drawer, never a full
@@ -55,6 +57,7 @@ export function BattlecardDrawer({
   audienceSegment,
   areaGeometry,
   benchmarks,
+  error,
 }: BattlecardDrawerProps) {
   // Mount gate so the portal target (document.body) exists before rendering.
   const [mounted, setMounted] = useState(false);
@@ -128,7 +131,7 @@ export function BattlecardDrawer({
                 <p className="text-xs text-neutral-500">
                   {catchmentHasSites
                     ? "No brownfield register sites fall in this area. Other areas in the catchment have plots, shown on the map and ranking."
-                    : "No brownfield register sites loaded for this catchment. Load the Development sites data (Reference data) and re-run to see buildable plots."}
+                    : "No brownfield register sites loaded for this catchment. An admin can load the Development sites data on Reference data; re-run to see buildable plots."}
                 </p>
               ) : (
                 <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
@@ -139,12 +142,10 @@ export function BattlecardDrawer({
                         : s.maxDwellings != null
                           ? `${s.maxDwellings} homes`
                           : null;
+                    // Competitor permissions red, brownfield green, matching
+                    // the map legend.
                     const dot =
-                      s.sourceType === "allocation"
-                        ? "#C9A24B"
-                        : s.sourceType === "permission"
-                          ? "#C04A1F"
-                          : "#1F5A3C";
+                      s.sourceType === "permission" ? "#C04A1F" : "#1F5A3C";
                     return (
                       <li
                         key={s.reference ?? i}
@@ -160,9 +161,15 @@ export function BattlecardDrawer({
                             {s.name ?? s.reference ?? "Site"}
                           </span>
                         </span>
-                        <span className="shrink-0 font-semibold text-light-accent">
-                          {cap ?? (s.hectares != null ? `${s.hectares} ha` : "")}
-                        </span>
+                        {cap != null || s.hectares != null ? (
+                          <span className="shrink-0 font-semibold text-light-accent">
+                            {cap ?? `${s.hectares} ha`}
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-neutral-400">
+                            size n/a
+                          </span>
+                        )}
                       </li>
                     );
                   })}
@@ -237,6 +244,10 @@ export function BattlecardDrawer({
             </section>
           )}
         </div>
+      ) : error ? (
+        <p className="rounded-card border border-priority-low/40 bg-priority-low/10 p-3 text-sm text-neutral-700">
+          {error}
+        </p>
       ) : (
         <p className="text-sm text-neutral-500">Loading Battlecard...</p>
       )}

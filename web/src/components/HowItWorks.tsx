@@ -276,7 +276,8 @@ export function HowItWorks() {
           </Card>
           <Card icon={Gauge} title="Seconds, not hours">
             Defining a catchment by eye used to take 15 to 30 minutes per site.
-            Here it is an automated sub-second lookup, repeatable at scale.
+            Here an automated run builds and ranks it in seconds, repeatable at
+            scale.
           </Card>
           <Card icon={Scale} title="Ranked priorities">
             Areas are scored and ordered, so you see where to focus spend and
@@ -312,7 +313,7 @@ export function HowItWorks() {
               icon: Route,
               step: "2",
               title: "Choose the catchment",
-              body: "Build a 30-minute drive-time zone, or switch to a straight radius for dense cities. The areas inside it are found and weighted by how much of each falls in the zone.",
+              body: "Build a drive-time zone (30 minutes by default, tunable per run), or switch to a straight radius for dense cities. The areas inside it are found and weighted by how much of each falls in the zone.",
             },
             {
               icon: Layers,

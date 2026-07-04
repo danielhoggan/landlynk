@@ -120,9 +120,12 @@ export function BattlecardInsights({
                   {bm?.national != null && (
                     <p className="mt-0.5 text-[10px] text-neutral-400">
                       <span className={tone}>
-                        {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} UK {bm.national}
+                        {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} UK avg{" "}
+                        {bm.national}
                       </span>
-                      {bm.catchment != null ? ` · area ${bm.catchment}` : ""}
+                      {bm.catchment != null
+                        ? ` · catchment avg ${bm.catchment}`
+                        : ""}
                     </p>
                   )}
                 </div>

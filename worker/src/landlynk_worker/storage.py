@@ -106,11 +106,33 @@ def _build_cost_report(items: list[dict]) -> dict:
     }
 
 
+def stored_price_set(config: dict | None) -> bool:
+    """Whether a stored run config carried an explicit target price.
+
+    Configs persisted since the flag landed carry priceSet. Older ones always
+    stored the engine default band (250k to 400k) even when the user set none,
+    so for those the band only counts when it differs from that default. Keeps
+    the drawer, the verdict and the exports from asserting a price story the
+    user never chose.
+    """
+    if not config:
+        return False
+    if config.get("priceSet") is not None:
+        return bool(config["priceSet"])
+    band = config.get("priceBand") or {}
+    if not band.get("from"):
+        return False
+    return not (band.get("from") == 250_000 and band.get("to") == 400_000)
+
+
 def scoring_config_to_dict(config: ScoringConfig) -> dict:
     """Serialise the scoring config stored with a catchment for reproducibility."""
     return {
         "weights": config.weights,
         "priceBand": {"from": config.price_band.frm, "to": config.price_band.to},
+        # Whether the user set the band (else it is the engine default above and
+        # no price story should be asserted from it).
+        "priceSet": config.price_set,
         "bedRange": config.bed_range,
         "overlapThreshold": config.overlap_threshold,
         "driveTimeMinutes": config.drive_time_minutes,

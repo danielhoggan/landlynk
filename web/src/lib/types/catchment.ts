@@ -55,6 +55,9 @@ export interface CatchmentInput {
 export interface StoredConfig {
   weights?: Record<string, number>;
   priceBand?: { from: number; to: number };
+  /** Whether the run carried an explicit target price (the stored band is the
+   * engine default otherwise). Absent on runs saved before the flag landed. */
+  priceSet?: boolean;
   bedRange?: string;
   overlapThreshold?: number;
   driveTimeMinutes?: number;

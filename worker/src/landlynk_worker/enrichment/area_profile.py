@@ -103,7 +103,11 @@ def _google(model: str, prompt: str) -> tuple[str, dict]:
     resp = httpx.post(
         url,
         headers={"content-type": "application/json"},
-        json={"contents": [{"parts": [{"text": prompt}]}]},
+        json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            # Force a JSON reply, matching the OpenAI transport's response_format.
+            "generationConfig": {"responseMimeType": "application/json"},
+        },
         timeout=60.0,
     )
     resp.raise_for_status()
@@ -125,11 +129,26 @@ _TRANSPORTS: dict[str, Transport] = {
 }
 
 
-def _parse(text: str) -> dict:
+def extract_json(text: str) -> dict:
+    """Parse the JSON object out of an LLM reply, tolerating code fences and
+    prose around it ("Here is the profile: {...}"). Shared by the enrichment
+    parsers so a slightly-off reply does not fail the whole generation."""
     clean = text.replace("```json", "").replace("```", "").strip()
+    start, end = clean.find("{"), clean.rfind("}")
+    if start != -1 and end > start:
+        clean = clean[start : end + 1]
     parsed = json.loads(clean)
+    if not isinstance(parsed, dict):
+        raise ValueError("Model reply was not a JSON object")
+    return parsed
+
+
+def _parse(text: str) -> dict:
+    parsed = extract_json(text)
     amenities = []
-    for a in parsed.get("amenities", []):
+    for a in parsed.get("amenities", []) or []:
+        if not isinstance(a, dict):
+            continue
         category = a.get("category", "Other")
         if category not in AMENITY_CATEGORIES:
             category = "Other"

@@ -34,8 +34,8 @@ export default function ArchivedPage() {
       )}
       {items && items.length === 0 && (
         <p className="text-sm text-neutral-500">
-          Nothing archived. Archive a run from the history to tuck it away here
-          without deleting it.
+          Nothing archived. Archive a run from Previous catchments to tuck it
+          away here without deleting it.
         </p>
       )}
 

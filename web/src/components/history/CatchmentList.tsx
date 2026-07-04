@@ -143,7 +143,12 @@ export function CatchmentList({
                   label="Delete"
                   danger
                   disabled={busy === item.id}
-                  onClick={() => onDelete(item.id, item.developmentName)}
+                  onClick={() =>
+                    onDelete(
+                      item.id,
+                      item.developmentName?.trim() || item.inputValue,
+                    )
+                  }
                 >
                   <Trash2 size={16} />
                 </IconButton>

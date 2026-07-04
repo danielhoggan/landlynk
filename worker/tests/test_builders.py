@@ -226,17 +226,27 @@ def test_brand_industry_and_usage_scoped_to_active_brand(client):
         headers=_h("ext@x.com"),
     )
     client.put("/admin/users/ext@x.com/brands", json={"brandIds": [b]})
+    client.put("/admin/users/ext@x.com/role", json={"role": "external-user"})
 
     brand = client.get("/me", headers=_h("ext@x.com")).json()["brands"][0]
     assert brand["industry"] == "retail" and brand["companyName"] == "Acme"
 
-    # With the brand active, usage is metered to that brand's group cap.
+    # With the brand active, an external user is metered to that group's cap.
     usage = client.get(
         "/builders/usage",
         headers={**_h("ext@x.com"), "X-Active-Brand": b},
     ).json()
     assert usage["metered"] is True and usage["cap"] == 5
     assert usage["resetsOn"].endswith("-01")
+
+    # Internal staff working under the same brand stay unmetered: a demo or an
+    # internal job never hits or drains the client's allowance.
+    client.put("/admin/users/ext@x.com/role", json={"role": "internal-user"})
+    internal_usage = client.get(
+        "/builders/usage",
+        headers={**_h("ext@x.com"), "X-Active-Brand": b},
+    ).json()
+    assert internal_usage["metered"] is False
 
 
 def test_job_run_allowance_meters_and_blocks(client, monkeypatch):

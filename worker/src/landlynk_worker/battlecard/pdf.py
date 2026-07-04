@@ -20,7 +20,7 @@ from pathlib import Path
 
 from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.graphics.charts.piecharts import Pie
-from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.shapes import Drawing, String
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4, landscape
@@ -279,6 +279,21 @@ def _bar_drawing(
     height: float,
 ) -> Drawing:
     d = Drawing(width, height)
+    if not values:
+        # Nothing to chart (all inputs suppressed or missing): say so rather
+        # than drawing an empty axis or crashing the render.
+        d.add(
+            String(
+                width / 2,
+                height / 2,
+                "Not available",
+                textAnchor="middle",
+                fontSize=8,
+                fillColor=colors.grey,
+                fontName=_BODY_FONT,
+            )
+        )
+        return d
     chart = VerticalBarChart()
     chart.x = 14
     chart.y = 24
@@ -470,22 +485,30 @@ def _card_flowables(
     charts = vs.charts
     cw = 62 * mm
     ch = 42 * mm
+    # Only chart what exists: a suppressed band or income figure must not
+    # render as a zero bar (null is never zero).
+    age_bands = [b for b in charts.age_demographics if b.percentage.value is not None]
     age = _bar_drawing(
-        [b.label for b in charts.age_demographics],
-        [_numf(b.percentage) for b in charts.age_demographics],
+        [b.label for b in age_bands],
+        [_numf(b.percentage) for b in age_bands],
         navy,
         cw,
         ch,
     )
     inc = charts.household_income
+    income_pairs = [
+        (label, value)
+        for label, value in [
+            ("Mean", inc.mean.value),
+            ("Median", inc.median.value),
+            ("Low LA", inc.lowest_la.value.value),
+            ("High LA", inc.highest_la.value.value),
+        ]
+        if value is not None
+    ]
     income = _bar_drawing(
-        ["Mean", "Median", "Low LA", "High LA"],
-        [
-            _numf(inc.mean),
-            _numf(inc.median),
-            _numf(inc.lowest_la.value),
-            _numf(inc.highest_la.value),
-        ],
+        [p[0] for p in income_pairs],
+        [float(p[1]) for p in income_pairs],
         navy,
         cw,
         ch,

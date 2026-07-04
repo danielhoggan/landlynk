@@ -21,13 +21,13 @@ export function RankingExplainer({
     intent === "find_site"
       ? [
           `Areas are scored on how well their residents fit ${audience}: the age profile, the tenure mix and the household types, weighted together with the size of the local market. The list is ordered by that fit, or by buildable land if you switch the sort.`,
-          `Suitable shows the stronger-fitting areas in this catchment and hides the weakest third; switch to All areas to see every area. Scores are relative to this catchment, so they compare the areas here rather than against a national bar.`,
+          `Suitable shows the stronger-fitting areas in this catchment and hides the low-fit band; switch to All areas to see every area. Scores are relative to this catchment, so they compare the areas here rather than against a national bar.`,
           `Green dots are brownfield plots (buildable land with dwelling capacity); red dots are competitor developments (recent residential planning applications nearby). Open any area for the exact signal-by-signal breakdown.`,
         ]
       : intent === "appraise"
         ? [
             `The verdict checks whether local incomes support your price (about ${mult}x household income), how deep demand is by buyer type, and how much buildable land and competing pipeline sit in the catchment.`,
-            `Areas are ranked on the land-acquisition signals: demand depth, addressable scale, income and low deprivation. Scores are relative to this catchment. Open any area for the exact signal-by-signal breakdown.`,
+            `Areas are ranked on the sales signals: income fit against the price, tenure mix, age profile, household types and the size of the local market. Scores are relative to this catchment. Open any area for the exact signal-by-signal breakdown.`,
           ]
         : [
             `Demand is sized from the catchment's households by buyer type. The recommendation is the deepest pool left once you mark what is already selling slowly, so the final phase leans toward under-served demand.`,

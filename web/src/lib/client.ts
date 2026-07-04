@@ -345,7 +345,7 @@ export interface DevelopmentSite {
   lng: number;
   /** The MSOA/LA the site falls in, for per-area listing. */
   areaCode: string | null;
-  /** "brownfield" | "allocation" | "permission". */
+  /** "brownfield" (register plots) | "permission" (competitor applications). */
   sourceType: string;
 }
 

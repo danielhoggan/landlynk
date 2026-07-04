@@ -10,11 +10,10 @@ const BASE_STYLE: string =
   process.env.NEXT_PUBLIC_MAP_STYLE ??
   "https://tiles.openfreemap.org/styles/liberty";
 
+// Competitor permissions red, brownfield green, matching the main map legend.
 const SITE_COLOR: maplibregl.ExpressionSpecification = [
   "match",
   ["get", "sourceType"],
-  "allocation",
-  "#C9A24B",
   "permission",
   "#C04A1F",
   "#1F5A3C",

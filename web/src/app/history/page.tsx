@@ -34,7 +34,7 @@ export default function HistoryPage() {
       )}
       {items && items.length === 0 && (
         <p className="text-sm text-neutral-500">
-          No catchments yet. Build one from the map view. Runs you create are
+          No catchments yet. Build one from New catchment. Runs you create are
           private to you; share them with colleagues from here.
         </p>
       )}

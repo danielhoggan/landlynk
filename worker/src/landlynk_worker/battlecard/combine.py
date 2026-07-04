@@ -132,6 +132,8 @@ def aggregate_profiles(profiles: list[AreaProfile]) -> AreaProfile:
 
 
 def _config_from_dict(d: dict | None) -> ScoringConfig:
+    from ..storage import stored_price_set
+
     base = ScoringConfig()
     if not d:
         return base
@@ -142,13 +144,19 @@ def _config_from_dict(d: dict | None) -> ScoringConfig:
             frm=pb.get("from", base.price_band.frm),
             to=pb.get("to", base.price_band.to),
         ),
-        price_set=bool(d.get("priceBand")),
+        # Stored configs always carry a band (the engine default when the user
+        # set none), so the flag, not the band's presence, decides whether a
+        # price story is asserted.
+        price_set=stored_price_set(d),
         bed_range=d.get("bedRange", base.bed_range),
         overlap_threshold=d.get("overlapThreshold", base.overlap_threshold),
         drive_time_minutes=d.get("driveTimeMinutes", base.drive_time_minutes),
         affordability_multiple=d.get(
             "affordabilityMultiple", base.affordability_multiple
         ),
+        segment=d.get("segment", base.segment),
+        objective=d.get("objective", base.objective),
+        intent=d.get("intent", base.intent),
         tenure_preference=d.get("tenurePreference") or base.tenure_preference,
         age_preference=d.get("agePreference") or base.age_preference,
         scale_saturation=d.get("scaleSaturation", base.scale_saturation),
