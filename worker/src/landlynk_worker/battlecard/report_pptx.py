@@ -659,10 +659,12 @@ def _plan(slide: Slide, card: Battlecard, theme: dict) -> None:
     demand = _segments_line(card)
     supply = theme.get("supply")
     if supply and (supply.get("buildablePlots") or supply.get("competitorSchemes")):
+        # Competitor homes are not derived from PlanIt (scheme counts only), so
+        # only the scheme count is shown, matching the on-screen Site verdict.
         demand += (
             f"  •  Buildable land {supply['buildablePlots']:,} plots "
             f"({supply['buildableHomes']:,} homes)  •  Competitor schemes "
-            f"{supply['competitorSchemes']:,} ({supply['competitorHomes']:,} homes)"
+            f"{supply['competitorSchemes']:,}"
         )
     cards = [
         ("PRIMARY TARGET SEGMENTS", segments),

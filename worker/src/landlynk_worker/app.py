@@ -1779,15 +1779,37 @@ def catchment_competitors(
     return {"sites": _competitor_sites(catchment_id, geom)}
 
 
+# The competitor pill, the Site verdict and the report export all need the same
+# PlanIt result for a catchment, so cache it in-process for a short window
+# rather than sweeping the national API three times per page. A failed or empty
+# fetch is kept only briefly, so a PlanIt blip does not pin zero competitors.
+_COMPETITOR_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_COMPETITOR_TTL = 900.0
+_COMPETITOR_EMPTY_TTL = 60.0
+
+
 def _live_competitors(geom: dict) -> list[dict]:
     """Residential planning applications in the catchment, live from PlanIt."""
     if not settings.planit_enabled:
         return []
+    import hashlib
+    import time
+
+    key = hashlib.sha256(json.dumps(geom, sort_keys=True).encode()).hexdigest()
+    hit = _COMPETITOR_CACHE.get(key)
+    if hit is not None:
+        age = time.monotonic() - hit[0]
+        if age < (_COMPETITOR_TTL if hit[1] else _COMPETITOR_EMPTY_TTL):
+            return hit[1]
     from .pipeline.planit import fetch_competitor_sites
 
-    return fetch_competitor_sites(
+    sites = fetch_competitor_sites(
         geom, settings.planit_base_url, settings.planit_lookback_days
     )
+    if len(_COMPETITOR_CACHE) > 64:  # bound the cache across many catchments
+        _COMPETITOR_CACHE.clear()
+    _COMPETITOR_CACHE[key] = (time.monotonic(), sites)
+    return sites
 
 
 @app.get("/admin/diagnostics/planit")

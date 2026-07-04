@@ -92,14 +92,18 @@ export function MarketingActivationPanel({
           </span>
         </h2>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => (playbook ? run(false) : setPending({ refresh: false }))}
-            disabled={busy}
-            className="rounded-card bg-light-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
-          >
-            {busy ? "Generating..." : playbook ? "View plan" : "Generate plan"}
-          </button>
+          {/* The plan renders below once generated, so the primary action is
+              only offered while there is none; regenerate stays available. */}
+          {!playbook && (
+            <button
+              type="button"
+              onClick={() => setPending({ refresh: false })}
+              disabled={busy}
+              className="rounded-card bg-light-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
+            >
+              {busy ? "Generating..." : "Generate plan"}
+            </button>
+          )}
           {playbook && (
             <button
               type="button"
@@ -109,7 +113,7 @@ export function MarketingActivationPanel({
               title="Regenerate"
               className="rounded-card border border-neutral-300 p-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
             >
-              <RefreshCw size={14} />
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
             </button>
           )}
         </div>
