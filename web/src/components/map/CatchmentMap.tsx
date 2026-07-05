@@ -179,7 +179,13 @@ export function CatchmentMap({
         const area = areasRef.current.find((a) => a.areaCode === code);
         if (area) onSelectRef.current(area);
       });
-      map.on("mousemove", "areas-fill", (e) => {
+      // A tap fires synthetic mouse events: mousemove opens the hover popup and
+      // the synthetic hover then ends, so mouseleave removes it a beat later.
+      // Hover popups are therefore bound only where a real pointer can hover;
+      // on touch, taps open popups via click and the close button dismisses.
+      const canHover = window.matchMedia("(hover: hover)").matches;
+
+      if (canHover) map.on("mousemove", "areas-fill", (e) => {
         const f = e.features?.[0];
         if (!f) return;
         map.getCanvas().style.cursor = "pointer";
@@ -199,7 +205,7 @@ export function CatchmentMap({
           )
           .addTo(map);
       });
-      map.on("mouseleave", "areas-fill", () => {
+      if (canHover) map.on("mouseleave", "areas-fill", () => {
         map.getCanvas().style.cursor = "";
         popup.remove();
       });
@@ -244,11 +250,11 @@ export function CatchmentMap({
           )
           .addTo(map);
       };
-      map.on("mousemove", "sites-circle", (e) => {
+      if (canHover) map.on("mousemove", "sites-circle", (e) => {
         map.getCanvas().style.cursor = "pointer";
         showSitePopup(e);
       });
-      map.on("mouseleave", "sites-circle", () => {
+      if (canHover) map.on("mouseleave", "sites-circle", () => {
         map.getCanvas().style.cursor = "";
         popup.remove();
       });

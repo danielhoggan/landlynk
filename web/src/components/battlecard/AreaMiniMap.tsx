@@ -42,7 +42,15 @@ export function AreaMiniMap({
       new maplibregl.NavigationControl({ showCompass: false }),
       "top-right",
     );
-    const popup = new maplibregl.Popup({ closeButton: false, offset: 10 });
+    // Hover popups only work with a real pointer: a tap's synthetic hover ends
+    // a beat after it starts, which removed the popup almost immediately. On
+    // touch, taps open the popup via click and the close button dismisses it.
+    const canHover = window.matchMedia("(hover: hover)").matches;
+    const popup = new maplibregl.Popup({
+      closeButton: !canHover,
+      closeOnClick: false,
+      offset: 10,
+    });
 
     map.on("load", () => {
       const b = new maplibregl.LngLatBounds();
@@ -106,15 +114,20 @@ export function AreaMiniMap({
         any = true;
       });
 
-      map.on("mouseenter", "plots", () => (map.getCanvas().style.cursor = "pointer"));
-      map.on("mouseleave", "plots", () => {
-        map.getCanvas().style.cursor = "";
-        popup.remove();
-      });
-      map.on("mousemove", "plots", (e) => {
+      const showPlotPopup = (e: maplibregl.MapLayerMouseEvent) => {
         const name = e.features?.[0]?.properties?.name as string | undefined;
         if (name) popup.setLngLat(e.lngLat).setHTML(`<div class="text-xs">${name}</div>`).addTo(map);
-      });
+      };
+      if (canHover) {
+        map.on("mouseenter", "plots", () => (map.getCanvas().style.cursor = "pointer"));
+        map.on("mouseleave", "plots", () => {
+          map.getCanvas().style.cursor = "";
+          popup.remove();
+        });
+        map.on("mousemove", "plots", showPlotPopup);
+      }
+      // Tap a plot (mobile) to see its name; the popup stays until closed.
+      map.on("click", "plots", showPlotPopup);
 
       if (any) map.fitBounds(b, { padding: 28, maxZoom: 15, duration: 0 });
     });

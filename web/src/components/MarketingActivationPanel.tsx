@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Megaphone, RefreshCw } from "lucide-react";
+import { ChevronDown, Megaphone, RefreshCw } from "lucide-react";
 import {
   generateMarketingPlaybook,
   getMarketingPlaybook,
@@ -82,41 +82,54 @@ export function MarketingActivationPanel({
     "Already-generated plans are free.";
 
   return (
-    <div className="rounded-card border border-neutral-200 bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
+    // Collapsible (same accordion pattern as the ranking explainer) so the
+    // optional internal tool does not dominate the page; the summary pill says
+    // when a plan already exists without expanding.
+    <details className="group rounded-card border border-neutral-200 bg-white">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-sm font-semibold">
+        <span className="flex flex-wrap items-center gap-2">
           <Megaphone size={16} className="text-light-accent" /> Marketing
           activation
           <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
             Internal
           </span>
-        </h2>
-        <div className="flex items-center gap-2">
-          {/* The plan renders below once generated, so the primary action is
-              only offered while there is none; regenerate stays available. */}
-          {!playbook && (
-            <button
-              type="button"
-              onClick={() => setPending({ refresh: false })}
-              disabled={busy}
-              className="rounded-card bg-light-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
-            >
-              {busy ? "Generating..." : "Generate plan"}
-            </button>
-          )}
           {playbook && (
-            <button
-              type="button"
-              onClick={() => setPending({ refresh: true })}
-              disabled={busy}
-              aria-label="Regenerate"
-              title="Regenerate"
-              className="rounded-card border border-neutral-300 p-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-            </button>
+            <span className="rounded-full bg-light-accent/10 px-2 py-0.5 text-[10px] font-semibold text-light-accent">
+              Plan ready
+            </span>
           )}
-        </div>
+        </span>
+        <ChevronDown
+          size={16}
+          className="shrink-0 text-neutral-400 transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div className="px-4 pb-4">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* The plan renders below once generated, so the primary action is
+            only offered while there is none; regenerate stays available. */}
+        {!playbook && (
+          <button
+            type="button"
+            onClick={() => setPending({ refresh: false })}
+            disabled={busy}
+            className="rounded-card bg-light-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
+          >
+            {busy ? "Generating..." : "Generate plan"}
+          </button>
+        )}
+        {playbook && (
+          <button
+            type="button"
+            onClick={() => setPending({ refresh: true })}
+            disabled={busy}
+            aria-label="Regenerate"
+            title="Regenerate"
+            className="rounded-card border border-neutral-300 p-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+          </button>
+        )}
       </div>
 
       {pending && (
@@ -295,7 +308,8 @@ export function MarketingActivationPanel({
           </p>
         </div>
       )}
-    </div>
+      </div>
+    </details>
   );
 }
 
