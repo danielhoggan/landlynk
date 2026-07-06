@@ -133,19 +133,21 @@ def fetch_competitor_sites(
             "app_size": "Large,Medium",
             "start_date": start_date,
         }
-        try:
-            # Tiles normally answer in 2 to 5 seconds; a tight timeout keeps a
-            # struggling PlanIt from pinning the verdict or an export for the
-            # full worst case (tiles x waves). A slow tile just drops out.
-            with httpx.Client(
-                timeout=10.0, headers={"User-Agent": "LandLynk/1.0 (+catchment)"}
-            ) as client:
-                resp = client.get(url, params=params)
-                resp.raise_for_status()
-                return resp.json()
-        except Exception as exc:  # pragma: no cover - network path
-            log.warning("PlanIt tile fetch failed: %s", exc)
-            return {}
+        # PlanIt answers a cold bbox slowly (about 20s while it builds its own
+        # cache) and repeats in 2 to 3s, so a tight timeout silently drops every
+        # first-time tile. Give the cold query room and retry once: the retry
+        # rides PlanIt's warmed cache and returns fast.
+        for attempt in (1, 2):
+            try:
+                with httpx.Client(
+                    timeout=25.0, headers={"User-Agent": "LandLynk/1.0 (+catchment)"}
+                ) as client:
+                    resp = client.get(url, params=params)
+                    resp.raise_for_status()
+                    return resp.json()
+            except Exception as exc:  # pragma: no cover - network path
+                log.warning("PlanIt tile fetch failed (attempt %s): %s", attempt, exc)
+        return {}
 
     tiles = _tiles(poly.bounds)
     seen: set = set()
