@@ -10,7 +10,14 @@ import type {
 } from "@/lib/types/catchment";
 import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/lib/priority";
 import { tagsForArea, type TagContext } from "@/lib/areaTags";
-import type { DevelopmentSite } from "@/lib/client";
+import type { DevelopmentSite, CouncilBoundary } from "@/lib/client";
+
+/** Metric the area fill is shaded by; "band" is the priority ranking. */
+export type ShadeBy = "band" | "income" | "housePrice" | "ownerOccupied";
+
+/** Choropleth ramp, light to dark LandLynk green; grey marks no data. */
+export const SHADE_RAMP = ["#E7F0E9", "#1F5A3C"] as const;
+export const SHADE_NO_DATA = "#CBCBCB";
 
 interface CatchmentMapProps {
   areas: CatchmentArea[];
@@ -24,6 +31,10 @@ interface CatchmentMapProps {
   tagContext?: TagContext;
   /** Brownfield development sites to overlay (Find a site). */
   sites?: DevelopmentSite[];
+  /** Shade the areas by a data metric instead of the priority band. */
+  shadeBy?: ShadeBy;
+  /** Council (LA) boundaries to outline and label over the areas. */
+  councils?: CouncilBoundary[];
 }
 
 // Open vector base map. OpenFreeMap is free, OSM-based and needs no API key, so
@@ -42,7 +53,9 @@ function areasToFeatures(
   areas: CatchmentArea[],
   matchedCodes: Set<string> | null | undefined,
   tagContext?: TagContext,
+  shadeBy: ShadeBy = "band",
 ): GeoJSON.FeatureCollection {
+  const shade = shadeColours(areas, shadeBy);
   return {
     type: "FeatureCollection",
     features: areas
@@ -59,6 +72,7 @@ function areasToFeatures(
           income: a.metrics?.income ?? null,
           housePrice: a.metrics?.housePrice ?? null,
           ownerOccupied: a.metrics?.ownerOccupied ?? null,
+          shadeColor: shade(a),
           tags: tagsForArea(a, tagContext)
             .map((t) => t.label)
             .join(", "),
@@ -72,6 +86,52 @@ function areasToFeatures(
 // is a translucent overlay; each region is colour-coded by priority band,
 // dimmed when filtered out, hoverable for its key numbers, and clickable to open
 // the deep-dive.
+// The priority-band fill, the default shading.
+const BAND_FILL: maplibregl.ExpressionSpecification = [
+  "match",
+  ["get", "band"],
+  "high",
+  PRIORITY_COLORS.high,
+  "mid",
+  PRIORITY_COLORS.mid,
+  "low",
+  PRIORITY_COLORS.low,
+  "#999999",
+];
+
+function hexLerp(a: string, b: string, t: number): string {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  return `#${pa
+    .map((v, i) =>
+      Math.round(v + (pb[i] - v) * t)
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
+// Colour per area for the chosen shading: a linear ramp over the metric's
+// range in this catchment, grey where the area has no value. Computed in JS
+// and stored on the feature, so the paint layer just reads it.
+function shadeColours(
+  areas: CatchmentArea[],
+  shadeBy: ShadeBy,
+): (a: CatchmentArea) => string | null {
+  if (shadeBy === "band") return () => null;
+  const vals = areas
+    .map((a) => a.metrics?.[shadeBy])
+    .filter((v): v is number => v != null);
+  const min = vals.length ? Math.min(...vals) : 0;
+  const max = vals.length ? Math.max(...vals) : 0;
+  return (a) => {
+    const v = a.metrics?.[shadeBy];
+    if (v == null || !vals.length) return SHADE_NO_DATA;
+    if (min === max) return SHADE_RAMP[1];
+    return hexLerp(SHADE_RAMP[0], SHADE_RAMP[1], (v - min) / (max - min));
+  };
+}
+
 export function CatchmentMap({
   areas,
   isochrone,
@@ -81,6 +141,8 @@ export function CatchmentMap({
   matchedCodes,
   tagContext,
   sites,
+  shadeBy = "band",
+  councils,
 }: CatchmentMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -141,17 +203,7 @@ export function CatchmentMap({
         type: "fill",
         source: "areas",
         paint: {
-          "fill-color": [
-            "match",
-            ["get", "band"],
-            "high",
-            PRIORITY_COLORS.high,
-            "mid",
-            PRIORITY_COLORS.mid,
-            "low",
-            PRIORITY_COLORS.low,
-            "#999999",
-          ],
+          "fill-color": BAND_FILL,
           // Dim areas filtered out.
           "fill-opacity": ["case", ["==", ["get", "match"], 1], 0.55, 0.07],
         },
@@ -161,6 +213,35 @@ export function CatchmentMap({
         type: "line",
         source: "areas",
         paint: { "line-color": "#FFFFFF", "line-width": 1 },
+      });
+
+      // Council (LA) boundaries: dashed outlines with a labelled name, drawn
+      // over the areas but under the site dots.
+      map.addSource("councils", { type: "geojson", data: emptyFc() });
+      map.addLayer({
+        id: "councils-line",
+        type: "line",
+        source: "councils",
+        paint: {
+          "line-color": "#334155",
+          "line-width": 1.5,
+          "line-dasharray": [3, 2],
+        },
+      });
+      map.addLayer({
+        id: "councils-label",
+        type: "symbol",
+        source: "councils",
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": 11,
+          "text-font": ["Noto Sans Regular"],
+        },
+        paint: {
+          "text-color": "#334155",
+          "text-halo-color": "#FFFFFF",
+          "text-halo-width": 1.2,
+        },
       });
 
       map.on("click", "areas-fill", (e) => {
@@ -284,11 +365,36 @@ export function CatchmentMap({
       return;
     }
 
-    const areaFc = areasToFeatures(areas, matchedCodes, tagContextRef.current);
+    const areaFc = areasToFeatures(
+      areas,
+      matchedCodes,
+      tagContextRef.current,
+      shadeBy,
+    );
     const areaSource = map.getSource("areas") as
       | maplibregl.GeoJSONSource
       | undefined;
     areaSource?.setData(areaFc);
+    // Shade by the chosen metric's per-feature colour (or the priority band).
+    map.setPaintProperty(
+      "areas-fill",
+      "fill-color",
+      shadeBy === "band"
+        ? BAND_FILL
+        : (["get", "shadeColor"] as maplibregl.ExpressionSpecification),
+    );
+
+    const councilSource = map.getSource("councils") as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    councilSource?.setData({
+      type: "FeatureCollection",
+      features: (councils ?? []).map((c) => ({
+        type: "Feature",
+        geometry: c.geometry as GeoJSON.Geometry,
+        properties: { name: c.name },
+      })),
+    });
 
     const isoSource = map.getSource("isochrone") as
       | maplibregl.GeoJSONSource
@@ -338,7 +444,7 @@ export function CatchmentMap({
   useEffect(() => {
     syncData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areas, isochrone, coordinate, matchedCodes, sites]);
+  }, [areas, isochrone, coordinate, matchedCodes, sites, shadeBy, councils]);
 
   useEffect(() => {
     const map = mapRef.current;

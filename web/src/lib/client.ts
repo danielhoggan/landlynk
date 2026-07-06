@@ -374,6 +374,25 @@ export async function getCatchmentCompetitors(
   return data?.sites ?? [];
 }
 
+export interface CouncilBoundary {
+  code: string;
+  name: string;
+  geometry: { type: string; coordinates: unknown };
+}
+
+// Local authority boundaries intersecting the catchment, for the map overlay.
+// Empty when LA boundaries are not loaded.
+export async function getCatchmentCouncils(
+  catchmentId: string,
+): Promise<CouncilBoundary[]> {
+  const res = await fetch(`/api/catchments/${catchmentId}/councils`, {
+    headers: activeBrandHeaders(),
+  });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({ councils: [] }));
+  return data?.councils ?? [];
+}
+
 export interface CatchmentBenchmarks {
   metrics: Record<string, { national: number | null; catchment: number | null }>;
   income: { national: number | null; catchment: number | null };

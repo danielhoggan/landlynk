@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Download, ChevronDown, SlidersHorizontal, Loader2 } from "lucide-react";
-import { CatchmentMap } from "@/components/map/CatchmentMap";
+import {
+  CatchmentMap,
+  SHADE_RAMP,
+  SHADE_NO_DATA,
+  type ShadeBy,
+} from "@/components/map/CatchmentMap";
 import { RankingList } from "@/components/map/RankingList";
 import { BattlecardDrawer } from "@/components/battlecard/BattlecardDrawer";
 import type {
@@ -19,11 +24,13 @@ import {
   getCatchmentSites,
   getCatchmentCompetitors,
   getCatchmentBenchmarks,
+  getCatchmentCouncils,
   pollCatchment,
   submitCatchment,
   type BuilderProfile,
   type DevelopmentSite,
   type CatchmentBenchmarks,
+  type CouncilBoundary,
 } from "@/lib/client";
 import {
   SIGNAL_TAGS,
@@ -44,6 +51,14 @@ import { segmentsForIndustry } from "@/lib/segments";
 import { INDUSTRIES } from "@/lib/industries";
 import { OBJECTIVES, SIGNAL_LABELS } from "@/lib/objectives";
 import { useUser } from "@/lib/userContext";
+
+// Metrics the map can be shaded by, beyond the default priority ranking.
+const SHADE_OPTIONS: { id: ShadeBy; label: string }[] = [
+  { id: "band", label: "Priority" },
+  { id: "income", label: "Avg income" },
+  { id: "housePrice", label: "House price" },
+  { id: "ownerOccupied", label: "Owner-occupied" },
+];
 
 // MVP entry surface: paste a postcode or grid ref, the worker builds the
 // catchment, and the interactive map with ranked clickable areas renders here
@@ -217,6 +232,13 @@ export default function HomePage() {
   const [competitorsLoading, setCompetitorsLoading] = useState(false);
   // Catchment and national benchmarks, so the deep-dive can compare an area.
   const [benchmarks, setBenchmarks] = useState<CatchmentBenchmarks | null>(null);
+  // Shade the map areas by a data metric (choropleth) instead of the ranking.
+  const [shadeBy, setShadeBy] = useState<ShadeBy>("band");
+  // Council (LA) boundary overlay: fetched lazily on first toggle per run.
+  // null = not fetched yet; [] = fetched, none available (LA data not loaded).
+  const [councils, setCouncils] = useState<CouncilBoundary[] | null>(null);
+  const [councilsOn, setCouncilsOn] = useState(false);
+  const [councilsLoading, setCouncilsLoading] = useState(false);
   // Find a site: weight the ranking toward areas with more brownfield capacity.
   const [weightByLand, setWeightByLand] = useState(false);
   // Find a site: order the ranking by audience fit (score) or by buildable land.
@@ -290,6 +312,22 @@ export default function HomePage() {
     setFilter(new Set());
     setRangeInputs({});
   };
+
+  // Range of the chosen shading metric across this catchment, for the legend.
+  const shadeVals =
+    shadeBy === "band"
+      ? []
+      : areas
+          .map((a) => a.metrics?.[shadeBy])
+          .filter((v): v is number => v != null);
+  const shadeMin = shadeVals.length ? Math.min(...shadeVals) : null;
+  const shadeMax = shadeVals.length ? Math.max(...shadeVals) : null;
+  const fmtShadeVal = (v: number) =>
+    shadeBy === "ownerOccupied"
+      ? `${Math.round(v)}%`
+      : v >= 1000
+        ? `£${Math.round(v / 1000)}k`
+        : `£${Math.round(v)}`;
 
   // Housebuilder intents are signposted only for residential brands; everyone
   // else keeps the single, generic flow. A stored run intent also counts: an
@@ -559,6 +597,33 @@ export default function HomePage() {
       setBenchmarks(null);
     }
   }, [catchment?.id, catchment?.status]);
+
+  // Council boundaries belong to a specific run; reset when the run changes so
+  // a reopened catchment does not show another run's councils.
+  useEffect(() => {
+    setCouncils(null);
+    setCouncilsOn(false);
+  }, [catchment?.id]);
+
+  // Lazily fetch the council boundaries the first time the overlay is turned
+  // on for this run; after that the toggle just shows and hides them.
+  async function toggleCouncils() {
+    if (councilsOn) {
+      setCouncilsOn(false);
+      return;
+    }
+    if (councils === null && catchment) {
+      setCouncilsLoading(true);
+      try {
+        setCouncils(await getCatchmentCouncils(catchment.id));
+      } catch {
+        setCouncils([]);
+      } finally {
+        setCouncilsLoading(false);
+      }
+    }
+    setCouncilsOn(true);
+  }
 
   // On Find a site, overlay the brownfield sites (fast) and the competitor
   // developments (live, separate so it does not block the brownfield markers).
@@ -1388,6 +1453,81 @@ export default function HomePage() {
       )}
 
       <div className="space-y-4">
+        {activeRun && (
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium text-neutral-500">Shade by</span>
+              {SHADE_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => setShadeBy(o.id)}
+                  className={`rounded-full border px-2.5 py-1 font-medium transition ${
+                    shadeBy === o.id
+                      ? "border-light-accent bg-light-accent/10 text-light-accent"
+                      : "border-neutral-300 text-neutral-600 hover:bg-neutral-100"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+              {shadeBy !== "band" &&
+                (shadeMin != null && shadeMax != null ? (
+                  <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                    {fmtShadeVal(shadeMin)}
+                    <span
+                      className="inline-block h-2 w-20 rounded-full"
+                      style={{
+                        background: `linear-gradient(to right, ${SHADE_RAMP[0]}, ${SHADE_RAMP[1]})`,
+                      }}
+                      aria-hidden
+                    />
+                    {fmtShadeVal(shadeMax)}
+                    <span
+                      className="ml-1 inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: SHADE_NO_DATA }}
+                      aria-hidden
+                    />{" "}
+                    no data
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-neutral-400">
+                    No data for this metric in this run.
+                  </span>
+                ))}
+            </div>
+            <button
+              type="button"
+              onClick={toggleCouncils}
+              disabled={
+                councilsLoading || (councils !== null && councils.length === 0)
+              }
+              title={
+                councils !== null && councils.length === 0
+                  ? "No council boundaries available. An admin can load LA boundaries on Reference data."
+                  : councilsOn
+                    ? "Hide council boundaries"
+                    : "Show council boundaries"
+              }
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition disabled:opacity-60 ${
+                councilsOn
+                  ? "border-neutral-400 text-neutral-700"
+                  : "border-neutral-300 text-neutral-500 hover:bg-neutral-100"
+              }`}
+            >
+              {councilsLoading ? (
+                <Loader2 size={11} className="animate-spin" />
+              ) : (
+                <span
+                  className="inline-block w-3 border-t-2 border-dashed border-[#334155]"
+                  aria-hidden
+                />
+              )}
+              Council boundaries
+              {councilsOn && councils ? ` (${councils.length})` : ""}
+            </button>
+          </div>
+        )}
         <CatchmentMap
           areas={areas}
           isochrone={catchment?.isochrone ?? null}
@@ -1397,6 +1537,8 @@ export default function HomePage() {
           matchedCodes={matchedCodes}
           tagContext={tagContext}
           sites={runIntent === "find_site" ? visibleSites : undefined}
+          shadeBy={shadeBy}
+          councils={councilsOn ? (councils ?? []) : []}
         />
         {activeRun && runIntent === "find_site" &&
           (overlaySites.length > 0 || competitorsLoading ? (

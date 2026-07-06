@@ -336,6 +336,16 @@ def test_marketing_activation_internal_only_and_cached(client, monkeypatch):
     )
 
 
+def test_councils_overlay_degrades_without_database(client, monkeypatch):
+    # The council-boundary overlay is best effort: without a database (or the
+    # LA boundary dataset) it returns an empty list, never an error.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job_id = _submit(client)
+    res = client.get(f"/catchments/{job_id}/councils")
+    assert res.status_code == 200
+    assert res.json() == {"councils": []}
+
+
 def test_account_settings_roundtrip(client):
     alice = _user_headers("alice@x.com")
     client.get("/me", headers=alice)  # upsert the user first (settings FK)

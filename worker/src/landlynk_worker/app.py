@@ -1802,6 +1802,41 @@ def catchment_benchmarks(
     return out
 
 
+@app.get("/catchments/{catchment_id}/councils")
+def catchment_councils(
+    catchment_id: str, user: dict = Depends(current_user)
+) -> dict:
+    """Local authority (council) boundaries that intersect the catchment, for
+    the map's council overlay. Best effort: empty without a database or the LA
+    boundary dataset, so the toggle degrades gracefully."""
+    _require_access(catchment_id, user)
+    geom = _catchment_geometry(catchment_id)
+    if not geom:
+        return {"councils": []}
+    councils: list[dict] = []
+    try:
+        with get_pool().connection() as conn:
+            rows = conn.execute(
+                "SELECT area_code, area_name, ST_AsGeoJSON(geom) "
+                "FROM geo_boundaries WHERE area_type = 'LA' "
+                "AND ST_Intersects(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
+                "ORDER BY area_name LIMIT 40",
+                [json.dumps(geom)],
+            ).fetchall()
+        councils = [
+            {
+                "code": r[0],
+                "name": r[1] or r[0],
+                "geometry": json.loads(r[2]) if r[2] else None,
+            }
+            for r in rows
+            if r[2]
+        ]
+    except Exception:  # no DB or LA boundaries not loaded
+        councils = []
+    return {"councils": councils}
+
+
 @app.get("/catchments/{catchment_id}/competitors")
 def catchment_competitors(
     catchment_id: str, user: dict = Depends(current_user)
