@@ -270,6 +270,36 @@ def test_land_hub_rows_parse_and_filter():
     assert 51.99 < row["lat"] < 52.02 and -1.01 < row["lng"] < -0.98
 
 
+def test_land_hub_transforms_british_national_grid():
+    # The live hub feed is published in EPSG:27700 eastings/northings (declared
+    # in the crs member): points must transform to WGS84, or every site lands
+    # at an impossible latitude and no catchment ever matches.
+    from landlynk_worker.refdata.loaders import _land_hub_rows
+
+    e, n = 369051.0, 309137.6  # Telford, from the real feed
+    square = [[[e, n], [e, n + 50], [e + 50, n + 50], [e + 50, n], [e, n]]]
+    data = {
+        "type": "FeatureCollection",
+        "crs": {"type": "name", "properties": {"name": "EPSG:27700"}},
+        "features": [
+            {
+                "geometry": {"type": "Polygon", "coordinates": square},
+                "properties": {
+                    "Parcel_Name": "Old Park Mound",
+                    "Marketing_Status": "On market",
+                },
+            }
+        ],
+    }
+    (row,) = _land_hub_rows(data)
+    assert 52.6 < row["lat"] < 52.8  # Telford, not northing 309137
+    assert -2.6 < row["lng"] < -2.3
+    # The magnitude fallback catches the same feed with no crs declared.
+    del data["crs"]
+    (row,) = _land_hub_rows(data)
+    assert 52.6 < row["lat"] < 52.8
+
+
 def test_median_age_and_bands():
     counts = {age: 10 for age in range(0, 91)}
     assert t.aggregate_age_bands(counts)["age_0_15"] == 160

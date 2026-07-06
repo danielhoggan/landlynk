@@ -1664,9 +1664,19 @@ def _land_hub_rows(data: dict) -> list[dict]:
 
     Each feature is a parcel polygon with name, acreage, housing capacity and a
     marketing status; the point stored is the polygon's representative point.
-    Pure, so it is unit tested without the network.
+    The hub feed is published in British National Grid (EPSG:27700), so points
+    are transformed to WGS84; the declared crs (or a coordinate outside any
+    valid longitude and latitude) triggers the transform. Pure, so it is unit
+    tested without the network.
     """
+    from pyproj import Transformer
     from shapely.geometry import shape
+
+    crs_name = str(
+        ((data.get("crs") or {}).get("properties") or {}).get("name") or ""
+    )
+    declared_bng = "27700" in crs_name
+    to_wgs84 = Transformer.from_crs(27700, 4326, always_xy=True)
 
     rows: list[dict] = []
     for f in data.get("features", []) if isinstance(data, dict) else []:
@@ -1680,6 +1690,9 @@ def _land_hub_rows(data: dict) -> list[dict]:
             pt = shape(f["geometry"]).representative_point()
         except Exception:
             continue
+        lng, lat = pt.x, pt.y
+        if declared_bng or abs(lng) > 180 or abs(lat) > 90:
+            lng, lat = to_wgs84.transform(pt.x, pt.y)
         name = str(props.get("Parcel_Name") or "").strip() or None
         if name and status:
             name = f"{name} ({status})"
@@ -1693,8 +1706,8 @@ def _land_hub_rows(data: dict) -> list[dict]:
                 "hectares": round(acres * 0.404686, 2) if acres is not None else None,
                 "min_dwellings": None,
                 "max_dwellings": capacity,
-                "lat": float(pt.y),
-                "lng": float(pt.x),
+                "lat": float(lat),
+                "lng": float(lng),
             }
         )
     return rows
