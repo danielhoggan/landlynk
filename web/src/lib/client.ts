@@ -354,6 +354,9 @@ export interface DevelopmentSite {
   /** Planning decision state (permissions): Permitted, Rejected, Undecided,
    * Withdrawn. A refusal marks a possible acquisition lead. */
   status?: string | null;
+  /** Application type (Full, Outline...): outline consents mark land that is
+   * often traded with the permission. */
+  appType?: string | null;
   /** Decision date, when decided. */
   decidedDate?: string | null;
   /** Link to the planning application record. */
@@ -365,6 +368,7 @@ export const SITE_COLORS = {
   brownfield: "#1F5A3C",
   forsale: "#C9A24B",
   permission: "#C04A1F",
+  consented: "#2563EB",
   refused: "#7C3AED",
 } as const;
 
@@ -375,13 +379,25 @@ export function isRefused(status?: string | null): boolean {
   return s.includes("reject") || s.includes("refus") || s.includes("withdraw");
 }
 
-/** The layer a site belongs to on the map: refused applications separate from
- * live competitor schemes, so they can be toggled and coloured apart. */
+/** A granted outline permission: consented land, which is frequently sold with
+ * the permission rather than built out by the applicant. */
+export function isConsentedOutline(s: DevelopmentSite): boolean {
+  return (
+    (s.status ?? "").toLowerCase().includes("permit") &&
+    (s.appType ?? "").toLowerCase().includes("outline")
+  );
+}
+
+/** The layer a site belongs to on the map: refused applications and consented
+ * outline land separate from live competitor schemes, so each can be toggled
+ * and coloured apart. */
 export function siteLayerKey(
   s: DevelopmentSite,
-): "brownfield" | "forsale" | "permission" | "refused" {
+): "brownfield" | "forsale" | "permission" | "consented" | "refused" {
   if (s.sourceType === "permission") {
-    return isRefused(s.status) ? "refused" : "permission";
+    if (isRefused(s.status)) return "refused";
+    if (isConsentedOutline(s)) return "consented";
+    return "permission";
   }
   return s.sourceType === "forsale" ? "forsale" : "brownfield";
 }

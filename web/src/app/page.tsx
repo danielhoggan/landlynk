@@ -264,6 +264,7 @@ export default function HomePage() {
     brownfield: true,
     forsale: true,
     permission: false,
+    consented: false,
     refused: false,
   });
 
@@ -1584,13 +1585,16 @@ export default function HomePage() {
                   ["brownfield", "Brownfield", SITE_COLORS.brownfield],
                   ["forsale", "For sale", SITE_COLORS.forsale],
                   ["permission", "Competitor", SITE_COLORS.permission],
+                  ["consented", "Consented", SITE_COLORS.consented],
                   ["refused", "Refused", SITE_COLORS.refused],
                 ] as const
               ).map(([key, label, colour]) => {
                 const n = siteCounts[key] ?? 0;
                 const on = siteLayers[key];
                 const loading =
-                  (key === "permission" || key === "refused") &&
+                  (key === "permission" ||
+                    key === "consented" ||
+                    key === "refused") &&
                   competitorsLoading;
                 const emptyTitle: Record<string, string> = {
                   brownfield:
@@ -1599,6 +1603,8 @@ export default function HomePage() {
                     "No Homes England land for sale in this catchment. An admin can load the Land for sale dataset on Reference data.",
                   permission:
                     "No live residential planning applications found in this catchment. These load automatically from national planning data.",
+                  consented:
+                    "No granted outline permissions found in this catchment. Consented land loads automatically from national planning data; refresh if this run predates the lens.",
                   refused:
                     "No refused or withdrawn applications found in this catchment. These load automatically from national planning data.",
                 };

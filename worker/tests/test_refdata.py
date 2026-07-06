@@ -229,6 +229,8 @@ def test_planit_carries_decision_status():
     assert by_name["Refused Farm"]["url"].startswith("https://")
     assert by_name["Live Site"]["status"] == "Undecided"
     assert by_name["Live Site"]["url"] is None  # non-http link dropped
+    # Application type rides through so consented (outline) land can be lensed.
+    assert "appType" in by_name["Refused Farm"]
 
 
 def test_land_hub_rows_parse_and_filter():

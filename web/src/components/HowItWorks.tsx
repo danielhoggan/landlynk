@@ -124,8 +124,8 @@ const BY_INDUSTRY: Record<string, Tailored> = {
       },
       {
         icon: Building2,
-        title: "Competitors and refusals",
-        body: "Toggle competitor developments to see where rivals are already building: live major and medium residential planning applications, pulled from national planning data. Refused and withdrawn applications show separately in violet: owners who sought consent and failed, often the most motivated sellers in the catchment.",
+        title: "Competitors, consented land and refusals",
+        body: "Toggle competitor developments to see where rivals are already building: live major and medium residential planning applications, pulled from national planning data. Consented land (granted outline permissions, often sold with the consent) shows in blue, and refused or withdrawn applications in violet: owners who sought consent and failed, often the most motivated sellers in the catchment.",
       },
     ],
   },

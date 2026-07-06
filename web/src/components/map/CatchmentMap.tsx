@@ -319,11 +319,13 @@ export function CatchmentMap({
         const typeLabel =
           p.layerKey === "refused"
             ? "Refused application (possible acquisition lead)"
-            : p.layerKey === "permission"
-              ? "Competitor development"
-              : p.layerKey === "forsale"
-                ? "Public land for sale (Homes England)"
-                : "Brownfield land";
+            : p.layerKey === "consented"
+              ? "Consented land (outline permission granted)"
+              : p.layerKey === "permission"
+                ? "Competitor development"
+                : p.layerKey === "forsale"
+                  ? "Public land for sale (Homes England)"
+                  : "Brownfield land";
         const status =
           p.status && p.layerKey !== "forsale"
             ? `${String(p.status)}${p.decidedDate ? ` · ${String(p.decidedDate)}` : ""}`

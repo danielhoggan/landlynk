@@ -2003,6 +2003,7 @@ def _competitor_sites(catchment_id: str, geom: dict) -> list[dict]:
             "areaCode": area_for(s["lng"], s["lat"]),
             "sourceType": "permission",
             "status": s.get("status"),
+            "appType": s.get("appType"),
             "decidedDate": s.get("decidedDate"),
             "url": s.get("url"),
         }

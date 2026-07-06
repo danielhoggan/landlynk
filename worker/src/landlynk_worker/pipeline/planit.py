@@ -73,8 +73,11 @@ def _residential_sites_from_geojson(data: dict, poly: BaseGeometry) -> list[dict
                 "lng": float(pt.x),
                 # Decision status (Permitted, Rejected, Undecided, Withdrawn):
                 # a refusal marks an owner who sought consent and failed, an
-                # acquisition lead rather than competition.
+                # acquisition lead rather than competition. The application
+                # type tells outline consents (land often traded with the
+                # permission) from full ones.
                 "status": props.get("app_state"),
+                "appType": props.get("app_type"),
                 "decidedDate": props.get("decided_date"),
                 "url": link if str(link or "").startswith("http") else None,
             }
