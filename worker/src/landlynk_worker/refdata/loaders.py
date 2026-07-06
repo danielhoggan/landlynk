@@ -1409,6 +1409,7 @@ def _replace_table(
     rows: list[dict],
     source: str,
     geometry_columns: dict[str, str] | None = None,
+    replace_area_type: str | None = None,
 ) -> int:
     geometry_columns = geometry_columns or {}
     col_list = ", ".join(columns)
@@ -1416,7 +1417,14 @@ def _replace_table(
     insert_sql = f"INSERT INTO {table} ({col_list}) VALUES ({placeholders})"
     params = [[row.get(c) for c in columns] for row in rows]
     with pool.connection() as conn, conn.transaction():
-        conn.execute(f"TRUNCATE {table}")
+        if replace_area_type is not None:
+            # Replace only this area level, so MSOA and LA rows coexist (the
+            # council overlay needs LA boundaries alongside the MSOA set).
+            conn.execute(
+                f"DELETE FROM {table} WHERE area_type = %s", [replace_area_type]
+            )
+        else:
+            conn.execute(f"TRUNCATE {table}")
         with conn.cursor() as cur:
             # Batched insert: far faster than per-row for thousands of areas.
             cur.executemany(insert_sql, params)
@@ -1442,6 +1450,9 @@ def load_boundaries(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> 
         rows,
         source="ONS Open Geography Portal",
         geometry_columns={"geom": "ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))"},
+        # Loading LA boundaries (for the council overlay) must not wipe the
+        # MSOA set every run depends on, and vice versa.
+        replace_area_type=area_type,
     )
 
 

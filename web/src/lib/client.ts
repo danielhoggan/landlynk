@@ -398,17 +398,33 @@ export async function getCatchmentSites(
   return data?.sites ?? [];
 }
 
-// Competitor developments (live national planning applications) in a catchment.
-// Separate from getCatchmentSites so the fast brownfield overlay is not blocked.
+export interface CompetitorsSnapshot {
+  sites: DevelopmentSite[];
+  /** When the planning data was fetched from the national source. */
+  fetchedAt: string | null;
+  /** True when served from the run's stored snapshot rather than live. */
+  cached: boolean;
+}
+
+// Competitor developments (national planning applications) in a catchment.
+// Separate from getCatchmentSites so the fast brownfield overlay is not
+// blocked. The worker stores a snapshot per run, so past catchments return
+// instantly; refresh forces a live re-query.
 export async function getCatchmentCompetitors(
   catchmentId: string,
-): Promise<DevelopmentSite[]> {
-  const res = await fetch(`/api/catchments/${catchmentId}/competitors`, {
-    headers: activeBrandHeaders(),
-  });
-  if (!res.ok) return [];
+  refresh = false,
+): Promise<CompetitorsSnapshot> {
+  const res = await fetch(
+    `/api/catchments/${catchmentId}/competitors${refresh ? "?refresh=1" : ""}`,
+    { headers: activeBrandHeaders() },
+  );
+  if (!res.ok) return { sites: [], fetchedAt: null, cached: false };
   const data = await res.json().catch(() => ({ sites: [] }));
-  return data?.sites ?? [];
+  return {
+    sites: data?.sites ?? [],
+    fetchedAt: data?.fetchedAt ?? null,
+    cached: data?.cached === true,
+  };
 }
 
 export interface CouncilBoundary {

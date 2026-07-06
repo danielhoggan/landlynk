@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, ChevronDown, SlidersHorizontal, Loader2 } from "lucide-react";
+import {
+  Download,
+  ChevronDown,
+  SlidersHorizontal,
+  Loader2,
+  RefreshCw,
+} from "lucide-react";
 import {
   CatchmentMap,
   SHADE_RAMP,
@@ -229,9 +235,13 @@ export default function HomePage() {
   // not held up.
   const [sites, setSites] = useState<DevelopmentSite[]>([]);
   const [competitors, setCompetitors] = useState<DevelopmentSite[]>([]);
-  // Competitor data is a live national query and can take 10-20s, so the pill
-  // shows a spinner while it loads.
+  // Competitor data is a national query that can take 10-20s live, so the pill
+  // shows a spinner while it loads. The worker stores a snapshot per run, so
+  // past catchments show theirs instantly with the date it was fetched.
   const [competitorsLoading, setCompetitorsLoading] = useState(false);
+  const [competitorsFetchedAt, setCompetitorsFetchedAt] = useState<
+    string | null
+  >(null);
   // Catchment and national benchmarks, so the deep-dive can compare an area.
   const [benchmarks, setBenchmarks] = useState<CatchmentBenchmarks | null>(null);
   // Shade the map areas by a data metric (choropleth) instead of the ranking.
@@ -645,15 +655,32 @@ export default function HomePage() {
         .catch(() => setSites([]));
       setCompetitorsLoading(true);
       getCatchmentCompetitors(id)
-        .then(setCompetitors)
+        .then((snap) => {
+          setCompetitors(snap.sites);
+          setCompetitorsFetchedAt(snap.fetchedAt);
+        })
         .catch(() => setCompetitors([]))
         .finally(() => setCompetitorsLoading(false));
     } else {
       setSites([]);
       setCompetitors([]);
+      setCompetitorsFetchedAt(null);
       setCompetitorsLoading(false);
     }
   }, [runIntent, catchment?.id, catchment?.status]);
+
+  // Re-query the national planning source and replace this run's snapshot.
+  function refreshCompetitors() {
+    if (!catchment || competitorsLoading) return;
+    setCompetitorsLoading(true);
+    getCatchmentCompetitors(catchment.id, true)
+      .then((snap) => {
+        setCompetitors(snap.sites);
+        setCompetitorsFetchedAt(snap.fetchedAt);
+      })
+      .catch(() => {})
+      .finally(() => setCompetitorsLoading(false));
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1610,6 +1637,24 @@ export default function HomePage() {
                   </button>
                 );
               })}
+              {/* Planning layers are a stored snapshot per run; show its date
+                  and let the user re-check the national source. */}
+              {competitorsFetchedAt && (
+                <button
+                  type="button"
+                  onClick={refreshCompetitors}
+                  disabled={competitorsLoading}
+                  title="Re-check national planning data for this catchment"
+                  className="flex items-center gap-1 text-[11px] text-neutral-400 transition hover:text-neutral-600 disabled:opacity-60"
+                >
+                  <RefreshCw
+                    size={11}
+                    className={competitorsLoading ? "animate-spin" : ""}
+                  />
+                  planning data{" "}
+                  {new Date(competitorsFetchedAt).toLocaleDateString("en-GB")}
+                </button>
+              )}
             </div>
           ) : (
             <p className="text-xs text-neutral-500">

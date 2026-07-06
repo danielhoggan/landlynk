@@ -336,6 +336,20 @@ def test_marketing_activation_internal_only_and_cached(client, monkeypatch):
     )
 
 
+def test_competitors_snapshot_persisted_and_refreshable(client, monkeypatch):
+    # The planning-application result is stored per run: reopening serves the
+    # snapshot (cached, same fetch date) and refresh=true re-queries live.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job_id = _submit(client)
+    first = client.get(f"/catchments/{job_id}/competitors").json()
+    assert first["cached"] is False and first["fetchedAt"]
+    second = client.get(f"/catchments/{job_id}/competitors").json()
+    assert second["cached"] is True
+    assert second["fetchedAt"] == first["fetchedAt"]
+    refreshed = client.get(f"/catchments/{job_id}/competitors?refresh=true").json()
+    assert refreshed["cached"] is False
+
+
 def test_councils_overlay_degrades_without_database(client, monkeypatch):
     # The council-boundary overlay is best effort: without a database (or the
     # LA boundary dataset) it returns an empty list, never an error.

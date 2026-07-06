@@ -1636,7 +1636,7 @@ def report_pptx(
         _development_context(catchment_id),
         intent=request.intent,
         audience_label=request.audience_label,
-        supply=_site_supply(_catchment_geometry(catchment_id)),
+        supply=_site_supply(_catchment_geometry(catchment_id), catchment_id),
     )
     return Response(
         content=pptx,
@@ -1837,18 +1837,50 @@ def catchment_councils(
     return {"councils": councils}
 
 
+def _competitors_cache_key(catchment_id: str) -> str:
+    return f"competitors::{catchment_id}"
+
+
+def _stored_competitors(catchment_id: str) -> dict | None:
+    """The persisted planning-application snapshot for a run, or None."""
+    try:
+        return get_store().get_config(_competitors_cache_key(catchment_id))
+    except Exception:  # pragma: no cover - store read is best effort
+        return None
+
+
 @app.get("/catchments/{catchment_id}/competitors")
 def catchment_competitors(
-    catchment_id: str, user: dict = Depends(current_user)
+    catchment_id: str, refresh: bool = False, user: dict = Depends(current_user)
 ) -> dict:
-    """Competitor developments (live PlanIt residential applications) in the
+    """Competitor developments (PlanIt residential applications) in the
     catchment. Separate from /sites so the fast brownfield overlay is not held
-    up by the live national query."""
+    up by the national query.
+
+    The result is persisted per run, so reopening a past catchment shows its
+    snapshot instantly with the date it was fetched; refresh=true re-queries
+    PlanIt live and replaces the snapshot."""
+    from datetime import UTC, datetime
+
     _require_access(catchment_id, user)
+    store = get_store()
+    key = _competitors_cache_key(catchment_id)
+    if not refresh:
+        cached = _stored_competitors(catchment_id)
+        if cached is not None:
+            return {**cached, "cached": True}
     geom = _catchment_geometry(catchment_id)
     if not geom:
-        return {"sites": []}
-    return {"sites": _competitor_sites(catchment_id, geom)}
+        return {"sites": [], "fetchedAt": None, "cached": False}
+    record = {
+        "sites": _competitor_sites(catchment_id, geom),
+        "fetchedAt": datetime.now(UTC).isoformat(),
+    }
+    try:
+        store.set_config(key, record)
+    except Exception:  # pragma: no cover - persisting is best effort
+        _log.exception("could not persist competitors for %s", catchment_id)
+    return {**record, "cached": False}
 
 
 # The competitor pill, the Site verdict and the report export all need the same
@@ -1953,11 +1985,13 @@ def _is_refused(status: str | None) -> bool:
     return "reject" in s or "refus" in s or "withdraw" in s
 
 
-def _site_supply(geom: dict | None) -> dict:
+def _site_supply(geom: dict | None, catchment_id: str | None = None) -> dict:
     """Buildable supply (brownfield register), public land for sale (Land Hub)
-    and competitor schemes (live residential planning applications) in the
+    and competitor schemes (residential planning applications) in the
     catchment, with refusals split out as acquisition leads rather than
-    competition. Best effort: zeros without the data or a database."""
+    competition. Prefers the run's persisted planning snapshot so verdicts and
+    exports match the pills without re-querying PlanIt. Best effort: zeros
+    without the data or a database."""
     out = {
         "buildablePlots": 0,
         "buildableHomes": 0,
@@ -1986,7 +2020,10 @@ def _site_supply(geom: dict | None) -> dict:
                 out["forSaleSites"] = int(count)
     except Exception:  # no DB, no dataset, or PostGIS missing
         pass
-    competitors = _live_competitors(geom)
+    stored = _stored_competitors(catchment_id) if catchment_id else None
+    competitors = (
+        stored["sites"] if stored is not None else _live_competitors(geom)
+    )
     refused = [c for c in competitors if _is_refused(c.get("status"))]
     out["competitorSchemes"] = len(competitors) - len(refused)
     out["refusedSchemes"] = len(refused)
@@ -2000,7 +2037,7 @@ def catchment_verdict(
     """Whole-catchment appraisal verdict (price fit, addressable demand, supply)."""
     _require_access(catchment_id, user)
     verdict = _appraisal_verdict(_combined_card(catchment_id, request))
-    verdict["supply"] = _site_supply(_catchment_geometry(catchment_id))
+    verdict["supply"] = _site_supply(_catchment_geometry(catchment_id), catchment_id)
     # Whether the run carried an explicit target price. When it did not, the
     # stored band is the engine default, so the UI must not present the price
     # fit as if the user chose that price.
