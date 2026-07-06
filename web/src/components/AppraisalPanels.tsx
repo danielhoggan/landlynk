@@ -110,7 +110,9 @@ export function VerdictPanel({ catchmentId }: { catchmentId: string }) {
       </div>
       {verdict.supply &&
         (verdict.supply.buildablePlots > 0 ||
-          verdict.supply.competitorSchemes > 0) && (
+          verdict.supply.competitorSchemes > 0 ||
+          (verdict.supply.forSaleSites ?? 0) > 0 ||
+          (verdict.supply.refusedSchemes ?? 0) > 0) && (
           <>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
               Supply and competition
@@ -120,10 +122,22 @@ export function VerdictPanel({ catchmentId }: { catchmentId: string }) {
                 label="Buildable land (plots · homes)"
                 value={`${count(verdict.supply.buildablePlots)} · ${count(verdict.supply.buildableHomes)}`}
               />
+              {(verdict.supply.forSaleSites ?? 0) > 0 && (
+                <Stat
+                  label="Public land for sale (Homes England)"
+                  value={count(verdict.supply.forSaleSites ?? 0)}
+                />
+              )}
               <Stat
                 label="Competitor schemes"
                 value={count(verdict.supply.competitorSchemes)}
               />
+              {(verdict.supply.refusedSchemes ?? 0) > 0 && (
+                <Stat
+                  label="Refused applications (acquisition leads)"
+                  value={count(verdict.supply.refusedSchemes ?? 0)}
+                />
+              )}
             </div>
           </>
         )}

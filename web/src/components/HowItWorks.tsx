@@ -119,13 +119,13 @@ const BY_INDUSTRY: Record<string, Tailored> = {
       },
       {
         icon: MapPin,
-        title: "Brownfield plots",
-        body: "On Find a site the map overlays the national brownfield land register: previously-developed sites councils have flagged as suitable for housing, each with its dwelling capacity. These are the actual buildable plots in the areas that fit your buyer.",
+        title: "Brownfield and land for sale",
+        body: "On Find a site the map overlays the national brownfield land register (previously-developed sites councils have flagged as suitable for housing, with dwelling capacity) plus public land actively for sale from the Homes England Land Hub, in gold. These are the plots you could actually buy and build in the areas that fit your buyer.",
       },
       {
         icon: Building2,
-        title: "Competitor developments",
-        body: "Toggle competitor developments to see where rivals are already building: recent major and medium residential planning applications in the catchment, pulled live from national planning data. It is context on the competing pipeline, not land for you to build on.",
+        title: "Competitors and refusals",
+        body: "Toggle competitor developments to see where rivals are already building: live major and medium residential planning applications, pulled from national planning data. Refused and withdrawn applications show separately in violet: owners who sought consent and failed, often the most motivated sellers in the catchment.",
       },
     ],
   },
@@ -428,17 +428,21 @@ export function HowItWorks() {
             open government sources. Some are aggregated up from a finer geography,
             so they describe the area not a single street.
           </Card>
-          <Card icon={Info} title="Buildable land">
-            The national brownfield land register: previously-developed sites
-            with dwelling capacity, loaded once and shown within a catchment. It
-            skews to urban regeneration, so it is the best open national source
-            of available land rather than a complete picture of every site.
+          <Card icon={Info} title="Buildable land and land for sale">
+            The national brownfield land register (previously-developed sites
+            with dwelling capacity) plus the Homes England Land Hub, the open
+            register of public land actively for sale. Both skew to public and
+            urban-regeneration land, so they are the best open national sources
+            of available land rather than a complete picture of every site on
+            the market.
           </Card>
-          <Card icon={Info} title="Competitor developments">
+          <Card icon={Info} title="Planning applications">
             Residential planning applications, pulled live and nationally from
-            PlanIt, so the competitor overlay needs no upload and stays current.
-            It shows where rivals are active; it is a guide to visible pipeline,
-            not a complete or capacity-verified register.
+            PlanIt with their decision status, so the overlay needs no upload
+            and stays current. Live schemes show the competing pipeline;
+            refusals and withdrawals mark owners who tried to develop and
+            failed. It is a guide to visible activity, not a complete or
+            capacity-verified register.
           </Card>
           <Card icon={ShieldCheck} title="Reproducible and refreshable">
             Every dataset loads through a versioned, dated loader, and every score

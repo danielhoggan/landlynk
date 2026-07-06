@@ -22,7 +22,7 @@ export function RankingExplainer({
       ? [
           `Areas are scored on how well their residents fit ${audience}: the age profile, the tenure mix and the household types, weighted together with the size of the local market. The list is ordered by that fit, or by buildable land if you switch the sort.`,
           `Suitable shows the stronger-fitting areas in this catchment and hides the low-fit band; switch to All areas to see every area. Scores are relative to this catchment, so they compare the areas here rather than against a national bar.`,
-          `Green dots are brownfield plots (buildable land with dwelling capacity); red dots are competitor developments (recent residential planning applications nearby). Open any area for the exact signal-by-signal breakdown.`,
+          `Green dots are brownfield plots (buildable land with dwelling capacity), gold dots are public land for sale (Homes England) and red dots are live competitor schemes. Violet dots are refused or withdrawn applications: owners who sought consent and failed, often the most motivated sellers. Open any area for the exact signal-by-signal breakdown.`,
         ]
       : intent === "appraise"
         ? [

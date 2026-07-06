@@ -1705,12 +1705,12 @@ def catchment_sites(
         with get_pool().connection() as conn:
             rows = conn.execute(
                 "SELECT s.reference, s.name, s.hectares, s.min_dwellings, "
-                "s.max_dwellings, s.lat, s.lng, b.area_code "
+                "s.max_dwellings, s.lat, s.lng, b.area_code, s.source_type "
                 "FROM development_site s "
                 "LEFT JOIN geo_boundaries b "
                 "ON b.area_type = %s AND ST_Within(s.geom, b.geom) "
                 "WHERE ST_Within(s.geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
-                "AND s.source_type = 'brownfield' "
+                "AND s.source_type IN ('brownfield', 'forsale') "
                 "ORDER BY s.max_dwellings DESC NULLS LAST LIMIT 1500",
                 [area_type, json.dumps(geom)],
             ).fetchall()
@@ -1724,7 +1724,7 @@ def catchment_sites(
                 "lat": float(r[5]),
                 "lng": float(r[6]),
                 "areaCode": r[7],
-                "sourceType": "brownfield",
+                "sourceType": r[8],
             }
             for r in rows
         ]
@@ -1938,38 +1938,58 @@ def _competitor_sites(catchment_id: str, geom: dict) -> list[dict]:
             "lng": s["lng"],
             "areaCode": area_for(s["lng"], s["lat"]),
             "sourceType": "permission",
+            "status": s.get("status"),
+            "decidedDate": s.get("decidedDate"),
+            "url": s.get("url"),
         }
         for s in raw
     ]
 
 
+def _is_refused(status: str | None) -> bool:
+    """Whether a planning application was refused or withdrawn: an owner who
+    sought consent and failed, an acquisition lead rather than competition."""
+    s = (status or "").lower()
+    return "reject" in s or "refus" in s or "withdraw" in s
+
+
 def _site_supply(geom: dict | None) -> dict:
-    """Buildable supply (brownfield, from the loaded register) and competitor
-    schemes (live residential planning applications) in the catchment. Best
-    effort: zeros without the data or a database."""
+    """Buildable supply (brownfield register), public land for sale (Land Hub)
+    and competitor schemes (live residential planning applications) in the
+    catchment, with refusals split out as acquisition leads rather than
+    competition. Best effort: zeros without the data or a database."""
     out = {
         "buildablePlots": 0,
         "buildableHomes": 0,
+        "forSaleSites": 0,
         "competitorSchemes": 0,
         "competitorHomes": 0,
+        "refusedSchemes": 0,
     }
     if not geom:
         return out
     try:
         with get_pool().connection() as conn:
-            row = conn.execute(
-                "SELECT count(*), COALESCE(SUM(max_dwellings), 0) "
+            rows = conn.execute(
+                "SELECT source_type, count(*), COALESCE(SUM(max_dwellings), 0) "
                 "FROM development_site "
-                "WHERE source_type = 'brownfield' "
-                "AND ST_Within(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))",
+                "WHERE source_type IN ('brownfield', 'forsale') "
+                "AND ST_Within(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
+                "GROUP BY source_type",
                 [json.dumps(geom)],
-            ).fetchone()
-        if row:
-            out["buildablePlots"] = int(row[0])
-            out["buildableHomes"] = int(row[1] or 0)
+            ).fetchall()
+        for source_type, count, homes in rows:
+            if source_type == "brownfield":
+                out["buildablePlots"] = int(count)
+                out["buildableHomes"] = int(homes or 0)
+            else:
+                out["forSaleSites"] = int(count)
     except Exception:  # no DB, no dataset, or PostGIS missing
         pass
-    out["competitorSchemes"] = len(_live_competitors(geom))
+    competitors = _live_competitors(geom)
+    refused = [c for c in competitors if _is_refused(c.get("status"))]
+    out["competitorSchemes"] = len(competitors) - len(refused)
+    out["refusedSchemes"] = len(refused)
     return out
 
 

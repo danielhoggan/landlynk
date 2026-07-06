@@ -62,6 +62,7 @@ def _residential_sites_from_geojson(data: dict, poly: BaseGeometry) -> list[dict
             or props.get("name")
             or "Planning application"
         )
+        link = props.get("link") or props.get("url")
         sites.append(
             {
                 "reference": props.get("reference")
@@ -70,6 +71,12 @@ def _residential_sites_from_geojson(data: dict, poly: BaseGeometry) -> list[dict
                 "name": str(name).strip()[:120] or "Planning application",
                 "lat": float(pt.y),
                 "lng": float(pt.x),
+                # Decision status (Permitted, Rejected, Undecided, Withdrawn):
+                # a refusal marks an owner who sought consent and failed, an
+                # acquisition lead rather than competition.
+                "status": props.get("app_state"),
+                "decidedDate": props.get("decided_date"),
+                "url": link if str(link or "").startswith("http") else None,
             }
         )
     return sites

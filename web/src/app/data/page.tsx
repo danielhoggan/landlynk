@@ -83,6 +83,11 @@ const DEFAULT_HOSPITALS =
 // The national brownfield land register, published as one CSV.
 const DEFAULT_BROWNFIELD =
   "https://files.planning.data.gov.uk/dataset/brownfield-land.csv";
+// Homes England Land Hub: public land for sale, via the ArcGIS Hub download
+// API (the worker follows the envelope to the GeoJSON snapshot).
+const DEFAULT_LAND_FOR_SALE =
+  "https://hub.arcgis.com/api/download/v1/items/" +
+  "aab1b35c0d4d44d08b2233eb4a08df2a/geojson?redirect=false&layers=0";
 
 interface FieldDef {
   key: string;
@@ -312,6 +317,22 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
+  {
+    id: "land_for_sale",
+    title: "Land for sale (Homes England)",
+    blurb:
+      "Public land currently for sale or entering the market, from the Homes England Land Hub: parcel, acreage, housing capacity and marketing status. Shown as gold plots on the Find a site flow. Loads from the ArcGIS Hub open-data feed. Open Government Licence.",
+    source:
+      "https://www.data.gov.uk/dataset/630b2ebc-157d-44e2-9a6e-2cf9cc8ea424/homes-england-land-hub-sites",
+    sourceLabel: "Homes England Land Hub (data.gov.uk)",
+    fields: [
+      {
+        key: "url",
+        label: "Land Hub GeoJSON URL",
+        placeholder: DEFAULT_LAND_FOR_SALE,
+      },
+    ],
+  },
 ];
 
 export default function DataPage() {
@@ -333,6 +354,7 @@ export default function DataPage() {
     postcodes: { url: "" },
     hospitals: { url: DEFAULT_HOSPITALS },
     development_sites: { url: DEFAULT_BROWNFIELD },
+    land_for_sale: { url: DEFAULT_LAND_FOR_SALE },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});

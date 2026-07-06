@@ -1643,6 +1643,110 @@ def load_development_sites(pool: ConnectionPool, url: str, area_type: str = "MSO
     return _load_sites(pool, url, "brownfield", area_type)
 
 
+# Statuses that mean a Land Hub parcel is no longer buyable. Everything else
+# (on market, coming to market, under offer) is worth showing.
+_LAND_HUB_GONE = ("sold", "disposed", "completed", "exchanged")
+
+
+def _land_hub_rows(data: dict) -> list[dict]:
+    """Homes England Land Hub GeoJSON features as development site points.
+
+    Each feature is a parcel polygon with name, acreage, housing capacity and a
+    marketing status; the point stored is the polygon's representative point.
+    Pure, so it is unit tested without the network.
+    """
+    from shapely.geometry import shape
+
+    rows: list[dict] = []
+    for f in data.get("features", []) if isinstance(data, dict) else []:
+        if not isinstance(f, dict) or not f.get("geometry"):
+            continue
+        props = f.get("properties") or {}
+        status = str(props.get("Marketing_Status") or "").strip()
+        if any(g in status.lower() for g in _LAND_HUB_GONE):
+            continue
+        try:
+            pt = shape(f["geometry"]).representative_point()
+        except Exception:
+            continue
+        name = str(props.get("Parcel_Name") or "").strip() or None
+        if name and status:
+            name = f"{name} ({status})"
+        acres = t.parse_number(props.get("Gross_Area__Acres_"))
+        capacity = _to_int(t.parse_number(props.get("Housing_Capacity")))
+        ref = props.get("Site_Reference")
+        rows.append(
+            {
+                "reference": str(ref).strip() if ref is not None else None,
+                "name": name,
+                "hectares": round(acres * 0.404686, 2) if acres is not None else None,
+                "min_dwellings": None,
+                "max_dwellings": capacity,
+                "lat": float(pt.y),
+                "lng": float(pt.x),
+            }
+        )
+    return rows
+
+
+def _land_hub_geojson(url: str) -> dict:
+    """Fetch the Land Hub GeoJSON, following the ArcGIS Hub download API when
+    the URL returns a {resultUrl} envelope instead of the file itself. The hub
+    generates snapshots on demand, so a just-requested file may need a retry."""
+    import json as _json
+    import time
+
+    for _ in range(3):
+        data = _json.loads(_get_text(url))
+        if isinstance(data, dict) and data.get("type") == "FeatureCollection":
+            return data
+        result = data.get("resultUrl") if isinstance(data, dict) else None
+        if result:
+            return _json.loads(_get_text(result))
+        time.sleep(2)  # snapshot still generating
+    raise ValueError(
+        "The Land Hub download is still being prepared by ArcGIS Hub. "
+        "Try loading again in a minute."
+    )
+
+
+def load_land_for_sale(
+    pool: ConnectionPool, url: str, area_type: str = "MSOA"
+) -> int:  # pragma: no cover - PostGIS insert, parsing covered by _land_hub_rows
+    """Homes England Land Hub: public land for sale or entering the market."""
+    rows = _land_hub_rows(_land_hub_geojson(url))
+    if not rows:
+        raise ValueError(
+            "Parsed zero sites. Check the URL is the Homes England Land Hub "
+            "GeoJSON (hub.arcgis.com download or FeatureServer query)."
+        )
+    with pool.connection() as conn, conn.transaction():
+        conn.execute("DELETE FROM development_site WHERE source_type = 'forsale'")
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO development_site "
+                "(reference, name, hectares, min_dwellings, max_dwellings, lat, "
+                "lng, source_type, geom) VALUES "
+                "(%s, %s, %s, %s, %s, %s, %s, 'forsale', "
+                "ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+                [
+                    (
+                        r["reference"],
+                        r["name"],
+                        r["hectares"],
+                        r["min_dwellings"],
+                        r["max_dwellings"],
+                        r["lat"],
+                        r["lng"],
+                        r["lng"],
+                        r["lat"],
+                    )
+                    for r in rows
+                ],
+            )
+    return len(rows)
+
+
 def load_income(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
     if url.lower().endswith((".xlsx", ".xlsm")):
         records = _read_xlsx(_get_bytes(url))

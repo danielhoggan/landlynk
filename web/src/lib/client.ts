@@ -312,12 +312,15 @@ export interface CatchmentVerdict {
     family: number | null;
   };
   confidence: "high" | "medium" | "low";
-  /** Buildable supply and competitor schemes in the catchment. */
+  /** Buildable supply, land for sale and competitor schemes in the catchment,
+   * with refused applications split out as acquisition leads. */
   supply?: {
     buildablePlots: number;
     buildableHomes: number;
+    forSaleSites?: number;
     competitorSchemes: number;
     competitorHomes: number;
+    refusedSchemes?: number;
   };
 }
 
@@ -345,8 +348,42 @@ export interface DevelopmentSite {
   lng: number;
   /** The MSOA/LA the site falls in, for per-area listing. */
   areaCode: string | null;
-  /** "brownfield" (register plots) | "permission" (competitor applications). */
+  /** "brownfield" (register plots) | "forsale" (Homes England Land Hub) |
+   * "permission" (planning applications). */
   sourceType: string;
+  /** Planning decision state (permissions): Permitted, Rejected, Undecided,
+   * Withdrawn. A refusal marks a possible acquisition lead. */
+  status?: string | null;
+  /** Decision date, when decided. */
+  decidedDate?: string | null;
+  /** Link to the planning application record. */
+  url?: string | null;
+}
+
+/** Dot colours per site layer, shared by the map, mini map and drawer. */
+export const SITE_COLORS = {
+  brownfield: "#1F5A3C",
+  forsale: "#C9A24B",
+  permission: "#C04A1F",
+  refused: "#7C3AED",
+} as const;
+
+/** Whether a planning application was refused or withdrawn: an owner who
+ * sought consent and failed, an acquisition lead rather than competition. */
+export function isRefused(status?: string | null): boolean {
+  const s = (status ?? "").toLowerCase();
+  return s.includes("reject") || s.includes("refus") || s.includes("withdraw");
+}
+
+/** The layer a site belongs to on the map: refused applications separate from
+ * live competitor schemes, so they can be toggled and coloured apart. */
+export function siteLayerKey(
+  s: DevelopmentSite,
+): "brownfield" | "forsale" | "permission" | "refused" {
+  if (s.sourceType === "permission") {
+    return isRefused(s.status) ? "refused" : "permission";
+  }
+  return s.sourceType === "forsale" ? "forsale" : "brownfield";
 }
 
 // Brownfield development sites inside a catchment, for the Find a site overlay.

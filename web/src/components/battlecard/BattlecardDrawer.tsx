@@ -5,7 +5,12 @@ import { createPortal } from "react-dom";
 import { X, Download } from "lucide-react";
 import type { Battlecard } from "@/lib/types/battlecard";
 import type { GeoJsonGeometry } from "@/lib/types/catchment";
-import type { DevelopmentSite, CatchmentBenchmarks } from "@/lib/client";
+import {
+  SITE_COLORS,
+  siteLayerKey,
+  type DevelopmentSite,
+  type CatchmentBenchmarks,
+} from "@/lib/client";
 import { OnLocationSummary } from "./OnLocationSummary";
 import { AreaMiniMap } from "./AreaMiniMap";
 import { ScoreExplainer } from "./ScoreExplainer";
@@ -142,10 +147,8 @@ export function BattlecardDrawer({
                         : s.maxDwellings != null
                           ? `${s.maxDwellings} homes`
                           : null;
-                    // Competitor permissions red, brownfield green, matching
-                    // the map legend.
-                    const dot =
-                      s.sourceType === "permission" ? "#C04A1F" : "#1F5A3C";
+                    // Colour matches the main map legend per layer.
+                    const dot = SITE_COLORS[siteLayerKey(s)];
                     return (
                       <li
                         key={s.reference ?? i}

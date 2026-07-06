@@ -4,20 +4,11 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { GeoJsonGeometry } from "@/lib/types/catchment";
-import type { DevelopmentSite } from "@/lib/client";
+import { SITE_COLORS, siteLayerKey, type DevelopmentSite } from "@/lib/client";
 
 const BASE_STYLE: string =
   process.env.NEXT_PUBLIC_MAP_STYLE ??
   "https://tiles.openfreemap.org/styles/liberty";
-
-// Competitor permissions red, brownfield green, matching the main map legend.
-const SITE_COLOR: maplibregl.ExpressionSpecification = [
-  "match",
-  ["get", "sourceType"],
-  "permission",
-  "#C04A1F",
-  "#1F5A3C",
-];
 
 // A focused map of one area and the development plots inside it, shown in the
 // Battlecard drawer so a user sees exactly where the plots sit. Remounts per
@@ -93,6 +84,8 @@ export function AreaMiniMap({
             geometry: { type: "Point", coordinates: [s.lng, s.lat] },
             properties: {
               sourceType: s.sourceType,
+              // Colour matches the main map legend per layer.
+              dotColor: SITE_COLORS[siteLayerKey(s)],
               name: s.name ?? s.reference ?? "Site",
             },
           })),
@@ -104,7 +97,7 @@ export function AreaMiniMap({
         source: "plots",
         paint: {
           "circle-radius": 6,
-          "circle-color": SITE_COLOR,
+          "circle-color": ["get", "dotColor"],
           "circle-stroke-color": "#FFFFFF",
           "circle-stroke-width": 1.5,
         },

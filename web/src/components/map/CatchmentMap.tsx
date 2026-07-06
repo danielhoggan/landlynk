@@ -10,7 +10,12 @@ import type {
 } from "@/lib/types/catchment";
 import { PRIORITY_COLORS, PRIORITY_LABELS } from "@/lib/priority";
 import { tagsForArea, type TagContext } from "@/lib/areaTags";
-import type { DevelopmentSite, CouncilBoundary } from "@/lib/client";
+import {
+  SITE_COLORS,
+  siteLayerKey,
+  type DevelopmentSite,
+  type CouncilBoundary,
+} from "@/lib/client";
 
 /** Metric the area fill is shaded by; "band" is the priority ranking. */
 export type ShadeBy = "band" | "income" | "housePrice" | "ownerOccupied";
@@ -299,13 +304,9 @@ export function CatchmentMap({
         source: "sites",
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 5, 10, 7, 14, 10],
-          "circle-color": [
-            "match",
-            ["get", "sourceType"],
-            "permission",
-            "#C04A1F",
-            "#1F5A3C",
-          ],
+          // Colour computed per feature (brownfield, for sale, competitor,
+          // refused), so the layer just reads it.
+          "circle-color": ["get", "dotColor"],
           "circle-stroke-color": "#FFFFFF",
           "circle-stroke-width": 1.5,
           "circle-opacity": 0.9,
@@ -316,17 +317,31 @@ export function CatchmentMap({
         if (!p) return;
         const cap = p.capacity ? String(p.capacity) : "";
         const typeLabel =
-          p.sourceType === "permission"
-            ? "Competitor development"
-            : "Brownfield land";
+          p.layerKey === "refused"
+            ? "Refused application (possible acquisition lead)"
+            : p.layerKey === "permission"
+              ? "Competitor development"
+              : p.layerKey === "forsale"
+                ? "Public land for sale (Homes England)"
+                : "Brownfield land";
+        const status =
+          p.status && p.layerKey !== "forsale"
+            ? `${String(p.status)}${p.decidedDate ? ` · ${String(p.decidedDate)}` : ""}`
+            : "";
+        const link =
+          typeof p.url === "string" && p.url.startsWith("http")
+            ? `<a href="${escapeHtml(p.url)}" target="_blank" rel="noopener" class="text-light-accent underline">View application</a>`
+            : "";
         popup
           .setLngLat(e.lngLat)
           .setHTML(
             `<div class="text-xs">
                <div class="font-semibold text-sm">${escapeHtml(String(p.name || "Development site"))}</div>
                <div class="text-neutral-500">${typeLabel}</div>
+               ${status ? `<div>${escapeHtml(status)}</div>` : ""}
                ${cap ? `<div>${escapeHtml(cap)} dwellings</div>` : ""}
                ${p.hectares ? `<div>${escapeHtml(String(p.hectares))} ha</div>` : ""}
+               ${link}
              </div>`,
           )
           .addTo(map);
@@ -480,16 +495,24 @@ function sitesToFeatures(
       : (s.maxDwellings ?? s.minDwellings ?? null);
   return {
     type: "FeatureCollection",
-    features: (sites ?? []).map((s) => ({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [s.lng, s.lat] },
-      properties: {
-        name: s.name ?? "Development site",
-        capacity: capacity(s),
-        hectares: s.hectares,
-        sourceType: s.sourceType,
-      },
-    })),
+    features: (sites ?? []).map((s) => {
+      const layerKey = siteLayerKey(s);
+      return {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [s.lng, s.lat] },
+        properties: {
+          name: s.name ?? "Development site",
+          capacity: capacity(s),
+          hectares: s.hectares,
+          sourceType: s.sourceType,
+          layerKey,
+          dotColor: SITE_COLORS[layerKey],
+          status: s.status ?? null,
+          decidedDate: s.decidedDate ?? null,
+          url: s.url ?? null,
+        },
+      };
+    }),
   };
 }
 

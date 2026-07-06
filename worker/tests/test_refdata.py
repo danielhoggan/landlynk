@@ -179,11 +179,95 @@ def test_planit_filters_residential_inside_polygon():
             },
         ]
     }
-    names = [s["name"] for s in _residential_sites_from_geojson(data, poly)]
+    sites = _residential_sites_from_geojson(data, poly)
+    names = [s["name"] for s in sites]
     assert "Mill Road" in names  # residential keyword, inside
     assert "Big site" in names  # large application, inside
     assert "1 High St" not in names  # not residential
     assert "Far away" not in names  # outside the polygon
+
+
+def test_planit_carries_decision_status():
+    # Decision state, decided date and link ride through, so refusals can be
+    # shown as acquisition leads rather than competition. Bad links dropped.
+    from shapely.geometry import shape
+
+    from landlynk_worker.pipeline.planit import _residential_sites_from_geojson
+
+    poly = shape(
+        {
+            "type": "Polygon",
+            "coordinates": [[[-1, 51], [-1, 52], [0, 52], [0, 51], [-1, 51]]],
+        }
+    )
+    data = {
+        "features": [
+            {
+                "geometry": {"type": "Point", "coordinates": [-0.5, 51.5]},
+                "properties": {
+                    "description": "Erection of 40 dwellings",
+                    "address": "Refused Farm",
+                    "app_state": "Rejected",
+                    "decided_date": "2026-01-15",
+                    "link": "https://www.planit.org.uk/planapplic/X/",
+                },
+            },
+            {
+                "geometry": {"type": "Point", "coordinates": [-0.4, 51.4]},
+                "properties": {
+                    "description": "60 homes",
+                    "address": "Live Site",
+                    "app_state": "Undecided",
+                    "link": "javascript:alert(1)",
+                },
+            },
+        ]
+    }
+    by_name = {s["name"]: s for s in _residential_sites_from_geojson(data, poly)}
+    assert by_name["Refused Farm"]["status"] == "Rejected"
+    assert by_name["Refused Farm"]["decidedDate"] == "2026-01-15"
+    assert by_name["Refused Farm"]["url"].startswith("https://")
+    assert by_name["Live Site"]["status"] == "Undecided"
+    assert by_name["Live Site"]["url"] is None  # non-http link dropped
+
+
+def test_land_hub_rows_parse_and_filter():
+    # Land Hub GeoJSON parses to site points: acres convert to hectares,
+    # capacity to max dwellings, sold parcels dropped, status kept in the name.
+    from landlynk_worker.refdata.loaders import _land_hub_rows
+
+    square = [[[-1.0, 52.0], [-1.0, 52.01], [-0.99, 52.01], [-0.99, 52.0], [-1.0, 52.0]]]
+    data = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "geometry": {"type": "Polygon", "coordinates": square},
+                "properties": {
+                    "Parcel_Name": "Old Park Mound, Telford",
+                    "Gross_Area__Acres_": 2.8602,
+                    "Marketing_Status": "On market",
+                    "Housing_Capacity": 67.0,
+                    "Site_Reference": 1494,
+                },
+            },
+            {
+                "geometry": {"type": "Polygon", "coordinates": square},
+                "properties": {
+                    "Parcel_Name": "Gone Site",
+                    "Marketing_Status": "Sold",
+                },
+            },
+            {"geometry": None, "properties": {"Parcel_Name": "No geometry"}},
+        ],
+    }
+    rows = _land_hub_rows(data)
+    assert len(rows) == 1  # sold and geometry-less parcels dropped
+    row = rows[0]
+    assert row["name"] == "Old Park Mound, Telford (On market)"
+    assert row["reference"] == "1494"
+    assert row["hectares"] == 1.16  # 2.8602 acres
+    assert row["max_dwellings"] == 67
+    assert 51.99 < row["lat"] < 52.02 and -1.01 < row["lng"] < -0.98
 
 
 def test_median_age_and_bands():

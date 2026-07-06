@@ -19,6 +19,7 @@ const NAMES: Record<string, string> = {
   postcodes: "Postcodes",
   hospitals: "Hospitals",
   development_sites: "Development sites (brownfield)",
+  land_for_sale: "Land for sale (Homes England)",
 };
 
 const DISMISS_KEY = "landlynk.staleDismissed";

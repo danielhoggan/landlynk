@@ -27,6 +27,8 @@ import {
   getCatchmentCouncils,
   pollCatchment,
   submitCatchment,
+  SITE_COLORS,
+  siteLayerKey,
   type BuilderProfile,
   type DevelopmentSite,
   type CatchmentBenchmarks,
@@ -250,7 +252,9 @@ export default function HomePage() {
   // competitor (live planning applications) off by default as it is context.
   const [siteLayers, setSiteLayers] = useState<Record<string, boolean>>({
     brownfield: true,
+    forsale: true,
     permission: false,
+    refused: false,
   });
 
   const areas: CatchmentArea[] = catchment?.areas ?? [];
@@ -375,13 +379,17 @@ export default function HomePage() {
 
   // Read from the run's stored config, so the drawer reflects what the run
   // actually used: whether a price was set and which audience it searched for.
-  // Brownfield plus live competitor developments, the full overlay set.
+  // Brownfield, land for sale and live planning applications (competitor and
+  // refused), the full overlay set.
   const overlaySites = [...sites, ...competitors];
-  // Which site layers are shown on the map and list. Buildable land is on by
-  // default; competitor permissions are opt-in context.
-  const visibleSites = overlaySites.filter((s) => siteLayers[s.sourceType] ?? true);
+  // Which site layers are shown on the map and list. Buildable and for-sale
+  // land on by default; live competitors and refusals are opt-in context.
+  const visibleSites = overlaySites.filter(
+    (s) => siteLayers[siteLayerKey(s)] ?? true,
+  );
   const siteCounts = overlaySites.reduce<Record<string, number>>((acc, s) => {
-    acc[s.sourceType] = (acc[s.sourceType] ?? 0) + 1;
+    const key = siteLayerKey(s);
+    acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
 
@@ -1546,13 +1554,27 @@ export default function HomePage() {
               <span className="font-medium text-neutral-500">Land layers</span>
               {(
                 [
-                  ["brownfield", "Brownfield", "#1F5A3C"],
-                  ["permission", "Competitor", "#C04A1F"],
+                  ["brownfield", "Brownfield", SITE_COLORS.brownfield],
+                  ["forsale", "For sale", SITE_COLORS.forsale],
+                  ["permission", "Competitor", SITE_COLORS.permission],
+                  ["refused", "Refused", SITE_COLORS.refused],
                 ] as const
               ).map(([key, label, colour]) => {
                 const n = siteCounts[key] ?? 0;
                 const on = siteLayers[key];
-                const loading = key === "permission" && competitorsLoading;
+                const loading =
+                  (key === "permission" || key === "refused") &&
+                  competitorsLoading;
+                const emptyTitle: Record<string, string> = {
+                  brownfield:
+                    "No brownfield register sites in this catchment. An admin can load or refresh the Development sites dataset on Reference data.",
+                  forsale:
+                    "No Homes England land for sale in this catchment. An admin can load the Land for sale dataset on Reference data.",
+                  permission:
+                    "No live residential planning applications found in this catchment. These load automatically from national planning data.",
+                  refused:
+                    "No refused or withdrawn applications found in this catchment. These load automatically from national planning data.",
+                };
                 return (
                   <button
                     key={key}
@@ -1560,11 +1582,9 @@ export default function HomePage() {
                     disabled={loading || n === 0}
                     title={
                       loading
-                        ? "Finding competitor developments..."
+                        ? "Finding planning applications..."
                         : n === 0
-                          ? key === "permission"
-                            ? "No recent residential planning applications found in this catchment. Competitor schemes load live from national planning data, no upload needed."
-                            : "No brownfield register sites in this catchment. An admin can load or refresh the Development sites dataset on Reference data."
+                          ? emptyTitle[key]
                           : on
                             ? `Hide ${label.toLowerCase()} plots`
                             : `Show ${label.toLowerCase()} plots`
