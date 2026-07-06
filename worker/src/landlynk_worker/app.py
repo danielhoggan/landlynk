@@ -1916,6 +1916,38 @@ def _live_competitors(geom: dict) -> list[dict]:
     return sites
 
 
+@app.get("/admin/diagnostics/sites")
+def sites_diagnostics(user: dict = Depends(current_user)) -> dict:
+    """What the development_site table actually holds, per source type, with
+    coordinate ranges, so an admin can tell "not loaded" from "loaded with bad
+    coordinates" (e.g. a feed left in British National Grid) at a glance."""
+    _require_admin(user)
+    out: dict = {"sourceTypes": {}}
+    try:
+        with get_pool().connection() as conn:
+            rows = conn.execute(
+                "SELECT source_type, count(*), MIN(lat), MAX(lat), "
+                "MIN(lng), MAX(lng) FROM development_site GROUP BY source_type"
+            ).fetchall()
+        for st, n, min_lat, max_lat, min_lng, max_lng in rows:
+            out["sourceTypes"][st] = {
+                "count": int(n),
+                "latRange": [round(float(min_lat), 3), round(float(max_lat), 3)],
+                "lngRange": [round(float(min_lng), 3), round(float(max_lng), 3)],
+                # UK bounds; false means the rows were loaded before the
+                # coordinate transform and need reloading.
+                "coordinatesLookValid": bool(
+                    49 < float(min_lat)
+                    and float(max_lat) < 61
+                    and -9 < float(min_lng)
+                    and float(max_lng) < 2
+                ),
+            }
+    except Exception as exc:  # no DB or table missing
+        out["error"] = str(exc)
+    return out
+
+
 @app.get("/admin/diagnostics/planit")
 def planit_diagnostics(user: dict = Depends(current_user)) -> dict:
     """Probe PlanIt from the worker so an admin can confirm the live competitor
