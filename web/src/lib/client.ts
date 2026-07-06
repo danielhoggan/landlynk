@@ -349,7 +349,7 @@ export interface DevelopmentSite {
   /** The MSOA/LA the site falls in, for per-area listing. */
   areaCode: string | null;
   /** "brownfield" (register plots) | "forsale" (Homes England Land Hub) |
-   * "permission" (planning applications). */
+   * "mod_disposal" (MOD disposals) | "permission" (planning applications). */
   sourceType: string;
   /** Planning decision state (permissions): Permitted, Rejected, Undecided,
    * Withdrawn. A refusal marks a possible acquisition lead. */
@@ -399,7 +399,10 @@ export function siteLayerKey(
     if (isConsentedOutline(s)) return "consented";
     return "permission";
   }
-  return s.sourceType === "forsale" ? "forsale" : "brownfield";
+  // Homes England and MOD disposals pool as the gold for-sale layer.
+  return s.sourceType === "forsale" || s.sourceType === "mod_disposal"
+    ? "forsale"
+    : "brownfield";
 }
 
 // Brownfield development sites inside a catchment, for the Find a site overlay.

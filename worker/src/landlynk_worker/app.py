@@ -1710,7 +1710,7 @@ def catchment_sites(
                 "LEFT JOIN geo_boundaries b "
                 "ON b.area_type = %s AND ST_Within(s.geom, b.geom) "
                 "WHERE ST_Within(s.geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
-                "AND s.source_type IN ('brownfield', 'forsale') "
+                "AND s.source_type IN ('brownfield', 'forsale', 'mod_disposal') "
                 "ORDER BY s.max_dwellings DESC NULLS LAST LIMIT 1500",
                 [area_type, json.dumps(geom)],
             ).fetchall()
@@ -2040,7 +2040,7 @@ def _site_supply(geom: dict | None, catchment_id: str | None = None) -> dict:
             rows = conn.execute(
                 "SELECT source_type, count(*), COALESCE(SUM(max_dwellings), 0) "
                 "FROM development_site "
-                "WHERE source_type IN ('brownfield', 'forsale') "
+                "WHERE source_type IN ('brownfield', 'forsale', 'mod_disposal') "
                 "AND ST_Within(geom, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)) "
                 "GROUP BY source_type",
                 [json.dumps(geom)],
@@ -2049,8 +2049,8 @@ def _site_supply(geom: dict | None, catchment_id: str | None = None) -> dict:
             if source_type == "brownfield":
                 out["buildablePlots"] = int(count)
                 out["buildableHomes"] = int(homes or 0)
-            else:
-                out["forSaleSites"] = int(count)
+            else:  # Homes England and MOD disposals pool as land for sale
+                out["forSaleSites"] += int(count)
     except Exception:  # no DB, no dataset, or PostGIS missing
         pass
     stored = _stored_competitors(catchment_id) if catchment_id else None

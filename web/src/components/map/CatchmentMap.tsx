@@ -324,7 +324,9 @@ export function CatchmentMap({
               : p.layerKey === "permission"
                 ? "Competitor development"
                 : p.layerKey === "forsale"
-                  ? "Public land for sale (Homes England)"
+                  ? p.sourceType === "mod_disposal"
+                    ? "MOD land disposal"
+                    : "Public land for sale (Homes England)"
                   : "Brownfield land";
         const status =
           p.status && p.layerKey !== "forsale"

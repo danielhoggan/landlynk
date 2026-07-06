@@ -430,11 +430,11 @@ export function HowItWorks() {
           </Card>
           <Card icon={Info} title="Buildable land and land for sale">
             The national brownfield land register (previously-developed sites
-            with dwelling capacity) plus the Homes England Land Hub, the open
-            register of public land actively for sale. Both skew to public and
-            urban-regeneration land, so they are the best open national sources
-            of available land rather than a complete picture of every site on
-            the market.
+            with dwelling capacity) plus public land actively for sale: the
+            Homes England Land Hub and the MOD disposal database. All skew to
+            public and urban-regeneration land, so they are the best open
+            national sources of available land rather than a complete picture
+            of every site on the market.
           </Card>
           <Card icon={Info} title="Planning applications">
             Residential planning applications, pulled live and nationally from

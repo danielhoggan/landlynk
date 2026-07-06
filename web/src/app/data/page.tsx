@@ -88,6 +88,10 @@ const DEFAULT_BROWNFIELD =
 const DEFAULT_LAND_FOR_SALE =
   "https://hub.arcgis.com/api/download/v1/items/" +
   "aab1b35c0d4d44d08b2233eb4a08df2a/geojson?redirect=false&layers=0";
+// MOD disposal database: the stable GOV.UK publication page; the worker
+// resolves the per-release .ods link from it.
+const DEFAULT_MOD_DISPOSALS =
+  "https://www.gov.uk/government/publications/disposal-database-house-of-commons-report";
 
 interface FieldDef {
   key: string;
@@ -333,6 +337,22 @@ const DATASETS: DatasetDef[] = [
       },
     ],
   },
+  {
+    id: "mod_disposals",
+    title: "MOD land disposals",
+    blurb:
+      "Defence sites being sold or assessed for disposal, from the MOD disposal database: site, hectares, housing unit potential and disposal year. Sites are geocoded at load time (no coordinates in the source), so the load takes a few minutes. Shown with the gold For sale plots. Open Government Licence.",
+    source:
+      "https://www.gov.uk/government/publications/disposal-database-house-of-commons-report",
+    sourceLabel: "MOD disposal database (GOV.UK)",
+    fields: [
+      {
+        key: "url",
+        label: "GOV.UK publication page (or .ods) URL",
+        placeholder: DEFAULT_MOD_DISPOSALS,
+      },
+    ],
+  },
 ];
 
 export default function DataPage() {
@@ -355,6 +375,7 @@ export default function DataPage() {
     hospitals: { url: DEFAULT_HOSPITALS },
     development_sites: { url: DEFAULT_BROWNFIELD },
     land_for_sale: { url: DEFAULT_LAND_FOR_SALE },
+    mod_disposals: { url: DEFAULT_MOD_DISPOSALS },
   });
   const [areaType, setAreaType] = useState<"MSOA" | "LA">("MSOA");
   const [errors, setErrors] = useState<Record<string, string>>({});

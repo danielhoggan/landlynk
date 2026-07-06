@@ -20,6 +20,7 @@ const NAMES: Record<string, string> = {
   hospitals: "Hospitals",
   development_sites: "Development sites (brownfield)",
   land_for_sale: "Land for sale (Homes England)",
+  mod_disposals: "MOD land disposals",
 };
 
 const DISMISS_KEY = "landlynk.staleDismissed";

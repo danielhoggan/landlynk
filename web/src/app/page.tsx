@@ -1600,7 +1600,7 @@ export default function HomePage() {
                   brownfield:
                     "No brownfield register sites in this catchment. An admin can load or refresh the Development sites dataset on Reference data.",
                   forsale:
-                    "No Homes England land for sale in this catchment. An admin can load the Land for sale dataset on Reference data.",
+                    "No public land for sale in this catchment. An admin can load the Land for sale (Homes England) and MOD land disposals datasets on Reference data.",
                   permission:
                     "No live residential planning applications found in this catchment. These load automatically from national planning data.",
                   consented:

@@ -302,6 +302,78 @@ def test_land_hub_transforms_british_national_grid():
     assert 52.6 < row["lat"] < 52.8
 
 
+def _mini_ods(rows):
+    """A minimal ODS file with one sheet, for parser tests."""
+    import io
+    import zipfile
+
+    content = (
+        '<?xml version="1.0"?>'
+        '<office:document-content '
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0">'
+        "<office:body><office:spreadsheet><table:table>"
+    )
+    for row in rows:
+        content += "<table:table-row>"
+        for cell in row:
+            content += f"<table:table-cell><text:p>{cell}</text:p></table:table-cell>"
+        content += "</table:table-row>"
+    content += "</table:table></office:spreadsheet></office:body></office:document-content>"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("content.xml", content)
+    return buf.getvalue()
+
+
+def test_mod_disposals_parse():
+    # The MOD ODS parses to disposal sites: title rows skipped, area and
+    # housing unit potential coerced (TBC and 0 read as unknown), and a
+    # geocoding query built from the address columns.
+    from landlynk_worker.refdata.loaders import _mod_rows, _read_ods_rows
+
+    ods = _mini_ods(
+        [
+            ["House of Commons Report"],
+            ["12/08/2025 10:00"],
+            [
+                "ID", "Status", "DEO Site", "Primary Establishment Name",
+                "Primary Parcel Name", "Disposal From", "Address", "Town",
+                "County", "Country", "Total Area (ha)",
+                "Housing Unit Potential (HUP)", "Constituency",
+            ],
+            [
+                "2058640", "Assessment", "Yes", "ALANBROOKE BARRACKS",
+                "ALANBROOKE BARRACKS", "2032", "Alanbrooke Barracks, Topcliffe",
+                "Thirsk", "North Yorkshire", "ENGLAND", "150.86", "500",
+                "Thirsk and Malton",
+            ],
+            [
+                "2059121", "Delivery", "", "ALDERSHOT GARRISON",
+                "Various Parcels", "2025", "Alison's Road", "Aldershot",
+                "Hampshire", "England", "TBC", "0", "Aldershot",
+            ],
+            [""],
+        ]
+    )
+    rows = _mod_rows(_read_ods_rows(ods))
+    assert len(rows) == 2
+    first = rows[0]
+    assert first["reference"] == "mod-2058640"
+    assert first["name"].startswith("Alanbrooke Barracks (MOD disposal")
+    assert "2032" in first["name"]
+    assert first["hectares"] == 150.86
+    assert first["max_dwellings"] == 500
+    assert first["geocode_query"] == (
+        "Alanbrooke Barracks, Topcliffe, Thirsk, North Yorkshire, UK"
+    )
+    assert first["fallback_query"] == "Thirsk, North Yorkshire, UK"
+    second = rows[1]
+    assert second["hectares"] is None  # TBC
+    assert second["max_dwellings"] is None  # zero potential reads unassessed
+
+
 def test_median_age_and_bands():
     counts = {age: 10 for age in range(0, 91)}
     assert t.aggregate_age_bands(counts)["age_0_15"] == 160

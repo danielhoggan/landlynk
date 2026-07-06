@@ -1771,6 +1771,205 @@ def load_land_for_sale(
     return len(rows)
 
 
+def _read_ods_rows(data: bytes) -> list[list[str]]:
+    """Minimal ODS reader: the first sheet as rows of cell strings.
+
+    Handles repeated columns; enough for the small MOD disposals workbook
+    without taking on an ODS dependency.
+    """
+    import xml.etree.ElementTree as ET
+
+    ns = {
+        "table": "urn:oasis:names:tc:opendocument:xmlns:table:1.0",
+        "text": "urn:oasis:names:tc:opendocument:xmlns:text:1.0",
+    }
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        root = ET.fromstring(z.read("content.xml"))
+    table = root.find(".//table:table", ns)
+    if table is None:
+        return []
+    rows: list[list[str]] = []
+    for tr in table.findall("table:table-row", ns):
+        cells: list[str] = []
+        for tc in tr.findall("table:table-cell", ns):
+            rep = int(
+                tc.get(f"{{{ns['table']}}}number-columns-repeated", "1") or 1
+            )
+            txt = " ".join(
+                "".join(p.itertext()) for p in tc.findall("text:p", ns)
+            ).strip()
+            cells.extend([txt] * min(rep, 64))
+        rows.append(cells)
+    return rows
+
+
+def _mod_rows(sheet: list[list[str]]) -> list[dict]:
+    """MOD disposal-database rows (site, status, disposal year, area, housing
+    unit potential and a geocoding query built from the address columns). Pure,
+    so it is unit tested without the network; coordinates are resolved by the
+    load function."""
+    hdr_i = next(
+        (i for i, r in enumerate(sheet) if r and (r[0] or "").strip() == "ID"),
+        None,
+    )
+    if hdr_i is None:
+        return []
+    hdr = [(c or "").strip().lower() for c in sheet[hdr_i]]
+
+    def col(*names: str) -> int | None:
+        for n in names:
+            for i, h in enumerate(hdr):
+                if n in h:
+                    return i
+        return None
+
+    c_id = col("id")
+    c_status = col("status")
+    c_est = col("establishment")
+    c_parcel = col("parcel")
+    c_from = col("disposal from")
+    c_addr = col("address")
+    c_town = col("town")
+    c_county = col("county")
+    c_area = col("total area")
+    c_hup = col("housing unit")
+
+    def g(row: list[str], i: int | None) -> str:
+        return (row[i] or "").strip() if i is not None and i < len(row) else ""
+
+    out: list[dict] = []
+    for r in sheet[hdr_i + 1 :]:
+        if not g(r, c_id):
+            continue
+        est = g(r, c_est).title() or g(r, c_parcel).title() or g(r, c_addr)
+        if not est:
+            continue
+        status = g(r, c_status)
+        year = g(r, c_from)
+        suffix = ", ".join(
+            b
+            for b in ("MOD disposal", status, f"from {year}" if year else "")
+            if b
+        )
+        hup = _to_int(t.parse_number(g(r, c_hup)))
+        out.append(
+            {
+                "reference": f"mod-{g(r, c_id)}",
+                "name": f"{est} ({suffix})",
+                "hectares": t.parse_number(g(r, c_area)),
+                "min_dwellings": None,
+                # Zero housing unit potential reads as unassessed, not none.
+                "max_dwellings": hup or None,
+                "geocode_query": ", ".join(
+                    b
+                    for b in (g(r, c_addr), g(r, c_town), g(r, c_county), "UK")
+                    if b
+                ),
+                "fallback_query": ", ".join(
+                    b for b in (g(r, c_town), g(r, c_county), "UK") if b
+                ),
+            }
+        )
+    return out
+
+
+def _nominatim_geocode(query: str) -> tuple[float, float] | None:
+    """Geocode one address with OSM Nominatim (free; their usage policy caps
+    at one request per second, hence the sleep)."""
+    import time
+
+    resp = httpx.get(
+        "https://nominatim.openstreetmap.org/search",
+        params={"q": query, "format": "json", "limit": 1, "countrycodes": "gb"},
+        headers={"User-Agent": "LandLynk/1.0 (geographic intelligence engine)"},
+        timeout=20.0,
+    )
+    resp.raise_for_status()
+    hits = resp.json()
+    time.sleep(1.1)
+    if not hits:
+        return None
+    return float(hits[0]["lat"]), float(hits[0]["lon"])
+
+
+_ODS_LINK_RE = re.compile(r'href="([^"]+\.ods)"', re.IGNORECASE)
+
+
+def load_mod_disposals(
+    pool: ConnectionPool, url: str, area_type: str = "MSOA", geocode: object = None
+) -> int:  # pragma: no cover - network and PostGIS; parsing covered by _mod_rows
+    """MOD land disposals (DIO disposal database): defence sites being sold or
+    assessed for disposal, with hectares and housing unit potential.
+
+    Accepts the stable GOV.UK publication page (the per-release .ods link is
+    resolved from it) or a direct .ods URL. Sites carry no coordinates, so each
+    is geocoded once at load time via OSM Nominatim; rows that cannot be placed
+    are skipped rather than mislocated.
+    """
+    from urllib.parse import urljoin
+
+    call = geocode or _nominatim_geocode
+    data = _get_bytes(url)
+    head = data[:1024].lstrip().lower()
+    if head.startswith(b"<!doctype html") or head.startswith(b"<html") or b"<head" in head:
+        match = _ODS_LINK_RE.search(data.decode("utf-8", "ignore"))
+        if not match:
+            raise ValueError(
+                "No .ods download found on that page. Paste the GOV.UK "
+                "'Disposal database: House of Commons report' page URL or the "
+                "spreadsheet link itself."
+            )
+        data = _get_bytes(urljoin(url, match.group(1)))
+    rows = _mod_rows(_read_ods_rows(data))
+    if not rows:
+        raise ValueError(
+            "Parsed zero disposal sites. Check the URL is the MOD disposal "
+            "database (House of Commons report) page or its .ods file."
+        )
+    placed: list[dict] = []
+    for r in rows:
+        coords = None
+        try:
+            coords = call(r["geocode_query"]) or (
+                call(r["fallback_query"]) if r["fallback_query"] else None
+            )
+        except Exception:
+            coords = None
+        if coords is None:
+            continue
+        r["lat"], r["lng"] = coords
+        placed.append(r)
+    if not placed:
+        raise ValueError("Could not geocode any disposal sites. Try again later.")
+    with pool.connection() as conn, conn.transaction():
+        conn.execute(
+            "DELETE FROM development_site WHERE source_type = 'mod_disposal'"
+        )
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO development_site "
+                "(reference, name, hectares, min_dwellings, max_dwellings, lat, "
+                "lng, source_type, geom) VALUES "
+                "(%s, %s, %s, %s, %s, %s, %s, 'mod_disposal', "
+                "ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+                [
+                    (
+                        r["reference"],
+                        r["name"],
+                        r["hectares"],
+                        r["min_dwellings"],
+                        r["max_dwellings"],
+                        r["lat"],
+                        r["lng"],
+                        r["lng"],
+                        r["lat"],
+                    )
+                    for r in placed
+                ],
+            )
+    return len(placed)
+
+
 def load_income(pool: ConnectionPool, url: str, area_type: str = "MSOA") -> int:
     if url.lower().endswith((".xlsx", ".xlsm")):
         records = _read_xlsx(_get_bytes(url))
