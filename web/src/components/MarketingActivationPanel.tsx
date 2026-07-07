@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Megaphone, RefreshCw } from "lucide-react";
+import { ChevronDown, Download, Megaphone, RefreshCw } from "lucide-react";
 import {
   generateMarketingPlaybook,
   getMarketingPlaybook,
@@ -119,16 +119,24 @@ export function MarketingActivationPanel({
           </button>
         )}
         {playbook && (
-          <button
-            type="button"
-            onClick={() => setPending({ refresh: true })}
-            disabled={busy}
-            aria-label="Regenerate"
-            title="Regenerate"
-            className="rounded-card border border-neutral-300 p-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-          </button>
+          <>
+            <a
+              href={`/api/catchments/${catchmentId}/marketing/pptx`}
+              className="flex items-center gap-1.5 rounded-card border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100"
+            >
+              <Download size={14} /> Deck
+            </a>
+            <button
+              type="button"
+              onClick={() => setPending({ refresh: true })}
+              disabled={busy}
+              aria-label="Regenerate"
+              title="Regenerate"
+              className="rounded-card border border-neutral-300 p-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
+            </button>
+          </>
         )}
       </div>
 

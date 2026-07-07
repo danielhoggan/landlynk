@@ -66,7 +66,18 @@ const SHADE_OPTIONS: { id: ShadeBy; label: string }[] = [
   { id: "income", label: "Avg income" },
   { id: "housePrice", label: "House price" },
   { id: "ownerOccupied", label: "Owner-occupied" },
+  { id: "medianAge", label: "Median age" },
+  { id: "familyShare", label: "Family households" },
+  { id: "privateRented", label: "Private rented" },
 ];
+
+// Percent-valued shade metrics (stored 0 to 100); median age is years and the
+// rest are pounds.
+const PCT_SHADES: ReadonlySet<ShadeBy> = new Set([
+  "ownerOccupied",
+  "familyShare",
+  "privateRented",
+]);
 
 // MVP entry surface: paste a postcode or grid ref, the worker builds the
 // catchment, and the interactive map with ranked clickable areas renders here
@@ -338,11 +349,13 @@ export default function HomePage() {
   const shadeMin = shadeVals.length ? Math.min(...shadeVals) : null;
   const shadeMax = shadeVals.length ? Math.max(...shadeVals) : null;
   const fmtShadeVal = (v: number) =>
-    shadeBy === "ownerOccupied"
+    PCT_SHADES.has(shadeBy)
       ? `${Math.round(v)}%`
-      : v >= 1000
-        ? `£${Math.round(v / 1000)}k`
-        : `£${Math.round(v)}`;
+      : shadeBy === "medianAge"
+        ? `${Math.round(v)} yrs`
+        : v >= 1000
+          ? `£${Math.round(v / 1000)}k`
+          : `£${Math.round(v)}`;
 
   // Housebuilder intents are signposted only for residential brands; everyone
   // else keeps the single, generic flow. A stored run intent also counts: an

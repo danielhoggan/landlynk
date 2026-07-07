@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Gauge, Layers } from "lucide-react";
-import { getCatchmentVerdict, type CatchmentVerdict } from "@/lib/client";
+import {
+  getCatchmentCompetitors,
+  getCatchmentVerdict,
+  type CatchmentVerdict,
+} from "@/lib/client";
 
 function money(v: number | null | undefined): string {
   if (v == null) return "n/a";
@@ -46,7 +50,19 @@ function useVerdict(catchmentId: string) {
     let active = true;
     setLoading(true);
     getCatchmentVerdict(catchmentId)
-      .then((v) => active && setVerdict(v))
+      .then((v) => {
+        if (!active) return;
+        setVerdict(v);
+        // The verdict never blocks on the national planning source. When the
+        // run has no snapshot yet, take it in the background (10-20s) and
+        // re-read so the supply row fills in.
+        if (v?.supply?.planningPending) {
+          getCatchmentCompetitors(catchmentId)
+            .then(() => getCatchmentVerdict(catchmentId))
+            .then((v2) => active && v2 && setVerdict(v2))
+            .catch(() => {});
+        }
+      })
       .catch(() => {})
       .finally(() => active && setLoading(false));
     return () => {
@@ -108,10 +124,16 @@ export function VerdictPanel({ catchmentId }: { catchmentId: string }) {
           />
         ))}
       </div>
+      {verdict.supply?.planningPending && (
+        <p className="text-[11px] text-neutral-400">
+          Finding planning applications for this catchment…
+        </p>
+      )}
       {verdict.supply &&
         (verdict.supply.buildablePlots > 0 ||
           verdict.supply.competitorSchemes > 0 ||
           (verdict.supply.forSaleSites ?? 0) > 0 ||
+          (verdict.supply.consentedSchemes ?? 0) > 0 ||
           (verdict.supply.refusedSchemes ?? 0) > 0) && (
           <>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
@@ -132,6 +154,12 @@ export function VerdictPanel({ catchmentId }: { catchmentId: string }) {
                 label="Competitor schemes"
                 value={count(verdict.supply.competitorSchemes)}
               />
+              {(verdict.supply.consentedSchemes ?? 0) > 0 && (
+                <Stat
+                  label="Consented land (outline permissions)"
+                  value={count(verdict.supply.consentedSchemes ?? 0)}
+                />
+              )}
               {(verdict.supply.refusedSchemes ?? 0) > 0 && (
                 <Stat
                   label="Refused applications (acquisition leads)"

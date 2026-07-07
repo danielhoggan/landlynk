@@ -320,7 +320,11 @@ export interface CatchmentVerdict {
     forSaleSites?: number;
     competitorSchemes: number;
     competitorHomes: number;
+    consentedSchemes?: number;
     refusedSchemes?: number;
+    /** True when the planning snapshot has not been taken yet; the panel
+     * fetches it in the background and re-reads the verdict. */
+    planningPending?: boolean;
   };
 }
 

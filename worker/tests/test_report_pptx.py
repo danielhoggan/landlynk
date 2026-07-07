@@ -63,6 +63,42 @@ def test_report_deck_renders():
     assert len(pptx) > 5000
 
 
+def test_marketing_deck_renders():
+    # The marketing activation playbook renders to a valid deck, with partial
+    # payloads (missing sections) tolerated.
+    from landlynk_worker.battlecard.marketing_pptx import render_marketing_pptx
+
+    playbook = {
+        "summary": "Lead with first time buyers.",
+        "model": "gpt-4o",
+        "budgetTiers": [
+            {"tier": "Core", "audience": "FTB", "sharePct": 60, "rationale": "r"},
+            {"tier": "Support", "audience": "Downsizers", "sharePct": 40, "rationale": ""},
+        ],
+        "channelMix": [
+            {
+                "tier": "Core",
+                "channels": [
+                    {"channel": "Google Search", "sharePct": 40, "role": "capture"},
+                    {"channel": "Meta", "sharePct": 35, "role": "demand"},
+                ],
+            }
+        ],
+        "searchThemes": [
+            {"theme": "New homes", "exampleKeywords": ["new homes near me"], "intent": "buy"}
+        ],
+        "metaAudiences": [
+            {"name": "Renters", "definition": "25-34", "creativeAngle": "own for less"}
+        ],
+        "watchOuts": ["affordability tight"],
+        "kpis": [{"metric": "CPL", "target": "under £40", "why": "efficiency"}],
+    }
+    pptx = render_marketing_pptx(playbook, "Oak Rise · NN15 7FJ")
+    assert pptx[:2] == b"PK"
+    # A near-empty playbook still renders rather than crashing the download.
+    assert render_marketing_pptx({"summary": ""}, "X")[:2] == b"PK"
+
+
 def test_report_deck_renders_without_a_brand_logo():
     # No logo: the deck must still render (falls back to the LandLynk wordmark).
     pptx = render_report_pptx(

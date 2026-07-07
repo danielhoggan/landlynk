@@ -1339,6 +1339,63 @@ def cached_marketing_activation(
     return {"playbook": {**cached, "cached": True}}
 
 
+@app.get("/catchments/{catchment_id}/marketing/pptx")
+def marketing_activation_pptx(
+    catchment_id: str,
+    user: dict = Depends(current_user),
+) -> Response:
+    """The cached Marketing Activation playbook as a branded deck. Internal
+    staff only; never generates, so it costs nothing: generate the plan first."""
+    from .battlecard.marketing_pptx import render_marketing_pptx
+
+    _require_access(catchment_id, user)
+    _require_internal(user)
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    codes = [a["areaCode"] for a in catchment.get("areas", [])]
+    model = _default_model()
+    intent = ((catchment.get("input") or {}).get("config") or {}).get("intent")
+    cached = (
+        store.get_config(_marketing_key(codes, model, intent))
+        if codes and model
+        else None
+    )
+    if cached is None:
+        raise HTTPException(
+            status_code=404, detail="No marketing plan yet. Generate it first."
+        )
+    inp = catchment.get("input") or {}
+    title = (
+        " · ".join(
+            b
+            for b in (
+                (inp.get("developmentName") or "").strip(),
+                (inp.get("value") or "").strip(),
+            )
+            if b
+        )
+        or "Marketing activation"
+    )
+    pptx = render_marketing_pptx(
+        cached,
+        title,
+        heading_color=_heading(catchment_id),
+        logo=_brand_logo(catchment_id),
+        accent=_brand_accent(catchment_id),
+    )
+    return Response(
+        content=pptx,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
+        headers={
+            "Content-Disposition": 'attachment; filename="landlynk-marketing.pptx"'
+        },
+    )
+
+
 class RoleRequest(BaseModel):
     role: str
 
@@ -2018,19 +2075,33 @@ def _is_refused(status: str | None) -> bool:
     return "reject" in s or "refus" in s or "withdraw" in s
 
 
-def _site_supply(geom: dict | None, catchment_id: str | None = None) -> dict:
-    """Buildable supply (brownfield register), public land for sale (Land Hub)
-    and competitor schemes (residential planning applications) in the
-    catchment, with refusals split out as acquisition leads rather than
-    competition. Prefers the run's persisted planning snapshot so verdicts and
-    exports match the pills without re-querying PlanIt. Best effort: zeros
-    without the data or a database."""
+def _is_consented(site: dict) -> bool:
+    """A granted outline permission: consented land, frequently sold with the
+    permission rather than built out by the applicant."""
+    return (
+        "permit" in (site.get("status") or "").lower()
+        and "outline" in (site.get("appType") or "").lower()
+    )
+
+
+def _site_supply(
+    geom: dict | None, catchment_id: str | None = None, allow_live: bool = True
+) -> dict:
+    """Buildable supply (brownfield register), public land for sale (Land Hub
+    and MOD) and competitor schemes (residential planning applications) in the
+    catchment, with consented outlines and refusals split out. Prefers the
+    run's persisted planning snapshot so verdicts and exports match the pills
+    without re-querying PlanIt. allow_live=False never blocks on the national
+    source: with no snapshot it returns planningPending so the caller can
+    fetch in the background. Best effort: zeros without the data or a
+    database."""
     out = {
         "buildablePlots": 0,
         "buildableHomes": 0,
         "forSaleSites": 0,
         "competitorSchemes": 0,
         "competitorHomes": 0,
+        "consentedSchemes": 0,
         "refusedSchemes": 0,
     }
     if not geom:
@@ -2054,11 +2125,18 @@ def _site_supply(geom: dict | None, catchment_id: str | None = None) -> dict:
     except Exception:  # no DB, no dataset, or PostGIS missing
         pass
     stored = _stored_competitors(catchment_id) if catchment_id else None
+    if stored is None and not allow_live:
+        out["planningPending"] = True
+        return out
     competitors = (
         stored["sites"] if stored is not None else _live_competitors(geom)
     )
     refused = [c for c in competitors if _is_refused(c.get("status"))]
-    out["competitorSchemes"] = len(competitors) - len(refused)
+    consented = [
+        c for c in competitors if not _is_refused(c.get("status")) and _is_consented(c)
+    ]
+    out["competitorSchemes"] = len(competitors) - len(refused) - len(consented)
+    out["consentedSchemes"] = len(consented)
     out["refusedSchemes"] = len(refused)
     return out
 
@@ -2070,7 +2148,12 @@ def catchment_verdict(
     """Whole-catchment appraisal verdict (price fit, addressable demand, supply)."""
     _require_access(catchment_id, user)
     verdict = _appraisal_verdict(_combined_card(catchment_id, request))
-    verdict["supply"] = _site_supply(_catchment_geometry(catchment_id), catchment_id)
+    # Never block the verdict on the national planning source: with no stored
+    # snapshot yet, supply reports planningPending and the panel fetches the
+    # snapshot in the background then re-reads.
+    verdict["supply"] = _site_supply(
+        _catchment_geometry(catchment_id), catchment_id, allow_live=False
+    )
     # Whether the run carried an explicit target price. When it did not, the
     # stored band is the engine default, so the UI must not present the price
     # fit as if the user chose that price.

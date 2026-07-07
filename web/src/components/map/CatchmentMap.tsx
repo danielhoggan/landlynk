@@ -18,7 +18,14 @@ import {
 } from "@/lib/client";
 
 /** Metric the area fill is shaded by; "band" is the priority ranking. */
-export type ShadeBy = "band" | "income" | "housePrice" | "ownerOccupied";
+export type ShadeBy =
+  | "band"
+  | "income"
+  | "housePrice"
+  | "ownerOccupied"
+  | "medianAge"
+  | "familyShare"
+  | "privateRented";
 
 /** Choropleth ramp, light to dark LandLynk green; grey marks no data. */
 export const SHADE_RAMP = ["#E7F0E9", "#1F5A3C"] as const;

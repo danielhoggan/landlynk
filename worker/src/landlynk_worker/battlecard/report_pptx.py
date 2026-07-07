@@ -689,14 +689,34 @@ def _plan(slide: Slide, card: Battlecard, theme: dict) -> None:
     # land layers are loaded, so the plan reflects the land journey.
     demand = _segments_line(card)
     supply = theme.get("supply")
-    if supply and (supply.get("buildablePlots") or supply.get("competitorSchemes")):
-        # Competitor homes are not derived from PlanIt (scheme counts only), so
-        # only the scheme count is shown, matching the on-screen Site verdict.
-        demand += (
-            f"  •  Buildable land {supply['buildablePlots']:,} plots "
-            f"({supply['buildableHomes']:,} homes)  •  Competitor schemes "
-            f"{supply['competitorSchemes']:,}"
+    if supply and any(
+        supply.get(k)
+        for k in (
+            "buildablePlots",
+            "forSaleSites",
+            "competitorSchemes",
+            "consentedSchemes",
+            "refusedSchemes",
         )
+    ):
+        # The acquisition picture, matching the map's land layers. Competitor
+        # homes are not derived from PlanIt (scheme counts only), so only
+        # scheme counts are shown, matching the on-screen Site verdict.
+        parts = [
+            f"Buildable land {supply.get('buildablePlots', 0):,} plots "
+            f"({supply.get('buildableHomes', 0):,} homes)"
+        ]
+        if supply.get("forSaleSites"):
+            parts.append(f"Public land for sale {supply['forSaleSites']:,}")
+        parts.append(f"Competitor schemes {supply.get('competitorSchemes', 0):,}")
+        if supply.get("consentedSchemes"):
+            parts.append(f"Consented (outline) {supply['consentedSchemes']:,}")
+        if supply.get("refusedSchemes"):
+            parts.append(
+                f"Refused applications {supply['refusedSchemes']:,} "
+                "(possible acquisition leads)"
+            )
+        demand += "  •  " + "  •  ".join(parts)
     cards = [
         ("PRIMARY TARGET SEGMENTS", segments),
         (

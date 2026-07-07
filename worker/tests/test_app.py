@@ -318,6 +318,12 @@ def test_marketing_activation_internal_only_and_cached(client, monkeypatch):
     assert got["playbook"]["summary"] == "Lead with FTB."
     assert calls["n"] == 1
 
+    # The cached plan exports as a deck, also without spending a call.
+    deck = client.get(f"/catchments/{job_id}/marketing/pptx")
+    assert deck.status_code == 200
+    assert deck.content[:2] == b"PK"
+    assert calls["n"] == 1
+
     # An external (client) user is blocked even on a run they own.
     ext = _user_headers("client@builder.com")
     ext_job = _submit(client, ext)
@@ -334,6 +340,22 @@ def test_marketing_activation_internal_only_and_cached(client, monkeypatch):
     assert (
         client.get(f"/catchments/{ext_job}/marketing", headers=ext).status_code == 403
     )
+
+
+def test_verdict_never_blocks_on_planning_source(client, monkeypatch):
+    # With no stored planning snapshot the verdict returns immediately with
+    # planningPending; once the snapshot exists (the competitors endpoint took
+    # it) the same verdict reports counts and no pending flag.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    job_id = _submit(client)
+    first = client.post(f"/catchments/{job_id}/verdict", json={"scope": "whole"}).json()
+    assert first["supply"]["planningPending"] is True
+    client.get(f"/catchments/{job_id}/competitors")  # takes the snapshot
+    second = client.post(
+        f"/catchments/{job_id}/verdict", json={"scope": "whole"}
+    ).json()
+    assert "planningPending" not in second["supply"]
+    assert second["supply"]["competitorSchemes"] == 0  # planit disabled in tests
 
 
 def test_competitors_snapshot_persisted_and_refreshable(client, monkeypatch):
