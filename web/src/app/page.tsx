@@ -988,11 +988,16 @@ export default function HomePage() {
             }
           />
           <Field
-            label={kind === "postcode" ? "Postcode" : "OS grid reference"}
+            label={kind === "postcode" ? "Postcode or area" : "OS grid reference"}
             value={value}
             onChange={setValue}
+            hint={
+              kind === "postcode"
+                ? "a full postcode, or just the area (NE1) to pin its centre"
+                : undefined
+            }
             placeholder={
-              kind === "postcode" ? "e.g. IP14 1AA" : "e.g. TM 06457 58755"
+              kind === "postcode" ? "e.g. IP14 1AA or NE1" : "e.g. TM 06457 58755"
             }
           />
         </div>

@@ -32,6 +32,15 @@ def test_detects_gridref():
     assert detect_input_kind("TM0645") == "gridref"
 
 
+def test_detects_outcode():
+    # An area alone is enough to pin a land search: NE1 is central Newcastle.
+    assert detect_input_kind("NE1") == "outcode"
+    assert detect_input_kind("sw1a") == "outcode"
+    # Two letters + two digits reads as a postcode area, not a 10km grid
+    # square (resolve_input still falls back to the grid parse on a 404).
+    assert detect_input_kind("NE61") == "outcode"
+
+
 def test_unknown_input():
     assert detect_input_kind("not an address") == "unknown"
 
@@ -101,6 +110,43 @@ def test_geocode_postcode_outside_gb_rejected():
     with _client_returning(payload) as client:
         with pytest.raises(GeocodeError):
             geocode_postcode("IP14 1AA", client)
+
+
+# --- Outcode geocoding (mocked) ------------------------------------------------
+
+
+def test_geocode_outcode_maps_result():
+    from landlynk_worker.pipeline.resolve import geocode_outcode
+
+    payload = {"result": {"outcode": "NE1", "latitude": 54.974, "longitude": -1.613}}
+    with _client_returning(payload) as client:
+        coord = geocode_outcode("ne1", client)
+    assert coord.lat == 54.974
+    assert coord.lng == -1.613
+
+
+def test_geocode_outcode_not_found():
+    from landlynk_worker.pipeline.resolve import geocode_outcode
+
+    with _client_returning({"error": "Not found"}, status=404) as client:
+        with pytest.raises(GeocodeError):
+            geocode_outcode("ZZ9", client)
+
+
+def test_outcode_resolves_via_dispatch():
+    payload = {"result": {"latitude": 54.974, "longitude": -1.613}}
+    with _client_returning(payload) as client:
+        coord = resolve_input("NE1", client)
+    assert coord.lat == 54.974
+
+
+def test_ambiguous_outcode_falls_back_to_gridref():
+    # SO16 is both a Southampton outcode and a valid 10km grid square. When
+    # the outcode lookup 404s the grid parse takes over, so neither reading
+    # of a short two-letter, two-digit input is lost.
+    with _client_returning({"error": "Not found"}, status=404) as client:
+        coord = resolve_input("SO16", client)
+    assert 49.86 <= coord.lat <= 60.86  # resolved as the SO grid square
 
 
 def test_resolve_input_rejects_garbage():

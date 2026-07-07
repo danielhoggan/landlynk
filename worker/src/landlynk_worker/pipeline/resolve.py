@@ -22,6 +22,10 @@ from pyproj import Transformer
 
 # UK postcode pattern (loose). Grid refs are two letters then digits.
 _POSTCODE_RE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$", re.IGNORECASE)
+# An outcode alone (NE1, SW1A, TS24): enough to pin an area search. Land
+# hunting starts with an area, not an address, so a full postcode is not
+# required (checked before grid refs; see resolve_input for the rare overlap).
+_OUTCODE_RE = re.compile(r"^[A-Z]{1,2}\d[A-Z\d]?$", re.IGNORECASE)
 _GRIDREF_RE = re.compile(r"^[A-Z]{2}\s*\d{2,10}(\s*\d{2,10})?$", re.IGNORECASE)
 
 # Rough GB bounding box for validation.
@@ -48,10 +52,18 @@ class Coordinate:
 
 
 def detect_input_kind(raw: str) -> str:
-    """Return "postcode", "gridref" or "unknown" for a raw input string."""
+    """Return "postcode", "outcode", "gridref" or "unknown" for a raw input.
+
+    Outcodes are checked before grid refs: a two-letter, two-digit string
+    (NE61) is almost always a postcode area, never a 10km grid square, and
+    resolve_input still falls back to the grid parse if the outcode does not
+    exist.
+    """
     value = raw.strip()
     if _POSTCODE_RE.match(value):
         return "postcode"
+    if _OUTCODE_RE.match(value):
+        return "outcode"
     if _GRIDREF_RE.match(value):
         return "gridref"
     return "unknown"
@@ -140,18 +152,54 @@ def geocode_postcode(postcode: str, client: httpx.Client) -> Coordinate:
     return coord
 
 
+def geocode_outcode(outcode: str, client: httpx.Client) -> Coordinate:
+    """Geocode a postcode area (outcode) to its centroid via postcodes.io.
+
+    "NE1" is enough to pin central Newcastle and search the catchment around
+    it; a land search starts with an area, not an address.
+    """
+    normalised = re.sub(r"\s+", "", outcode).upper()
+    resp = client.get(f"{_POSTCODES_IO}/outcodes/{normalised}")
+    if resp.status_code == 404:
+        raise GeocodeError(f"Postcode area not found: {outcode}")
+    resp.raise_for_status()
+    result = resp.json().get("result") or {}
+    lat, lng = result.get("latitude"), result.get("longitude")
+    if lat is None or lng is None:
+        raise GeocodeError(f"Postcode area has no coordinate: {outcode}")
+    coord = Coordinate(lat=float(lat), lng=float(lng))
+    if not is_within_gb(coord):
+        raise GeocodeError(f"Postcode area resolved outside GB: {outcode}")
+    return coord
+
+
+def _with_client(client: httpx.Client | None, call) -> Coordinate:  # noqa: ANN001
+    if client is None:
+        with httpx.Client(timeout=10.0) as owned:
+            return call(owned)
+    return call(client)
+
+
 def resolve_input(raw: str, client: httpx.Client | None = None) -> Coordinate:
     """Geocode raw input to a coordinate, dispatching on detected kind.
 
-    Grid references resolve offline. Postcodes need an httpx client; one is
-    created if not supplied.
+    Grid references resolve offline. Postcodes and outcodes need an httpx
+    client; one is created if not supplied. A string that could be either an
+    outcode or a short grid reference (SO16) tries the outcode first and falls
+    back to the grid parse when no such postcode area exists.
     """
     kind = detect_input_kind(raw)
     if kind == "gridref":
         return gridref_to_coordinate(raw)
     if kind == "postcode":
-        if client is None:
-            with httpx.Client(timeout=10.0) as owned:
-                return geocode_postcode(raw, owned)
-        return geocode_postcode(raw, client)
-    raise GeocodeError(f"Unrecognised input, not a postcode or grid reference: {raw}")
+        return _with_client(client, lambda c: geocode_postcode(raw, c))
+    if kind == "outcode":
+        try:
+            return _with_client(client, lambda c: geocode_outcode(raw, c))
+        except GeocodeError:
+            if _GRIDREF_RE.match(raw.strip()):
+                return gridref_to_coordinate(raw)
+            raise
+    raise GeocodeError(
+        f"Unrecognised input, not a postcode, postcode area or grid reference: {raw}"
+    )
