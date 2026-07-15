@@ -22,11 +22,12 @@ function dist(m: number): string {
   return m >= 950 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m / 10) * 10} m`;
 }
 
-// The place itself, around the searched pin: nearest station with walk and
-// drive estimates, buses and their routes, restaurants and cycle routes (all
-// factual, from OpenStreetMap, free) plus an optional AI story of annual
-// events and local history (metered like the Local Area Profile). Downloads
-// as the Place setting pack deck.
+// The place around the development itself, anchored on the run's postcode
+// pin: nearest station with walk and drive estimates, buses and their routes,
+// restaurants and cycle routes (all factual, from OpenStreetMap, free) plus
+// an optional AI story of annual events and local history (metered like the
+// Local Area Profile). Development-specific, so it is offered on Plan the
+// next phase only. Downloads as the Place setting pack deck.
 export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
   const [place, setPlace] = useState<PlaceProfile | null>(null);
   const [error, setError] = useState("");
@@ -94,8 +95,10 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
       <div className="space-y-4 px-4 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-neutral-500">
-            The place around the pin: transit, eating out and cycling from
-            OpenStreetMap. Walk and drive times are approximate.
+            The place around your development, anchored on its postcode:
+            transit, eating out and cycling from OpenStreetMap. Walk and drive
+            times are approximate. Sells the location to buyers of the next
+            phase.
           </p>
           <a
             href={`/api/catchments/${catchmentId}/place/pptx`}

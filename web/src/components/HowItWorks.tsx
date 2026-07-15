@@ -115,7 +115,7 @@ const BY_INDUSTRY: Record<string, Tailored> = {
       {
         icon: Presentation,
         title: "Plan the next phase",
-        body: "On a site you already own, see which audiences are under-served nearby and which product mix to lean the last phase toward when other types are slow.",
+        body: "On a site you already own, see which audiences are under-served nearby and which product mix to lean the last phase toward when other types are slow. The Place profile adds the development's own surroundings, anchored on its postcode (station, buses, food and drink, cycling, plus AI events and history), and exports as the Place setting pack for sales and marketing.",
       },
       {
         icon: MapPin,

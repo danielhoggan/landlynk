@@ -1318,18 +1318,19 @@ export default function HomePage() {
         <MixPanel catchmentId={catchment!.id} />
       )}
 
+      {/* The place around the development itself, anchored on the run's
+          postcode pin. Development-specific, so it belongs to Plan the next
+          phase only: on an owned site the place is the product. Exports as
+          the Place setting pack. */}
+      {activeRun && isHousebuilder && runIntent === "next_phase" && (
+        <PlaceProfilePanel catchmentId={catchment!.id} />
+      )}
+
       {catchment?.status === "complete" && areas.length > 0 && (
         <AreaProfilePanel
           catchmentId={catchment.id}
           starred={Array.from(starred)}
         />
-      )}
-
-      {/* The place around the pin: transit, dining, cycling (free, OSM) plus
-          the optional AI events-and-history story. Exports as the Place
-          setting pack. */}
-      {catchment?.status === "complete" && areas.length > 0 && (
-        <PlaceProfilePanel catchmentId={catchment.id} />
       )}
 
       {/* Marketing activation: a separate, optional AI pipeline for internal
