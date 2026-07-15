@@ -1406,23 +1406,52 @@ def _place_key(catchment_id: str) -> str:
 _PLACE_VERSION = 2
 
 
+def _place_needs_refetch(record: dict) -> bool:
+    """Whether a stored place record should be re-fetched: it predates the
+    current shape, or its best-effort sections came back empty (a rate-limited
+    mirror) and enough time has passed to try again."""
+    from datetime import UTC, datetime
+
+    if record.get("v") != _PLACE_VERSION:
+        return True
+    if not record.get("thin"):
+        return False
+    try:
+        fetched = datetime.fromisoformat(record["fetchedAt"])
+        return (datetime.now(UTC) - fetched).total_seconds() > 600
+    except Exception:
+        return True
+
+
 def _place_record(catchment_id: str, refresh: bool = False) -> dict | None:
-    """The persisted place facts for a run, fetching from OpenStreetMap once
-    and storing the result. None when the run has no coordinate."""
+    """The persisted place facts for a run, fetching from OpenStreetMap in a
+    bounded time and storing the result. A failed re-fetch falls back to the
+    stored record (stale beats broken); None when the run has no coordinate."""
     from datetime import UTC, datetime
 
     store = get_store()
     old = store.get_config(_place_key(catchment_id))
-    if not refresh and old is not None and old.get("v") == _PLACE_VERSION:
+    if not refresh and old is not None and not _place_needs_refetch(old):
         return old
     catchment = store.get_catchment(catchment_id)
     coord = (catchment or {}).get("coordinate")
     if not coord:
         return None
-    facts = fetch_place_facts(coord["lat"], coord["lng"])
+    try:
+        facts = fetch_place_facts(coord["lat"], coord["lng"])
+    except Exception:
+        if old is not None:
+            return old
+        raise
     record = {
         **facts,
         "v": _PLACE_VERSION,
+        # Best-effort sections all empty marks the record thin, so a later
+        # open re-tries (at most every ten minutes) instead of serving a
+        # rate-limited moment forever.
+        "thin": not (
+            facts.get("busServices") or facts.get("schools") or facts.get("parks")
+        ),
         "fetchedAt": datetime.now(UTC).isoformat(),
     }
     # Keep an already-generated AI story across any facts re-fetch.

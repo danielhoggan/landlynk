@@ -52,34 +52,36 @@ def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return 6_371_000 * 2 * math.asin(math.sqrt(a))
 
 
-def _run_query(query: str, client: httpx.Client | None = None) -> dict:
+def _run_query(
+    query: str,
+    client: httpx.Client | None = None,
+    deadline: float | None = None,
+) -> dict:
     """POST one Overpass query, trying each mirror until one answers.
 
-    Two passes with a pause between: the public instances rate-limit per IP,
-    and a busy moment usually clears in seconds.
+    The deadline (time.monotonic()) bounds the whole attempt: each mirror gets
+    at most the remaining budget, and no mirror is tried with under 4 seconds
+    left. The mirrors rate-limit per IP, so failures are normal; the caller
+    decides which queries are required and which degrade.
     """
     last: Exception | None = None
-    for attempt in (1, 2):
-        for base in OVERPASS_MIRRORS:
-            try:
-                if client is not None:
-                    resp = client.post(base, data={"data": query})
-                else:
-                    with httpx.Client(timeout=30.0, headers=_UA) as owned:
-                        resp = owned.post(base, data={"data": query})
-                resp.raise_for_status()
-                return resp.json()
-            except Exception as exc:  # pragma: no cover - network path
-                log.warning(
-                    "Overpass mirror failed (%s, attempt %s): %s",
-                    base,
-                    attempt,
-                    exc,
-                )
-                last = exc
-        if attempt == 1:
-            time.sleep(5)
-    raise last or RuntimeError("No Overpass mirror answered")
+    for base in OVERPASS_MIRRORS:
+        remaining = (deadline - time.monotonic()) if deadline else 15.0
+        if remaining < 4:
+            break
+        timeout = min(15.0, remaining)
+        try:
+            if client is not None:
+                resp = client.post(base, data={"data": query})
+            else:
+                with httpx.Client(timeout=timeout, headers=_UA) as owned:
+                    resp = owned.post(base, data={"data": query})
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as exc:  # pragma: no cover - network path
+            log.warning("Overpass mirror failed (%s): %s", base, exc)
+            last = exc
+    raise last or RuntimeError("No Overpass mirror answered in the time budget")
 
 
 def _walk_drive(distance_km: float) -> tuple[int, int]:
@@ -285,12 +287,18 @@ def parse_cycle_relations(elements: list) -> list[dict]:
 
 
 def fetch_place_facts(
-    lat: float, lng: float, client: httpx.Client | None = None
+    lat: float,
+    lng: float,
+    client: httpx.Client | None = None,
+    budget_s: float = 35.0,
 ) -> dict:
-    """The factual place profile around a pin. The first query is required;
-    every later one is best effort, so a rate-limited mirror thins a section
-    rather than failing the pack. Sequential with short gaps to stay inside
-    the public instances' per-IP limits."""
+    """The factual place profile around a pin, inside a hard time budget.
+
+    The first query is required; every later one is best effort, so a
+    rate-limited mirror thins a section rather than failing the pack, and the
+    budget guarantees the caller (a web request holding a spinner) gets an
+    answer in bounded time. Typical happy path is a few seconds; the record is
+    persisted per run, so the cost is paid once."""
     nodes_q = f"""[out:json][timeout:20];
 (
   node(around:900,{lat},{lng})[highway=bus_stop];
@@ -315,30 +323,26 @@ out tags 60;"""
 relation(around:3000,{lat},{lng})[route=bicycle];
 out tags 30;"""
 
-    elements = _run_query(nodes_q, client).get("elements", [])
+    deadline = time.monotonic() + budget_s
+
+    def optional(query: str) -> list:
+        if deadline - time.monotonic() < 4:
+            return []
+        try:
+            return _run_query(query, client, deadline).get("elements", [])
+        except Exception:
+            return []
+
+    elements = _run_query(nodes_q, client, deadline).get("elements", [])
     # Schools, supermarkets and parks are usually mapped as ways (areas), so
     # this second scan is what fills Daily life; degrade quietly if it fails.
-    try:
-        time.sleep(1)
-        elements += _run_query(ways_q, client).get("elements", [])
-    except Exception:
+    ways = optional(ways_q)
+    if not ways:
         log.warning("Overpass ways scan failed; daily-life sections thinner")
-    facts = parse_place_nodes(elements, lat, lng)
-    try:
-        time.sleep(1)
-        facts["busServices"] = parse_bus_relations(
-            _run_query(bus_q, client).get("elements", [])
-        )
-    except Exception:
-        facts["busServices"] = []
+    facts = parse_place_nodes(elements + ways, lat, lng)
+    facts["busServices"] = parse_bus_relations(optional(bus_q))
     if facts["busServices"]:
         # Relation refs are authoritative; stop tags are the fallback.
         facts["busRoutes"] = [s["ref"] for s in facts["busServices"]]
-    try:
-        time.sleep(1)
-        facts["cycleRoutes"] = parse_cycle_relations(
-            _run_query(cycles_q, client).get("elements", [])
-        )
-    except Exception:
-        facts["cycleRoutes"] = []
+    facts["cycleRoutes"] = parse_cycle_relations(optional(cycles_q))
     return facts

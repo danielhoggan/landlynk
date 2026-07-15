@@ -55,23 +55,36 @@ function AmenityList({
 // next phase only. Downloads as the Place setting pack deck.
 export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
   const [place, setPlace] = useState<PlaceProfile | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [usage, setUsage] = useState<LlmUsage | null>(null);
   const [pending, setPending] = useState(false);
 
+  const load = (refresh = false) => {
+    setLoaded(false);
+    setPlace(null);
+    getPlaceProfile(catchmentId, refresh)
+      .then(setPlace)
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  };
+
   useEffect(() => {
     let active = true;
+    setLoaded(false);
     setPlace(null);
     getPlaceProfile(catchmentId)
       .then((p) => active && setPlace(p))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => active && setLoaded(true));
     getUsage()
       .then((u) => active && setUsage(u))
       .catch(() => {});
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catchmentId]);
 
   async function addStory() {
@@ -133,8 +146,22 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
           </a>
         </div>
 
-        {!place && !error && (
-          <p className="text-xs text-neutral-500">Looking around the pin...</p>
+        {!place && !loaded && (
+          <p className="text-xs text-neutral-500">
+            Looking around the pin... (up to half a minute on first open)
+          </p>
+        )}
+        {!place && loaded && (
+          <p className="text-xs text-neutral-600">
+            The map source did not answer just now.{" "}
+            <button
+              type="button"
+              onClick={() => load(true)}
+              className="font-semibold text-light-accent underline"
+            >
+              Try again
+            </button>
+          </p>
         )}
         {error && <p className="text-xs text-priority-low">{error}</p>}
 
