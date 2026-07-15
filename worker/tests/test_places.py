@@ -16,7 +16,9 @@ def _node(lat, lng, **tags):
 
 def test_parse_place_nodes_groups_and_sorts():
     # Around a pin at (55.0, -1.6): stops carry route refs, eateries sort by
-    # distance, stations get walk and drive estimates, paired stops dedupe.
+    # distance, stations get walk and drive estimates, paired stops dedupe,
+    # daily-life amenities (shops, schools, health, parks) group from nodes
+    # and ways with centers.
     lat, lng = 55.0, -1.6
     elements = [
         _node(55.001, -1.6, highway="bus_stop", name="High St", route_ref="21;X9"),
@@ -24,19 +26,62 @@ def test_parse_place_nodes_groups_and_sorts():
         _node(55.003, -1.6, highway="bus_stop", name="Market"),
         _node(55.0005, -1.6, amenity="restaurant", name="Luigi's", cuisine="italian"),
         _node(55.002, -1.6, amenity="pub", name="The Ship"),
+        _node(55.004, -1.6, amenity="fast_food", name="Chippy"),
         _node(55.002, -1.6, amenity="cafe"),  # unnamed: dropped
         _node(55.03, -1.6, railway="station", name="Central"),
-        _node(55.06, -1.6, railway="station", name="Further"),
+        # A closer Metro stop must not displace heavy rail as the lead station.
+        _node(55.01, -1.6, railway="station", station="light_rail", name="Tram Stop"),
+        _node(55.002, -1.6, shop="supermarket", name="Aldi"),
+        _node(55.002, -1.6, amenity="pharmacy", name="Boots"),
+        # A school mapped as a way, carrying a center instead of lat/lon.
+        {
+            "type": "way",
+            "center": {"lat": 55.003, "lon": -1.6},
+            "tags": {"amenity": "school", "name": "Brunton First School"},
+        },
+        {
+            "type": "way",
+            "center": {"lat": 55.004, "lon": -1.6},
+            "tags": {"leisure": "park", "name": "Brunton Park"},
+        },
     ]
     out = parse_place_nodes(elements, lat, lng)
-    assert out["station"]["name"] == "Central"
-    assert out["station"]["distanceKm"] == pytest.approx(3.3, abs=0.2)
+    # The nearest station leads even when it is Metro; the nearest heavy-rail
+    # station always appears in the follow-ups so neither reading is lost.
+    assert out["station"]["name"] == "Tram Stop"
+    assert out["station"]["metro"] is True
+    assert [s["name"] for s in out["otherStations"]] == ["Central"]
+    assert out["otherStations"][0]["metro"] is False
     assert out["station"]["walkMinutes"] > out["station"]["driveMinutes"]
-    assert [s["name"] for s in out["otherStations"]] == ["Further"]
     assert [s["name"] for s in out["busStops"]] == ["High St", "Market"]  # deduped
     assert out["busRoutes"] == ["21", "X9"]
-    assert [r["name"] for r in out["restaurants"]] == ["Luigi's", "The Ship"]
+    assert [r["name"] for r in out["restaurants"]] == [
+        "Luigi's",
+        "The Ship",
+        "Chippy",
+    ]
     assert out["restaurants"][0]["cuisine"] == "italian"
+    assert [s["name"] for s in out["shops"]] == ["Aldi"]
+    assert [s["name"] for s in out["schools"]] == ["Brunton First School"]
+    assert [s["name"] for s in out["health"]] == ["Boots"]
+    assert [s["name"] for s in out["parks"]] == ["Brunton Park"]
+
+
+def test_parse_bus_relations_groups_directions():
+    from landlynk_worker.pipeline.places import parse_bus_relations
+
+    elements = [
+        {"tags": {"route": "bus", "ref": "X21", "to": "Ashington"}},
+        {"tags": {"route": "bus", "ref": "X21", "to": "Newcastle"}},
+        {"tags": {"route": "bus", "ref": "21", "to": "City Centre"}},
+        {"tags": {"route": "bus"}},  # no ref: dropped
+        {"tags": {"route": "bicycle", "ref": "72"}},  # not a bus
+    ]
+    out = parse_bus_relations(elements)
+    assert out == [
+        {"ref": "21", "destinations": ["City Centre"]},
+        {"ref": "X21", "destinations": ["Ashington", "Newcastle"]},
+    ]
 
 
 def test_parse_cycle_relations_dedupes_and_requires_identity():

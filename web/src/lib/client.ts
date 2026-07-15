@@ -544,6 +544,14 @@ export interface PlaceStation {
   distanceKm: number;
   walkMinutes: number;
   driveMinutes: number;
+  /** Light rail or underground rather than heavy rail. */
+  metro?: boolean;
+}
+
+export interface PlaceAmenity {
+  name: string;
+  type: string;
+  distanceM: number;
 }
 
 export interface PlaceStory {
@@ -560,12 +568,13 @@ export interface PlaceProfile {
   otherStations: PlaceStation[];
   busStops: { name: string; distanceM: number; routes: string[] }[];
   busRoutes: string[];
-  restaurants: {
-    name: string;
-    type: string;
-    cuisine: string | null;
-    distanceM: number;
-  }[];
+  /** Bus services from route relations: number plus end destinations. */
+  busServices?: { ref: string; destinations: string[] }[];
+  restaurants: (PlaceAmenity & { cuisine: string | null })[];
+  shops?: PlaceAmenity[];
+  schools?: PlaceAmenity[];
+  health?: PlaceAmenity[];
+  parks?: PlaceAmenity[];
   cycleRoutes: { ref: string | null; name: string | null }[];
   fetchedAt?: string;
   story?: PlaceStory;

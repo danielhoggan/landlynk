@@ -1401,27 +1401,33 @@ def _place_key(catchment_id: str) -> str:
     return f"place::{catchment_id}"
 
 
+# Bumped when the place fetch learns new sections, so runs snapshotted on an
+# older shape re-fetch instead of serving a thin pack forever.
+_PLACE_VERSION = 2
+
+
 def _place_record(catchment_id: str, refresh: bool = False) -> dict | None:
     """The persisted place facts for a run, fetching from OpenStreetMap once
     and storing the result. None when the run has no coordinate."""
     from datetime import UTC, datetime
 
     store = get_store()
-    if not refresh:
-        cached = store.get_config(_place_key(catchment_id))
-        if cached is not None:
-            return cached
+    old = store.get_config(_place_key(catchment_id))
+    if not refresh and old is not None and old.get("v") == _PLACE_VERSION:
+        return old
     catchment = store.get_catchment(catchment_id)
     coord = (catchment or {}).get("coordinate")
     if not coord:
         return None
     facts = fetch_place_facts(coord["lat"], coord["lng"])
-    record = {**facts, "fetchedAt": datetime.now(UTC).isoformat()}
-    if refresh:
-        # Keep an already-generated AI story across a facts refresh.
-        old = store.get_config(_place_key(catchment_id)) or {}
-        if old.get("story"):
-            record["story"] = old["story"]
+    record = {
+        **facts,
+        "v": _PLACE_VERSION,
+        "fetchedAt": datetime.now(UTC).isoformat(),
+    }
+    # Keep an already-generated AI story across any facts re-fetch.
+    if old and old.get("story"):
+        record["story"] = old["story"]
     try:
         store.set_config(_place_key(catchment_id), record)
     except Exception:  # pragma: no cover - persisting is best effort

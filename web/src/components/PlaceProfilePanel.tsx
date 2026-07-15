@@ -7,7 +7,10 @@ import {
   ChevronDown,
   Download,
   MapPin,
+  School,
+  ShoppingBasket,
   TrainFront,
+  Trees,
   UtensilsCrossed,
 } from "lucide-react";
 import {
@@ -15,11 +18,33 @@ import {
   getPlaceProfile,
   getUsage,
   type LlmUsage,
+  type PlaceAmenity,
   type PlaceProfile,
 } from "@/lib/client";
 
 function dist(m: number): string {
   return m >= 950 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m / 10) * 10} m`;
+}
+
+function AmenityList({
+  items,
+  empty,
+}: {
+  items: PlaceAmenity[];
+  empty: string;
+}) {
+  if (!items.length) {
+    return <p className="text-xs text-neutral-500">{empty}</p>;
+  }
+  return (
+    <ul className="space-y-0.5 text-xs text-neutral-600">
+      {items.map((i) => (
+        <li key={`${i.name}-${i.distanceM}`}>
+          <span className="font-medium">{i.name}</span> · {dist(i.distanceM)}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 // The place around the development itself, anchored on the run's postcode
@@ -122,7 +147,10 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
               </h3>
               {place.station ? (
                 <>
-                  <p className="text-sm font-semibold">{place.station.name}</p>
+                  <p className="text-sm font-semibold">
+                    {place.station.name}
+                    {place.station.metro ? " (Metro)" : ""}
+                  </p>
                   <p className="text-xs text-neutral-500">
                     {place.station.distanceKm} km · about{" "}
                     {place.station.walkMinutes} min walk or{" "}
@@ -130,7 +158,8 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
                   </p>
                   {place.otherStations.map((s) => (
                     <p key={s.name} className="text-[11px] text-neutral-400">
-                      Also {s.name}, {s.distanceKm} km
+                      Also {s.name}
+                      {s.metro ? " (Metro)" : ""}, {s.distanceKm} km
                     </p>
                   ))}
                 </>
@@ -143,9 +172,19 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
 
             <section className="rounded-card border border-neutral-200 p-3">
               <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
-                <Bus size={14} className="text-light-accent" /> Buses nearby
+                <Bus size={14} className="text-light-accent" /> Buses from the
+                door
               </h3>
-              {place.busRoutes.length > 0 && (
+              {(place.busServices?.length ?? 0) > 0 ? (
+                <ul className="space-y-0.5 text-xs text-neutral-600">
+                  {place.busServices!.slice(0, 5).map((svc) => (
+                    <li key={svc.ref}>
+                      <span className="font-semibold">{svc.ref}</span> to{" "}
+                      {svc.destinations.join(" / ") || "local service"}
+                    </li>
+                  ))}
+                </ul>
+              ) : place.busRoutes.length > 0 ? (
                 <div className="mb-1.5 flex flex-wrap gap-1">
                   {place.busRoutes.map((r) => (
                     <span
@@ -156,20 +195,51 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
                     </span>
                   ))}
                 </div>
-              )}
+              ) : null}
               {place.busStops.length > 0 ? (
-                <ul className="space-y-0.5 text-xs text-neutral-600">
-                  {place.busStops.slice(0, 4).map((s) => (
-                    <li key={s.name}>
-                      {s.name} · {dist(s.distanceM)}
-                    </li>
-                  ))}
-                </ul>
+                <p className="mt-1.5 text-[11px] text-neutral-400">
+                  Nearest stop {place.busStops[0].name},{" "}
+                  {dist(place.busStops[0].distanceM)}
+                </p>
               ) : (
                 <p className="text-xs text-neutral-500">
                   No bus stops within 900 m.
                 </p>
               )}
+            </section>
+
+            <section className="rounded-card border border-neutral-200 p-3">
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
+                <ShoppingBasket size={14} className="text-light-accent" /> Shops
+                and essentials
+              </h3>
+              <AmenityList
+                items={[...(place.shops ?? []), ...(place.health ?? [])]
+                  .sort((a, b) => a.distanceM - b.distanceM)
+                  .slice(0, 6)}
+                empty="No supermarkets, pharmacies or GPs mapped within 2 km."
+              />
+            </section>
+
+            <section className="rounded-card border border-neutral-200 p-3">
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
+                <School size={14} className="text-light-accent" /> Schools
+              </h3>
+              <AmenityList
+                items={(place.schools ?? []).slice(0, 6)}
+                empty="No schools mapped within 2 km on OpenStreetMap."
+              />
+            </section>
+
+            <section className="rounded-card border border-neutral-200 p-3">
+              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold">
+                <Trees size={14} className="text-light-accent" /> Parks and
+                leisure
+              </h3>
+              <AmenityList
+                items={(place.parks ?? []).slice(0, 6)}
+                empty="No named parks or leisure centres mapped within 1.5 km."
+              />
             </section>
 
             <section className="rounded-card border border-neutral-200 p-3">

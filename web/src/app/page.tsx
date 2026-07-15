@@ -750,7 +750,9 @@ export default function HomePage() {
           : developmentName;
       const { id } = await submitCatchment({
         kind,
-        value,
+        // Postcodes normalise to upper case so titles and packs read "NE3 5RD",
+        // not whatever casing was typed.
+        value: kind === "postcode" ? value.trim().toUpperCase() : value.trim(),
         developmentName: developmentNameToSend,
         areaType,
         town: town || undefined,
