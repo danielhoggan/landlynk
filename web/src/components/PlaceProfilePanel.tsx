@@ -6,6 +6,7 @@ import {
   Bus,
   ChevronDown,
   Download,
+  Loader2,
   MapPin,
   School,
   ShoppingBasket,
@@ -60,6 +61,42 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
   const [busy, setBusy] = useState(false);
   const [usage, setUsage] = useState<LlmUsage | null>(null);
   const [pending, setPending] = useState(false);
+  const [packBusy, setPackBusy] = useState(false);
+
+  // Fetch the pack as a blob so a failure shows inline instead of navigating
+  // the page to a JSON error, and the button can show progress (the first
+  // download can take up to half a minute while the AI slides generate).
+  async function downloadPack() {
+    if (packBusy) return;
+    setPackBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/catchments/${catchmentId}/place/pptx`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          data?.error ?? `Could not build the pack (${res.status})`,
+        );
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "landlynk-place-pack.pptx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      // The download may have auto-generated the AI story; reflect it here.
+      getPlaceProfile(catchmentId)
+        .then((p) => p && setPlace(p))
+        .catch(() => {});
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not build the pack");
+    } finally {
+      setPackBusy(false);
+    }
+  }
 
   const load = (refresh = false) => {
     setLoaded(false);
@@ -140,17 +177,24 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
             events, history and political slides (1 AI lookup, first time
             only).
           </p>
-          <a
-            href={`/api/catchments/${catchmentId}/place/pptx`}
+          <button
+            type="button"
+            onClick={downloadPack}
+            disabled={packBusy}
             title={
               place?.story
                 ? "Download the Place setting pack"
                 : "Downloads the full pack; the AI slides (events, history, political picture) generate automatically and use 1 AI lookup"
             }
-            className="flex shrink-0 items-center gap-1.5 rounded-card border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100"
+            className="flex shrink-0 items-center gap-1.5 rounded-card border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 disabled:opacity-60"
           >
-            <Download size={14} /> Place setting pack
-          </a>
+            {packBusy ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
+            {packBusy ? "Building pack..." : "Place setting pack"}
+          </button>
         </div>
 
         {!place && !loaded && (

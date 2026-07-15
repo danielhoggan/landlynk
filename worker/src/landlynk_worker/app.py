@@ -1582,11 +1582,12 @@ def place_pack_pptx(
     _require_access(catchment_id, user)
     try:
         record = _place_record(catchment_id)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="The map data source did not answer. Try again shortly.",
-        ) from exc
+    except Exception:
+        # The map source did not answer and nothing is stored yet: render the
+        # pack with placeholder sections (and the AI story below) rather than
+        # failing the download; a later download self-heals the facts.
+        _log.warning("place pack rendering without facts for %s", catchment_id)
+        record = {}
     if record is None:
         raise HTTPException(status_code=404, detail="Run has no location pin")
     catchment = get_store().get_catchment(catchment_id) or {}

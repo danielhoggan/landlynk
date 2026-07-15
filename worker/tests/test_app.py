@@ -434,6 +434,21 @@ def test_place_profile_persisted_and_pack_downloads(client, monkeypatch):
     assert story_calls["n"] == 1
 
 
+def test_place_pack_downloads_even_when_map_source_is_down(client, monkeypatch):
+    # No stored record and OpenStreetMap not answering: the pack still
+    # downloads with placeholder sections instead of erroring the click.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+
+    def boom(lat, lng, client=None):
+        raise RuntimeError("mirrors down")
+
+    monkeypatch.setattr(app_module, "fetch_place_facts", boom)
+    job_id = _submit(client)
+    assert client.get(f"/catchments/{job_id}/place").status_code == 502
+    pack = client.get(f"/catchments/{job_id}/place/pptx")
+    assert pack.status_code == 200 and pack.content[:2] == b"PK"
+
+
 def test_councils_overlay_degrades_without_database(client, monkeypatch):
     # The council-boundary overlay is best effort: without a database (or the
     # LA boundary dataset) it returns an empty list, never an error.
