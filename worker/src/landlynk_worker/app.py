@@ -1491,28 +1491,19 @@ class PlaceStoryRequest(BaseModel):
     refresh: bool = False
 
 
-@app.post("/catchments/{catchment_id}/place/story")
-def place_story(
-    catchment_id: str,
-    request: PlaceStoryRequest,
-    user: dict = Depends(current_user),
+def _add_place_story(
+    catchment_id: str, catchment: dict, user: dict, model_override: str | None = None
 ) -> dict:
-    """Generate (or return cached) the AI half of the Place setting pack:
-    annual events and festivals near the location, and the history of the
-    place. Metered and confirmed like the Local Area Profile; the factual
-    transit and dining sections never need this."""
-    from .enrichment import generate_place_story
+    """Generate, meter, audit and persist the AI story for a place record.
 
-    _require_access(catchment_id, user)
+    Raises HTTPException on no model, spent allowance or generation failure;
+    the story endpoint surfaces those, the pack download degrades instead.
+    """
+    from .enrichment import generate_place_story, token_cost
+
     store = get_store()
-    catchment = store.get_catchment(catchment_id)
-    if catchment is None:
-        raise HTTPException(status_code=404, detail="Catchment not found")
     record = store.get_config(_place_key(catchment_id)) or {}
-    if not request.refresh and record.get("story"):
-        return {**record["story"], "cached": True}
-
-    model = request.model or _default_model()
+    model = model_override or _default_model()
     if not model:
         raise HTTPException(
             status_code=503, detail="No AI model configured. Add a provider key."
@@ -1531,7 +1522,6 @@ def place_story(
     except Exception as exc:
         _log.exception("Place story generation failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    from .enrichment import token_cost
 
     usage = payload.pop("usage", {}) or {}
     in_tok = int(usage.get("input", 0) or 0)
@@ -1556,6 +1546,28 @@ def place_story(
         },
         cost=cost,
     )
+    return story
+
+
+@app.post("/catchments/{catchment_id}/place/story")
+def place_story(
+    catchment_id: str,
+    request: PlaceStoryRequest,
+    user: dict = Depends(current_user),
+) -> dict:
+    """Generate (or return cached) the AI half of the Place setting pack:
+    annual events and festivals, the history of the place and the political
+    picture. Metered like the Local Area Profile; the factual transit and
+    dining sections never need this."""
+    _require_access(catchment_id, user)
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    record = store.get_config(_place_key(catchment_id)) or {}
+    if not request.refresh and record.get("story"):
+        return {**record["story"], "cached": True}
+    story = _add_place_story(catchment_id, catchment, user, request.model)
     return {**story, "cached": False}
 
 
@@ -1578,6 +1590,22 @@ def place_pack_pptx(
     if record is None:
         raise HTTPException(status_code=404, detail="Run has no location pin")
     catchment = get_store().get_catchment(catchment_id) or {}
+    # Smart routing: the download auto-generates the AI slides (events,
+    # history, political picture) when missing, metered as one lookup. Best
+    # effort: a spent allowance, missing model or provider failure means the
+    # factual pack downloads anyway rather than the button failing.
+    if not record.get("story"):
+        try:
+            record = {
+                **record,
+                "story": _add_place_story(catchment_id, catchment, user),
+            }
+        except HTTPException as exc:
+            _log.info(
+                "place pack story auto-generate skipped for %s: %s",
+                catchment_id,
+                exc.detail,
+            )
     inp = catchment.get("input") or {}
     title = (
         " · ".join(

@@ -401,10 +401,12 @@ def test_place_profile_persisted_and_pack_downloads(client, monkeypatch):
     client.get(f"/catchments/{job_id}/place")
     assert calls["n"] == 1  # second read served from the stored record
 
+    # No AI model configured yet: the pack still downloads (factual only).
     pack = client.get(f"/catchments/{job_id}/place/pptx")
     assert pack.status_code == 200 and pack.content[:2] == b"PK"
 
-    # The AI story generates once, caches, and lands in the pack record.
+    # With a model configured, the pack download auto-generates the AI story
+    # (smart routing), persists it, and later downloads reuse it for free.
     monkeypatch.setattr(app_module.settings, "openai_api_key", "sk-test")
     client.put("/admin/models/default", json={"model": "gpt-4o"})
     story_calls = {"n": 0}
@@ -414,18 +416,22 @@ def test_place_profile_persisted_and_pack_downloads(client, monkeypatch):
         return {
             "events": [{"name": "Fair", "when": "June", "description": "d"}],
             "history": "Old town.",
+            "politics": None,
             "usage": {"input": 1, "output": 1, "total": 2},
         }
 
     monkeypatch.setattr(
         "landlynk_worker.enrichment.generate_place_story", fake_story
     )
-    s1 = client.post(f"/catchments/{job_id}/place/story", json={}).json()
-    assert s1["history"] == "Old town." and s1["cached"] is False
-    s2 = client.post(f"/catchments/{job_id}/place/story", json={}).json()
-    assert s2["cached"] is True and story_calls["n"] == 1
+    pack2 = client.get(f"/catchments/{job_id}/place/pptx")
+    assert pack2.status_code == 200 and story_calls["n"] == 1
     place = client.get(f"/catchments/{job_id}/place").json()["place"]
     assert place["story"]["history"] == "Old town."
+    # Story now cached: the explicit endpoint and further packs spend nothing.
+    s2 = client.post(f"/catchments/{job_id}/place/story", json={}).json()
+    assert s2["cached"] is True
+    client.get(f"/catchments/{job_id}/place/pptx")
+    assert story_calls["n"] == 1
 
 
 def test_councils_overlay_degrades_without_database(client, monkeypatch):

@@ -60,7 +60,6 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
   const [busy, setBusy] = useState(false);
   const [usage, setUsage] = useState<LlmUsage | null>(null);
   const [pending, setPending] = useState(false);
-  const [packPending, setPackPending] = useState(false);
 
   const load = (refresh = false) => {
     setLoaded(false);
@@ -137,68 +136,22 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
           <p className="text-xs text-neutral-500">
             The place around your development, anchored on its postcode:
             transit, eating out and cycling from OpenStreetMap. Walk and drive
-            times are approximate. Sells the location to buyers of the next
-            phase.
+            times are approximate. The pack download auto-includes the AI
+            events, history and political slides (1 AI lookup, first time
+            only).
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              // The pack's events, history and political slides need the AI
-              // story; offer to include it (one lookup) before downloading.
-              if (place && !place.story) {
-                setPackPending(true);
-              } else {
-                window.location.href = `/api/catchments/${catchmentId}/place/pptx`;
-              }
-            }}
+          <a
+            href={`/api/catchments/${catchmentId}/place/pptx`}
+            title={
+              place?.story
+                ? "Download the Place setting pack"
+                : "Downloads the full pack; the AI slides (events, history, political picture) generate automatically and use 1 AI lookup"
+            }
             className="flex shrink-0 items-center gap-1.5 rounded-card border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100"
           >
             <Download size={14} /> Place setting pack
-          </button>
+          </a>
         </div>
-
-        {packPending && (
-          <div className="rounded-card border border-priority-mid/40 bg-priority-mid/10 p-2.5 text-xs">
-            <p className="text-neutral-700">
-              The full pack includes AI slides: events and festivals, the
-              history of the place and the political picture.{" "}
-              {metered && usage?.cap != null
-                ? `Adding them uses 1 of your ${usage?.remaining ?? 0} remaining AI lookups.`
-                : "Adding them uses 1 AI lookup."}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={busy || exhausted}
-                onClick={async () => {
-                  setPackPending(false);
-                  await addStory();
-                  window.location.href = `/api/catchments/${catchmentId}/place/pptx`;
-                }}
-                className="rounded-card bg-light-accent px-3 py-1 font-semibold text-white disabled:opacity-50"
-              >
-                {busy ? "Adding..." : "Include and download"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPackPending(false);
-                  window.location.href = `/api/catchments/${catchmentId}/place/pptx`;
-                }}
-                className="rounded-card border border-neutral-300 px-3 py-1 font-semibold"
-              >
-                Download without
-              </button>
-              <button
-                type="button"
-                onClick={() => setPackPending(false)}
-                className="rounded-card px-3 py-1 font-semibold text-neutral-500"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
 
         {!place && !loaded && (
           <p className="text-xs text-neutral-500">
