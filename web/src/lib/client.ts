@@ -539,6 +539,70 @@ export async function generateMarketingPlaybook(
   return data;
 }
 
+export interface PlaceStation {
+  name: string;
+  distanceKm: number;
+  walkMinutes: number;
+  driveMinutes: number;
+}
+
+export interface PlaceStory {
+  events: { name: string; when: string; description: string }[];
+  history: string;
+  model?: string;
+  cached?: boolean;
+}
+
+/** The place profile around the searched pin: factual transit, dining and
+ * cycling from OpenStreetMap, plus the optional AI story (events, history). */
+export interface PlaceProfile {
+  station: PlaceStation | null;
+  otherStations: PlaceStation[];
+  busStops: { name: string; distanceM: number; routes: string[] }[];
+  busRoutes: string[];
+  restaurants: {
+    name: string;
+    type: string;
+    cuisine: string | null;
+    distanceM: number;
+  }[];
+  cycleRoutes: { ref: string | null; name: string | null }[];
+  fetchedAt?: string;
+  story?: PlaceStory;
+}
+
+// The factual place profile, persisted per run (free, no allowance).
+export async function getPlaceProfile(
+  catchmentId: string,
+  refresh = false,
+): Promise<PlaceProfile | null> {
+  const res = await fetch(
+    `/api/catchments/${catchmentId}/place${refresh ? "?refresh=1" : ""}`,
+    { headers: activeBrandHeaders() },
+  );
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({ place: null }));
+  return data?.place ?? null;
+}
+
+// Generate (or fetch cached) the AI story for the Place setting pack. Spends
+// an AI lookup, so the panel confirms against the monthly allowance first.
+export async function generatePlaceStory(
+  catchmentId: string,
+  body: { refresh?: boolean } = {},
+): Promise<PlaceStory> {
+  const res = await fetch(`/api/catchments/${catchmentId}/place/story`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...activeBrandHeaders() },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error ?? `Could not generate the story (${res.status})`);
+  }
+  return data;
+}
+
 export async function getUsage(): Promise<LlmUsage> {
   const res = await fetch("/api/builders/usage", {
     headers: activeBrandHeaders(),

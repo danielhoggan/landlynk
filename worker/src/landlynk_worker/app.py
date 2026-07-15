@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from psycopg_pool import ConnectionPool
 from .pipeline.orchestrate import PipelineDeps, run_catchment
 from .pipeline.outputs.kml import render_catchment_kml
+from .pipeline.places import fetch_place_facts
 from .pipeline.reference import PostgresReferenceData
 from .scoring.profile import ScoringConfig
 from .storage import InMemoryStore, JobInput, PostgresStore, Storage
@@ -1392,6 +1393,182 @@ def marketing_activation_pptx(
         ),
         headers={
             "Content-Disposition": 'attachment; filename="landlynk-marketing.pptx"'
+        },
+    )
+
+
+def _place_key(catchment_id: str) -> str:
+    return f"place::{catchment_id}"
+
+
+def _place_record(catchment_id: str, refresh: bool = False) -> dict | None:
+    """The persisted place facts for a run, fetching from OpenStreetMap once
+    and storing the result. None when the run has no coordinate."""
+    from datetime import UTC, datetime
+
+    store = get_store()
+    if not refresh:
+        cached = store.get_config(_place_key(catchment_id))
+        if cached is not None:
+            return cached
+    catchment = store.get_catchment(catchment_id)
+    coord = (catchment or {}).get("coordinate")
+    if not coord:
+        return None
+    facts = fetch_place_facts(coord["lat"], coord["lng"])
+    record = {**facts, "fetchedAt": datetime.now(UTC).isoformat()}
+    if refresh:
+        # Keep an already-generated AI story across a facts refresh.
+        old = store.get_config(_place_key(catchment_id)) or {}
+        if old.get("story"):
+            record["story"] = old["story"]
+    try:
+        store.set_config(_place_key(catchment_id), record)
+    except Exception:  # pragma: no cover - persisting is best effort
+        _log.exception("could not persist place record for %s", catchment_id)
+    return record
+
+
+@app.get("/catchments/{catchment_id}/place")
+def catchment_place(
+    catchment_id: str, refresh: bool = False, user: dict = Depends(current_user)
+) -> dict:
+    """The place profile around the searched pin: nearest station with walk and
+    drive estimates, bus stops and routes, restaurants and cycle routes, from
+    OpenStreetMap. Fetched once per run and persisted; free, so no allowance is
+    touched. The AI story (events, history) is added separately."""
+    _require_access(catchment_id, user)
+    try:
+        record = _place_record(catchment_id, refresh=refresh)
+    except Exception as exc:
+        _log.warning("place facts fetch failed for %s: %s", catchment_id, exc)
+        raise HTTPException(
+            status_code=502,
+            detail="The map data source did not answer. Try again shortly.",
+        ) from exc
+    if record is None:
+        return {"place": None}
+    return {"place": record}
+
+
+class PlaceStoryRequest(BaseModel):
+    model: str | None = None
+    refresh: bool = False
+
+
+@app.post("/catchments/{catchment_id}/place/story")
+def place_story(
+    catchment_id: str,
+    request: PlaceStoryRequest,
+    user: dict = Depends(current_user),
+) -> dict:
+    """Generate (or return cached) the AI half of the Place setting pack:
+    annual events and festivals near the location, and the history of the
+    place. Metered and confirmed like the Local Area Profile; the factual
+    transit and dining sections never need this."""
+    from .enrichment import generate_place_story
+
+    _require_access(catchment_id, user)
+    store = get_store()
+    catchment = store.get_catchment(catchment_id)
+    if catchment is None:
+        raise HTTPException(status_code=404, detail="Catchment not found")
+    record = store.get_config(_place_key(catchment_id)) or {}
+    if not request.refresh and record.get("story"):
+        return {**record["story"], "cached": True}
+
+    model = request.model or _default_model()
+    if not model:
+        raise HTTPException(
+            status_code=503, detail="No AI model configured. Add a provider key."
+        )
+    _enforce_llm_quota(user)
+
+    inp = catchment.get("input") or {}
+    dev_name = inp.get("developmentName") or "the location"
+    location = (
+        f"{dev_name}, {inp.get('value')}"
+        if inp.get("kind") == "postcode"
+        else dev_name
+    )
+    try:
+        payload = generate_place_story(location, model)
+    except Exception as exc:
+        _log.exception("Place story generation failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    from .enrichment import token_cost
+
+    usage = payload.pop("usage", {}) or {}
+    in_tok = int(usage.get("input", 0) or 0)
+    out_tok = int(usage.get("output", 0) or 0)
+    cost = token_cost(model, in_tok, out_tok)
+    story = {"model": model, **payload}
+    record["story"] = story
+    try:
+        store.set_config(_place_key(catchment_id), record)
+    except Exception:  # pragma: no cover
+        _log.exception("could not persist place story for %s", catchment_id)
+    store.record_llm_usage(user.get("email"), _quota_group(user), model, _usage_period())
+    _audit(
+        user,
+        "ai.place",
+        target_type="catchment",
+        target_id=catchment_id,
+        detail={
+            "model": model,
+            "tokens": int(usage.get("total", in_tok + out_tok) or 0),
+            "groupId": _active_group(user),
+        },
+        cost=cost,
+    )
+    return {**story, "cached": False}
+
+
+@app.get("/catchments/{catchment_id}/place/pptx")
+def place_pack_pptx(
+    catchment_id: str, user: dict = Depends(current_user)
+) -> Response:
+    """The Place setting pack as a branded deck: transit, dining and cycling
+    always; the AI events and history slides when the story has been added."""
+    from .battlecard.place_pptx import render_place_pptx
+
+    _require_access(catchment_id, user)
+    try:
+        record = _place_record(catchment_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="The map data source did not answer. Try again shortly.",
+        ) from exc
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run has no location pin")
+    catchment = get_store().get_catchment(catchment_id) or {}
+    inp = catchment.get("input") or {}
+    title = (
+        " · ".join(
+            b
+            for b in (
+                (inp.get("developmentName") or "").strip(),
+                (inp.get("value") or "").strip(),
+            )
+            if b
+        )
+        or "Place setting pack"
+    )
+    pptx = render_place_pptx(
+        record,
+        title,
+        heading_color=_heading(catchment_id),
+        logo=_brand_logo(catchment_id),
+        accent=_brand_accent(catchment_id),
+    )
+    return Response(
+        content=pptx,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ),
+        headers={
+            "Content-Disposition": 'attachment; filename="landlynk-place-pack.pptx"'
         },
     )
 

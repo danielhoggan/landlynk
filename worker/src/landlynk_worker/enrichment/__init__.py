@@ -3,6 +3,7 @@ choice of LLM providers."""
 
 from .area_profile import generate_area_profile
 from .marketing import build_facts, generate_marketing_activation
+from .place_story import generate_place_story
 from .models import (
     MODELS,
     available_models,
@@ -20,4 +21,5 @@ __all__ = [
     "generate_area_profile",
     "build_facts",
     "generate_marketing_activation",
+    "generate_place_story",
 ]

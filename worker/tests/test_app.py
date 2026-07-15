@@ -372,6 +372,62 @@ def test_competitors_snapshot_persisted_and_refreshable(client, monkeypatch):
     assert refreshed["cached"] is False
 
 
+def test_place_profile_persisted_and_pack_downloads(client, monkeypatch):
+    # The factual place profile fetches once (stubbed OSM), persists per run,
+    # and the Place setting pack renders from it without a story.
+    monkeypatch.setattr(app_module, "run_catchment", lambda **kwargs: _fake_result())
+    calls = {"n": 0}
+
+    def fake_facts(lat, lng, client=None):
+        calls["n"] += 1
+        return {
+            "station": {
+                "name": "Central",
+                "distanceKm": 1.2,
+                "walkMinutes": 14,
+                "driveMinutes": 4,
+            },
+            "otherStations": [],
+            "busStops": [],
+            "busRoutes": ["21"],
+            "restaurants": [],
+            "cycleRoutes": [],
+        }
+
+    monkeypatch.setattr(app_module, "fetch_place_facts", fake_facts)
+    job_id = _submit(client)
+    first = client.get(f"/catchments/{job_id}/place").json()["place"]
+    assert first["station"]["name"] == "Central" and first["fetchedAt"]
+    client.get(f"/catchments/{job_id}/place")
+    assert calls["n"] == 1  # second read served from the stored record
+
+    pack = client.get(f"/catchments/{job_id}/place/pptx")
+    assert pack.status_code == 200 and pack.content[:2] == b"PK"
+
+    # The AI story generates once, caches, and lands in the pack record.
+    monkeypatch.setattr(app_module.settings, "openai_api_key", "sk-test")
+    client.put("/admin/models/default", json={"model": "gpt-4o"})
+    story_calls = {"n": 0}
+
+    def fake_story(location, model, transport=None):
+        story_calls["n"] += 1
+        return {
+            "events": [{"name": "Fair", "when": "June", "description": "d"}],
+            "history": "Old town.",
+            "usage": {"input": 1, "output": 1, "total": 2},
+        }
+
+    monkeypatch.setattr(
+        "landlynk_worker.enrichment.generate_place_story", fake_story
+    )
+    s1 = client.post(f"/catchments/{job_id}/place/story", json={}).json()
+    assert s1["history"] == "Old town." and s1["cached"] is False
+    s2 = client.post(f"/catchments/{job_id}/place/story", json={}).json()
+    assert s2["cached"] is True and story_calls["n"] == 1
+    place = client.get(f"/catchments/{job_id}/place").json()["place"]
+    assert place["story"]["history"] == "Old town."
+
+
 def test_councils_overlay_degrades_without_database(client, monkeypatch):
     # The council-boundary overlay is best effort: without a database (or the
     # LA boundary dataset) it returns an empty list, never an error.
