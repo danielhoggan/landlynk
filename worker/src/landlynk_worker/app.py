@@ -1560,7 +1560,9 @@ def _add_place_story(
     in_tok = int(usage.get("input", 0) or 0)
     out_tok = int(usage.get("output", 0) or 0)
     cost = token_cost(model, in_tok, out_tok)
-    story = {"model": model, **payload}
+    # grounded marks stories generated with the anchor block; earlier ones
+    # could name the wrong suburb and regenerate on the next pack download.
+    story = {"model": model, "grounded": True, **payload}
     record["story"] = story
     try:
         store.set_config(_place_key(catchment_id), record)
@@ -1598,7 +1600,11 @@ def place_story(
     if catchment is None:
         raise HTTPException(status_code=404, detail="Catchment not found")
     record = store.get_config(_place_key(catchment_id)) or {}
-    if not request.refresh and record.get("story"):
+    if (
+        not request.refresh
+        and record.get("story")
+        and record["story"].get("grounded")
+    ):
         return {**record["story"], "cached": True}
     story = _add_place_story(catchment_id, catchment, user, request.model)
     return {**story, "cached": False}
@@ -1628,7 +1634,7 @@ def place_pack_pptx(
     # history, political picture) when missing, metered as one lookup. Best
     # effort: a spent allowance, missing model or provider failure means the
     # factual pack downloads anyway rather than the button failing.
-    if not record.get("story"):
+    if not record.get("story") or not record["story"].get("grounded"):
         try:
             record = {
                 **record,
