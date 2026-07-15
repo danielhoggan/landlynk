@@ -583,11 +583,14 @@ export interface PlaceProfile {
   health?: PlaceAmenity[];
   parks?: PlaceAmenity[];
   cycleRoutes: { ref: string | null; name: string | null }[];
-  /** Constituency, council and ward at the pin (ONS, via postcodes.io). */
+  /** Constituency, council, ward and sitting MP at the pin (ONS and the UK
+   * Parliament Members API, both authoritative). */
   civic?: {
     constituency: string | null;
     council: string | null;
     ward: string | null;
+    mp?: string | null;
+    mpParty?: string | null;
   } | null;
   fetchedAt?: string;
   story?: PlaceStory;

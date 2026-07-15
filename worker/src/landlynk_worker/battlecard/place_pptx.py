@@ -360,20 +360,27 @@ def _politics(slide, record: dict, story: dict, theme: dict) -> None:  # noqa: A
         fact_lines.append(
             (f"Ward: {civic['ward']}", 12, theme["navy"], False, False)
         )
+    if civic.get("mp"):
+        mp = civic["mp"] + (
+            f" ({civic['mpParty']})" if civic.get("mpParty") else ""
+        )
+        fact_lines.append((f"MP: {mp}", 12, theme["navy"], False, False))
     _card(
         slide,
         Inches(0.6),
         Inches(1.3),
         Inches(5.9),
         Inches(3.2),
-        "THE FACTS (ONS)",
+        "THE FACTS (ONS AND UK PARLIAMENT)",
         fact_lines
         or [("Civic lookup was unavailable for this pin.", 11, _GREY, False, False)],
         theme,
     )
     politics = story.get("politics") or {}
     pol_lines: list = []
-    if politics.get("mp"):
+    # Older cached stories carried a model-guessed MP; official records win,
+    # so it only shows when the factual lookup has nothing.
+    if politics.get("mp") and not civic.get("mp"):
         mp = politics["mp"] + (
             f" ({politics['mpParty']})" if politics.get("mpParty") else ""
         )

@@ -357,9 +357,12 @@ out tags 30;"""
 def _reverse_civic(
     lat: float, lng: float, client: httpx.Client | None = None
 ) -> dict | None:
-    """The constituency, council and ward at a coordinate, from postcodes.io
-    reverse lookup. Factual and free; the AI political commentary hangs off
-    these authoritative names. Best effort: None when the lookup fails."""
+    """The constituency, council, ward and sitting MP at a coordinate.
+
+    Names come from postcodes.io reverse lookup (ONS); the MP and party come
+    from the UK Parliament Members API, both free and authoritative, so the
+    political picture never rests on a model's guess. Best effort: None when
+    the lookup fails, MP fields absent when Parliament does not answer."""
     try:
         url = f"https://api.postcodes.io/postcodes?lon={lng}&lat={lat}&limit=1"
         if client is not None:
@@ -372,11 +375,46 @@ def _reverse_civic(
         if not results:
             return None
         r = results[0]
-        return {
+        civic = {
             "constituency": r.get("parliamentary_constituency"),
             "council": r.get("admin_district"),
             "ward": r.get("admin_ward"),
         }
     except Exception:  # pragma: no cover - network path
         log.warning("civic reverse lookup failed")
+        return None
+    if civic["constituency"]:
+        mp = _constituency_mp(civic["constituency"], client)
+        if mp:
+            civic.update(mp)
+    return civic
+
+
+def _constituency_mp(
+    constituency: str, client: httpx.Client | None = None
+) -> dict | None:
+    """The sitting MP and party for a constituency, from the UK Parliament
+    Members API (free, no key). Best effort."""
+    try:
+        url = "https://members-api.parliament.uk/api/Location/Constituency/Search"
+        params = {"searchText": constituency, "skip": 0, "take": 1}
+        if client is not None:
+            resp = client.get(url, params=params)
+        else:
+            with httpx.Client(timeout=10.0, headers=_UA) as owned:
+                resp = owned.get(url, params=params)
+        resp.raise_for_status()
+        items = resp.json().get("items") or []
+        if not items:
+            return None
+        rep = (
+            (items[0].get("value") or {}).get("currentRepresentation") or {}
+        ).get("member", {}).get("value", {})
+        name = rep.get("nameDisplayAs")
+        party = (rep.get("latestParty") or {}).get("name")
+        if not name:
+            return None
+        return {"mp": name, "mpParty": party}
+    except Exception:  # pragma: no cover - network path
+        log.warning("MP lookup failed for %s", constituency)
         return None

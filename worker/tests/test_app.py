@@ -411,7 +411,7 @@ def test_place_profile_persisted_and_pack_downloads(client, monkeypatch):
     client.put("/admin/models/default", json={"model": "gpt-4o"})
     story_calls = {"n": 0}
 
-    def fake_story(location, model, transport=None):
+    def fake_story(location, model, transport=None, grounding=None):
         story_calls["n"] += 1
         return {
             "events": [{"name": "Fair", "when": "June", "description": "d"}],

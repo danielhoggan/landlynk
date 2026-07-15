@@ -1403,7 +1403,38 @@ def _place_key(catchment_id: str) -> str:
 
 # Bumped when the place fetch learns new sections, so runs snapshotted on an
 # older shape re-fetch instead of serving a thin pack forever.
-_PLACE_VERSION = 3
+_PLACE_VERSION = 4
+
+
+def _place_grounding(record: dict | None) -> str | None:
+    """An authoritative anchor block for the AI story, from the place record:
+    ward, council and constituency (ONS) plus nearby landmark names (OSM). A
+    bare postcode lets a small model guess the wrong suburb; these pin it."""
+    if not record:
+        return None
+    lines: list[str] = []
+    civic = record.get("civic") or {}
+    civic_bits = [
+        f"{label}: {civic[key]}"
+        for key, label in (
+            ("ward", "Ward"),
+            ("council", "Council"),
+            ("constituency", "Constituency"),
+        )
+        if civic.get(key)
+    ]
+    if civic_bits:
+        lines.append("; ".join(civic_bits))
+    landmarks: list[str] = []
+    for s in [record.get("station"), *(record.get("otherStations") or [])][:2]:
+        if s:
+            landmarks.append(f"{s['name']} station")
+    for group in ("parks", "schools", "restaurants"):
+        for item in (record.get(group) or [])[:2]:
+            landmarks.append(item["name"])
+    if landmarks:
+        lines.append("Nearby: " + "; ".join(landmarks[:8]))
+    return "\n".join(lines) or None
 
 
 def _place_needs_refetch(record: dict) -> bool:
@@ -1518,7 +1549,9 @@ def _add_place_story(
         else dev_name
     )
     try:
-        payload = generate_place_story(location, model)
+        payload = generate_place_story(
+            location, model, grounding=_place_grounding(record)
+        )
     except Exception as exc:
         _log.exception("Place story generation failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc

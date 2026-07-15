@@ -439,11 +439,19 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
                   </p>
                 )}
                 <ul className="mt-1 space-y-0.5 text-xs text-neutral-600">
-                  {place.story.politics.mp && (
+                  {/* The MP comes from official records (UK Parliament API),
+                      never the model; older stories' guess is the fallback. */}
+                  {(place.civic?.mp || place.story.politics.mp) && (
                     <li>
-                      MP: {place.story.politics.mp}
-                      {place.story.politics.mpParty
-                        ? ` (${place.story.politics.mpParty})`
+                      MP: {place.civic?.mp || place.story.politics.mp}
+                      {(place.civic?.mp
+                        ? place.civic?.mpParty
+                        : place.story.politics.mpParty)
+                        ? ` (${
+                            place.civic?.mp
+                              ? place.civic?.mpParty
+                              : place.story.politics.mpParty
+                          })`
                         : ""}
                     </li>
                   )}

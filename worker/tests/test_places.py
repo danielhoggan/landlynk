@@ -95,20 +95,31 @@ def test_parse_cycle_relations_dedupes_and_requires_identity():
     assert out == [{"ref": "72", "name": "Hadrian's Cycleway"}]
 
 
-def test_place_story_parses_events_history_and_politics():
+def test_place_story_parses_and_grounds():
     from landlynk_worker.enrichment.place_story import generate_place_story
 
+    seen = {}
+
     def fake(model, prompt):
-        assert "NE1" in prompt
+        seen["prompt"] = prompt
         return (
             '{"events": [{"name": "Great North Run", "when": "September", '
             '"description": "Half marathon."}, "stray string"], '
             '"history": "A market town.", '
-            '"politics": {"mp": "A Person", "mpParty": "Labour", '
+            '"politics": {"mp": "A Guess", '
             '"councilControl": "Labour", "commentary": "Broadly pro-housing."}}'
         ), {"input": 300, "output": 500}
 
-    out = generate_place_story("Oak Rise, NE1", "gpt-4o", transport=fake)
+    out = generate_place_story(
+        "Oak Rise, NE1",
+        "gpt-4o",
+        transport=fake,
+        grounding="Ward: Parklands; Council: Newcastle upon Tyne",
+    )
+    # The anchors land in the prompt so the model cannot drift to the wrong
+    # suburb, and a model-guessed MP is discarded (official records supply it).
+    assert "Ward: Parklands" in seen["prompt"]
+    assert "never relocate" in seen["prompt"]
     assert out["events"] == [
         {
             "name": "Great North Run",
@@ -117,7 +128,7 @@ def test_place_story_parses_events_history_and_politics():
         }
     ]
     assert out["history"] == "A market town."
-    assert out["politics"]["mp"] == "A Person"
+    assert out["politics"]["mp"] == ""
     assert out["politics"]["councilControl"] == "Labour"
     assert out["usage"]["total"] == 800
 
