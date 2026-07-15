@@ -60,6 +60,7 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
   const [busy, setBusy] = useState(false);
   const [usage, setUsage] = useState<LlmUsage | null>(null);
   const [pending, setPending] = useState(false);
+  const [packPending, setPackPending] = useState(false);
 
   const load = (refresh = false) => {
     setLoaded(false);
@@ -109,10 +110,11 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
   const confirmText =
     metered && usage?.cap != null
       ? `You have ${usage?.remaining ?? 0} of ${usage.cap} AI lookups left this ` +
-        "month. Adding events and history uses 1. The transit and dining " +
-        "sections are free and already included."
-      : "This adds an AI lookup of the location's annual events and history. " +
-        "The transit and dining sections are free and already included.";
+        "month. Adding events, history and the political picture uses 1. The " +
+        "transit and dining sections are free and already included."
+      : "This adds an AI lookup of the location's annual events, history and " +
+        "political picture. The transit and dining sections are free and " +
+        "already included.";
 
   return (
     <details className="group rounded-card border border-neutral-200 bg-white">
@@ -138,13 +140,65 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
             times are approximate. Sells the location to buyers of the next
             phase.
           </p>
-          <a
-            href={`/api/catchments/${catchmentId}/place/pptx`}
+          <button
+            type="button"
+            onClick={() => {
+              // The pack's events, history and political slides need the AI
+              // story; offer to include it (one lookup) before downloading.
+              if (place && !place.story) {
+                setPackPending(true);
+              } else {
+                window.location.href = `/api/catchments/${catchmentId}/place/pptx`;
+              }
+            }}
             className="flex shrink-0 items-center gap-1.5 rounded-card border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100"
           >
             <Download size={14} /> Place setting pack
-          </a>
+          </button>
         </div>
+
+        {packPending && (
+          <div className="rounded-card border border-priority-mid/40 bg-priority-mid/10 p-2.5 text-xs">
+            <p className="text-neutral-700">
+              The full pack includes AI slides: events and festivals, the
+              history of the place and the political picture.{" "}
+              {metered && usage?.cap != null
+                ? `Adding them uses 1 of your ${usage?.remaining ?? 0} remaining AI lookups.`
+                : "Adding them uses 1 AI lookup."}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy || exhausted}
+                onClick={async () => {
+                  setPackPending(false);
+                  await addStory();
+                  window.location.href = `/api/catchments/${catchmentId}/place/pptx`;
+                }}
+                className="rounded-card bg-light-accent px-3 py-1 font-semibold text-white disabled:opacity-50"
+              >
+                {busy ? "Adding..." : "Include and download"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPackPending(false);
+                  window.location.href = `/api/catchments/${catchmentId}/place/pptx`;
+                }}
+                className="rounded-card border border-neutral-300 px-3 py-1 font-semibold"
+              >
+                Download without
+              </button>
+              <button
+                type="button"
+                onClick={() => setPackPending(false)}
+                className="rounded-card px-3 py-1 font-semibold text-neutral-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {!place && !loaded && (
           <p className="text-xs text-neutral-500">
@@ -321,7 +375,7 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
             disabled={busy || exhausted}
             className="rounded-card bg-light-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-95 disabled:opacity-50"
           >
-            {busy ? "Adding..." : "Add events and history (AI)"}
+            {busy ? "Adding..." : "Add events, history and political picture (AI)"}
           </button>
         )}
 
@@ -373,6 +427,40 @@ export function PlaceProfilePanel({ catchmentId }: { catchmentId: string }) {
                 <p className="output-prose text-sm leading-relaxed">
                   {place.story.history}
                 </p>
+              </section>
+            )}
+            {place.story.politics && (
+              <section className="rounded-card border border-neutral-200 p-3">
+                <h3 className="mb-2 text-xs font-semibold">
+                  The political picture
+                </h3>
+                {place.civic?.constituency && (
+                  <p className="text-xs text-neutral-500">
+                    {place.civic.constituency}
+                    {place.civic.council ? ` · ${place.civic.council}` : ""}
+                    {place.civic.ward ? ` · ${place.civic.ward} ward` : ""}
+                  </p>
+                )}
+                <ul className="mt-1 space-y-0.5 text-xs text-neutral-600">
+                  {place.story.politics.mp && (
+                    <li>
+                      MP: {place.story.politics.mp}
+                      {place.story.politics.mpParty
+                        ? ` (${place.story.politics.mpParty})`
+                        : ""}
+                    </li>
+                  )}
+                  {place.story.politics.councilControl && (
+                    <li>
+                      Council control: {place.story.politics.councilControl}
+                    </li>
+                  )}
+                </ul>
+                {place.story.politics.commentary && (
+                  <p className="mt-1.5 text-xs text-neutral-600">
+                    {place.story.politics.commentary}
+                  </p>
+                )}
               </section>
             )}
             <p className="text-[11px] text-neutral-400">

@@ -557,6 +557,13 @@ export interface PlaceAmenity {
 export interface PlaceStory {
   events: { name: string; when: string; description: string }[];
   history: string;
+  /** AI political picture (verify: control changes at elections). */
+  politics?: {
+    mp: string;
+    mpParty: string;
+    councilControl: string;
+    commentary: string;
+  } | null;
   model?: string;
   cached?: boolean;
 }
@@ -576,6 +583,12 @@ export interface PlaceProfile {
   health?: PlaceAmenity[];
   parks?: PlaceAmenity[];
   cycleRoutes: { ref: string | null; name: string | null }[];
+  /** Constituency, council and ward at the pin (ONS, via postcodes.io). */
+  civic?: {
+    constituency: string | null;
+    council: string | null;
+    ward: string | null;
+  } | null;
   fetchedAt?: string;
   story?: PlaceStory;
 }

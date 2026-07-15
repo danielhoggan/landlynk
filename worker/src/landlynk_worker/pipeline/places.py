@@ -150,6 +150,9 @@ def parse_place_nodes(elements: list, lat: float, lng: float) -> dict:
                     "name": tags.get("name") or "Bus stop",
                     "distanceM": round(dist),
                     "routes": routes,
+                    # Kept for the pack's transport map markers.
+                    "lat": coord[0],
+                    "lng": coord[1],
                 }
             )
         elif tags.get("railway") == "station":
@@ -163,6 +166,8 @@ def parse_place_nodes(elements: list, lat: float, lng: float) -> dict:
                     "walkMinutes": walk,
                     "driveMinutes": drive,
                     "metro": metro,
+                    "lat": coord[0],
+                    "lng": coord[1],
                 }
             )
 
@@ -345,4 +350,33 @@ out tags 30;"""
         # Relation refs are authoritative; stop tags are the fallback.
         facts["busRoutes"] = [s["ref"] for s in facts["busServices"]]
     facts["cycleRoutes"] = parse_cycle_relations(optional(cycles_q))
+    facts["civic"] = _reverse_civic(lat, lng, client)
     return facts
+
+
+def _reverse_civic(
+    lat: float, lng: float, client: httpx.Client | None = None
+) -> dict | None:
+    """The constituency, council and ward at a coordinate, from postcodes.io
+    reverse lookup. Factual and free; the AI political commentary hangs off
+    these authoritative names. Best effort: None when the lookup fails."""
+    try:
+        url = f"https://api.postcodes.io/postcodes?lon={lng}&lat={lat}&limit=1"
+        if client is not None:
+            resp = client.get(url)
+        else:
+            with httpx.Client(timeout=10.0, headers=_UA) as owned:
+                resp = owned.get(url)
+        resp.raise_for_status()
+        results = resp.json().get("result") or []
+        if not results:
+            return None
+        r = results[0]
+        return {
+            "constituency": r.get("parliamentary_constituency"),
+            "council": r.get("admin_district"),
+            "ward": r.get("admin_ward"),
+        }
+    except Exception:  # pragma: no cover - network path
+        log.warning("civic reverse lookup failed")
+        return None

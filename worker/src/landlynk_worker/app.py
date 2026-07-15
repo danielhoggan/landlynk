@@ -1403,7 +1403,7 @@ def _place_key(catchment_id: str) -> str:
 
 # Bumped when the place fetch learns new sections, so runs snapshotted on an
 # older shape re-fetch instead of serving a thin pack forever.
-_PLACE_VERSION = 2
+_PLACE_VERSION = 3
 
 
 def _place_needs_refetch(record: dict) -> bool:
@@ -1590,12 +1590,29 @@ def place_pack_pptx(
         )
         or "Place setting pack"
     )
+    # The transport map: development pin with station and bus stop markers.
+    map_image = None
+    coord = catchment.get("coordinate")
+    if coord:
+        from .battlecard.staticmap_render import place_png
+
+        markers = [
+            {"lat": s["lat"], "lng": s["lng"], "color": (29, 78, 216, 255), "r": 9}
+            for s in [record.get("station"), *(record.get("otherStations") or [])]
+            if s and s.get("lat") is not None
+        ] + [
+            {"lat": s["lat"], "lng": s["lng"], "color": (192, 74, 31, 255), "r": 5}
+            for s in (record.get("busStops") or [])
+            if s.get("lat") is not None
+        ]
+        map_image = place_png(coord["lat"], coord["lng"], markers)
     pptx = render_place_pptx(
         record,
         title,
         heading_color=_heading(catchment_id),
         logo=_brand_logo(catchment_id),
         accent=_brand_accent(catchment_id),
+        map_image=map_image,
     )
     return Response(
         content=pptx,

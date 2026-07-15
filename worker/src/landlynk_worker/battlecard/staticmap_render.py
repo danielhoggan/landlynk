@@ -16,10 +16,14 @@ from __future__ import annotations
 
 import io
 import math
+from typing import TYPE_CHECKING
 
 import httpx
 
 from .mapshape import largest_ring
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 # Composed maps cached by bounding box and size, so repeated exports of the same
 # catchment do not refetch tiles (and stay within OSM fair use).
@@ -49,7 +53,7 @@ def _pick_zoom(
     height: int,
 ) -> int:
     """Largest zoom where the bounding box still fits the image, with margin."""
-    for z in range(13, 3, -1):
+    for z in range(16, 3, -1):
         x0, y1 = _lonlat_to_px(minlon, maxlat, z)
         x1, y0 = _lonlat_to_px(maxlon, minlat, z)
         if (x1 - x0) <= width * 0.9 and (y1 - y0) <= height * 0.9:
@@ -84,6 +88,113 @@ def catchment_png(
         png = None
     _CACHE[key] = png
     return png
+
+
+def place_png(
+    lat: float,
+    lng: float,
+    markers: list[dict] | None = None,
+    width: int = 560,
+    height: int = 520,
+) -> bytes | None:
+    """A pin-centred basemap with marker dots, for the Place setting pack's
+    transport slide. markers: [{lat, lng, color: (r,g,b,a), r: px}]. Zoom fits
+    the pin and all markers. Best effort: None on any failure."""
+    markers = markers or []
+    lats = [lat] + [m["lat"] for m in markers]
+    lngs = [lng] + [m["lng"] for m in markers]
+    pad_lat = max((max(lats) - min(lats)) * 0.15, 0.002)
+    pad_lng = max((max(lngs) - min(lngs)) * 0.15, 0.003)
+    bbox = (
+        min(lngs) - pad_lng,
+        min(lats) - pad_lat,
+        max(lngs) + pad_lng,
+        max(lats) + pad_lat,
+    )
+    key = tuple(round(v, 4) for v in bbox) + (width, height, len(markers))
+    if key in _CACHE:
+        return _CACHE[key]
+    try:
+        png = _render_markers(bbox, lat, lng, markers, width, height)
+    except Exception:
+        png = None
+    _CACHE[key] = png
+    return png
+
+
+def _render_markers(
+    bbox: tuple,
+    lat: float,
+    lng: float,
+    markers: list[dict],
+    width: int,
+    height: int,
+) -> bytes | None:
+    from PIL import Image, ImageDraw
+
+    minlon, minlat, maxlon, maxlat = bbox
+    z = _pick_zoom(minlon, minlat, maxlon, maxlat, width, height)
+    canvas = _stitch(minlon, minlat, maxlon, maxlat, z, width, height)
+    if canvas is None:
+        return None
+    cx, cy = _lonlat_to_px((minlon + maxlon) / 2, (minlat + maxlat) / 2, z)
+    origin_x, origin_y = cx - width / 2, cy - height / 2
+
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    for m in markers:
+        mx, my = _lonlat_to_px(m["lng"], m["lat"], z)
+        r = m.get("r", 5)
+        draw.ellipse(
+            [mx - origin_x - r, my - origin_y - r, mx - origin_x + r, my - origin_y + r],
+            fill=m.get("color", (192, 74, 31, 255)),
+            outline="white",
+        )
+    px, py = _lonlat_to_px(lng, lat, z)
+    r = 11
+    draw.ellipse(
+        [px - origin_x - r, py - origin_y - r, px - origin_x + r, py - origin_y + r],
+        fill=(10, 31, 68, 255),
+        outline="white",
+        width=3,
+    )
+    out = Image.alpha_composite(canvas, overlay).convert("RGB")
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _stitch(
+    minlon: float,
+    minlat: float,
+    maxlon: float,
+    maxlat: float,
+    z: int,
+    width: int,
+    height: int,
+) -> Image.Image | None:
+    """Stitch OSM tiles covering the bbox centre into a canvas, or None."""
+    from PIL import Image
+
+    cx, cy = _lonlat_to_px((minlon + maxlon) / 2, (minlat + maxlat) / 2, z)
+    origin_x, origin_y = cx - width / 2, cy - height / 2
+    canvas = Image.new("RGBA", (width, height), (233, 231, 225, 255))
+    tx0, ty0 = int(origin_x // _TILE), int(origin_y // _TILE)
+    tx1, ty1 = int((origin_x + width) // _TILE), int((origin_y + height) // _TILE)
+    n = 2**z
+    with httpx.Client(timeout=5.0, headers=_HEADERS) as client:
+        for tx in range(tx0, tx1 + 1):
+            for ty in range(ty0, ty1 + 1):
+                if not (0 <= tx < n and 0 <= ty < n):
+                    continue
+                resp = client.get(_TILE_URL.format(z=z, x=tx, y=ty))
+                if resp.status_code != 200:
+                    return None
+                tile = Image.open(io.BytesIO(resp.content)).convert("RGBA")
+                canvas.paste(
+                    tile, (tx * _TILE - int(origin_x), ty * _TILE - int(origin_y))
+                )
+    return canvas
 
 
 def _render(

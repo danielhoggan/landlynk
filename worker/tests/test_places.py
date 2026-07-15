@@ -95,7 +95,7 @@ def test_parse_cycle_relations_dedupes_and_requires_identity():
     assert out == [{"ref": "72", "name": "Hadrian's Cycleway"}]
 
 
-def test_place_story_parses_events_and_history():
+def test_place_story_parses_events_history_and_politics():
     from landlynk_worker.enrichment.place_story import generate_place_story
 
     def fake(model, prompt):
@@ -103,7 +103,9 @@ def test_place_story_parses_events_and_history():
         return (
             '{"events": [{"name": "Great North Run", "when": "September", '
             '"description": "Half marathon."}, "stray string"], '
-            '"history": "A market town."}'
+            '"history": "A market town.", '
+            '"politics": {"mp": "A Person", "mpParty": "Labour", '
+            '"councilControl": "Labour", "commentary": "Broadly pro-housing."}}'
         ), {"input": 300, "output": 500}
 
     out = generate_place_story("Oak Rise, NE1", "gpt-4o", transport=fake)
@@ -115,6 +117,8 @@ def test_place_story_parses_events_and_history():
         }
     ]
     assert out["history"] == "A market town."
+    assert out["politics"]["mp"] == "A Person"
+    assert out["politics"]["councilControl"] == "Labour"
     assert out["usage"]["total"] == 800
 
 
@@ -138,12 +142,23 @@ def test_place_pack_renders_with_and_without_story():
     }
     bare = render_place_pptx(record, "Oak Rise · NE1")
     assert bare[:2] == b"PK"
+    record["civic"] = {
+        "constituency": "Newcastle upon Tyne North",
+        "council": "Newcastle upon Tyne",
+        "ward": "Parklands",
+    }
     record["story"] = {
         "events": [{"name": "Fair", "when": "June", "description": "Annual fair."}],
         "history": "Built on coal and shipping.",
+        "politics": {
+            "mp": "A Person",
+            "mpParty": "Labour",
+            "councilControl": "Labour",
+            "commentary": "Broadly pro-housing.",
+        },
         "model": "gpt-4o",
     }
-    with_story = render_place_pptx(record, "Oak Rise · NE1")
+    with_story = render_place_pptx(record, "Oak Rise · NE1", map_image=None)
     assert with_story[:2] == b"PK" and len(with_story) > len(bare)
     # An empty record still renders the factual slides with explanations.
     assert render_place_pptx({}, "X")[:2] == b"PK"

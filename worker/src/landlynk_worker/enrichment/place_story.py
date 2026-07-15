@@ -13,18 +13,24 @@ from .area_profile import _TRANSPORTS, Transport, extract_json
 from .models import model_provider
 
 _PROMPT = (
-    "You are a UK local culture and history researcher. The location is: "
-    "{location}. Anchor everything on this exact place; if unsure of the town, "
-    "use the postcode to place it correctly.\n\n"
+    "You are a UK local culture, history and civic affairs researcher. The "
+    "location is: {location}. Anchor everything on this exact place; if "
+    "unsure of the town, use the postcode to place it correctly.\n\n"
     "1. List 4 to 8 real annual events or festivals held in or near this "
     "location (fairs, markets, music, sport, cultural festivals), each with "
     "roughly when in the year it happens and one sentence on what it is.\n"
     "2. Write 4 to 6 flowing sentences on the history of the place: origins, "
     "what shaped it (industry, trade, transport), and any notable heritage "
-    "still visible today.\n\n"
+    "still visible today.\n"
+    "3. Give the political picture as of your knowledge: the constituency's "
+    "MP and their party, which party controls the local council, and 2 to 3 "
+    "sentences on the area's general political character and what that has "
+    "tended to mean for new housing development. Be neutral and factual; if "
+    "control may have changed recently, say so.\n\n"
     "Only include events you are confident are real and recurring. Respond "
     'ONLY with valid JSON: {{"events": [{{"name": "...", "when": "...", '
-    '"description": "..."}}], "history": "..."}}. '
+    '"description": "..."}}], "history": "...", "politics": {{"mp": "...", '
+    '"mpParty": "...", "councilControl": "...", "commentary": "..."}}}}. '
     "Do not use em dashes or Oxford commas."
 )
 
@@ -54,9 +60,21 @@ def generate_place_story(
         for e in (parsed.get("events") or [])
         if isinstance(e, dict) and e.get("name")
     ]
+    politics_raw = parsed.get("politics")
+    politics = (
+        {
+            "mp": str(politics_raw.get("mp") or ""),
+            "mpParty": str(politics_raw.get("mpParty") or ""),
+            "councilControl": str(politics_raw.get("councilControl") or ""),
+            "commentary": str(politics_raw.get("commentary") or ""),
+        }
+        if isinstance(politics_raw, dict)
+        else None
+    )
     total = (usage.get("input", 0) or 0) + (usage.get("output", 0) or 0)
     return {
         "events": events,
         "history": str(parsed.get("history") or ""),
+        "politics": politics,
         "usage": {**usage, "total": total},
     }

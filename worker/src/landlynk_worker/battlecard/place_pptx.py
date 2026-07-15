@@ -25,6 +25,7 @@ def render_place_pptx(
     heading_color: str | None = None,
     logo: bytes | None = None,
     accent: str | None = None,
+    map_image: bytes | None = None,
 ) -> bytes:
     """Render the Place setting pack for one catchment's place record."""
     navy = _hex(heading_color)
@@ -38,7 +39,8 @@ def render_place_pptx(
 
     _cover(prs.slides.add_slide(blank), heading, theme, bool(story))
     builders = [
-        lambda s: _getting_around(s, record, theme),
+        lambda s: _transport(s, record, theme, map_image),
+        lambda s: _cycling(s, record, theme),
         lambda s: _daily_life(s, record, theme),
         lambda s: _food_and_drink(s, record, theme),
     ]
@@ -46,6 +48,8 @@ def render_place_pptx(
         builders.append(lambda s: _events(s, story, theme))
     if story.get("history"):
         builders.append(lambda s: _history(s, story, theme))
+    if record.get("civic") or story.get("politics"):
+        builders.append(lambda s: _politics(s, record, story, theme))
     for build in builders:
         slide = prs.slides.add_slide(blank)
         build(slide)
@@ -164,15 +168,15 @@ def _station_lines(record: dict, theme: dict) -> tuple[str, list]:
     return f"NEAREST STATION  ·  {station['name']}", lines
 
 
-def _getting_around(slide, record: dict, theme: dict) -> None:  # noqa: ANN001
-    _heading_row(slide, "Getting around", theme)
+def _transport(slide, record: dict, theme: dict, map_image: bytes | None) -> None:  # noqa: ANN001
+    _heading_row(slide, "Transport links", theme)
     title, lines = _station_lines(record, theme)
-    _card(slide, Inches(0.6), Inches(1.3), Inches(6.0), Inches(2.6), title, lines, theme)
+    _card(slide, Inches(0.6), Inches(1.3), Inches(6.0), Inches(2.4), title, lines, theme)
 
     services = record.get("busServices") or []
     stops = record.get("busStops") or []
     bus_lines: list = []
-    for svc in services[:7]:
+    for svc in services[:8]:
         dest = " / ".join(svc.get("destinations") or []) or "local service"
         bus_lines.append(
             (f"{svc['ref']}  to  {dest}", 11, theme["navy"], False, False)
@@ -203,59 +207,202 @@ def _getting_around(slide, record: dict, theme: dict) -> None:  # noqa: ANN001
                 False,
             )
         )
-    _card(
-        slide,
-        Inches(6.8),
-        Inches(1.3),
-        Inches(5.9),
-        Inches(4.0),
-        "BUSES FROM THE DOOR",
-        bus_lines or [("No bus stops within 900 m.", 11, _GREY, False, False)],
-        theme,
-    )
-
-    cycles = record.get("cycleRoutes") or []
-    cycle_lines = [
+    bus_lines.append(
         (
-            ("NCN " + c["ref"] + "  " if c.get("ref") else "")
-            + (c.get("name") or "National cycle route"),
-            11,
-            theme["navy"],
+            "Bus destinations are the routes' end points; journey times vary "
+            "by service.",
+            9,
+            _GREY,
             False,
-            False,
+            True,
         )
-        for c in cycles[:5]
-    ]
+    )
     _card(
         slide,
         Inches(0.6),
-        Inches(4.1),
+        Inches(3.85),
         Inches(6.0),
-        Inches(2.5),
-        "CYCLE ROUTES",
-        cycle_lines
-        or [
+        Inches(2.8),
+        "BUSES FROM THE DOOR",
+        bus_lines
+        if (services or stops or record.get("busRoutes"))
+        else [("No bus stops within 900 m.", 11, _GREY, False, False)],
+        theme,
+    )
+
+    # The map: development pin (navy) with stations (blue) and stops (red).
+    if map_image:
+        slide.shapes.add_picture(
+            io.BytesIO(map_image),
+            Inches(6.8),
+            Inches(1.3),
+            width=Inches(5.9),
+            height=Inches(5.35),
+        )
+        _text(
+            slide,
+            Inches(6.8),
+            Inches(6.68),
+            Inches(5.9),
+            Inches(0.3),
+            [
+                (
+                    "Development (navy), stations (blue), bus stops (red). "
+                    "Map: OpenStreetMap contributors.",
+                    8,
+                    _GREY,
+                    False,
+                    True,
+                )
+            ],
+        )
+    else:
+        _card(
+            slide,
+            Inches(6.8),
+            Inches(1.3),
+            Inches(5.9),
+            Inches(2.0),
+            "MAP",
+            [
+                (
+                    "Map tiles were not available when this pack was built. "
+                    "Re-download to try again.",
+                    10,
+                    _GREY,
+                    False,
+                    True,
+                )
+            ],
+            theme,
+        )
+
+
+def _cycling(slide, record: dict, theme: dict) -> None:  # noqa: ANN001
+    _heading_row(slide, "Cycling", theme)
+    cycles = record.get("cycleRoutes") or []
+    if cycles:
+        row_h = Inches(4.6 / max(len(cycles[:5]), 2))
+        for i, c in enumerate(cycles[:5]):
+            title = ("NCN Route " + c["ref"]) if c.get("ref") else "Named route"
+            _card(
+                slide,
+                Inches(0.6),
+                Inches(1.3) + i * (row_h + Inches(0.1)),
+                Inches(12.1),
+                row_h,
+                title,
+                [
+                    (
+                        c.get("name")
+                        or "Signed national cycle network route within reach.",
+                        11,
+                        theme["navy"],
+                        False,
+                        False,
+                    )
+                ],
+                theme,
+            )
+    else:
+        _card(
+            slide,
+            Inches(0.6),
+            Inches(1.3),
+            Inches(12.1),
+            Inches(1.6),
+            "CYCLE ROUTES",
+            [
+                (
+                    "No named or numbered cycle routes within 3 km on "
+                    "OpenStreetMap. Local streets and shared paths may still "
+                    "offer everyday cycling.",
+                    11,
+                    _GREY,
+                    False,
+                    False,
+                )
+            ],
+            theme,
+        )
+    _text(
+        slide,
+        Inches(0.6),
+        Inches(6.55),
+        Inches(12.1),
+        Inches(0.4),
+        [
             (
-                "No named cycle routes within 3 km on OpenStreetMap.",
-                11,
+                "NCN routes are the National Cycle Network: signed, mapped "
+                "long-distance routes that double as everyday commuting spines.",
+                10,
                 _GREY,
+                False,
+                True,
+            )
+        ],
+    )
+
+
+def _politics(slide, record: dict, story: dict, theme: dict) -> None:  # noqa: ANN001
+    _heading_row(slide, "The political picture", theme)
+    civic = record.get("civic") or {}
+    fact_lines: list = []
+    if civic.get("constituency"):
+        fact_lines.append(
+            (f"Constituency: {civic['constituency']}", 12, theme["navy"], False, False)
+        )
+    if civic.get("council"):
+        fact_lines.append(
+            (f"Local authority: {civic['council']}", 12, theme["navy"], False, False)
+        )
+    if civic.get("ward"):
+        fact_lines.append(
+            (f"Ward: {civic['ward']}", 12, theme["navy"], False, False)
+        )
+    _card(
+        slide,
+        Inches(0.6),
+        Inches(1.3),
+        Inches(5.9),
+        Inches(3.2),
+        "THE FACTS (ONS)",
+        fact_lines
+        or [("Civic lookup was unavailable for this pin.", 11, _GREY, False, False)],
+        theme,
+    )
+    politics = story.get("politics") or {}
+    pol_lines: list = []
+    if politics.get("mp"):
+        mp = politics["mp"] + (
+            f" ({politics['mpParty']})" if politics.get("mpParty") else ""
+        )
+        pol_lines.append((f"MP: {mp}", 12, theme["navy"], False, False))
+    if politics.get("councilControl"):
+        pol_lines.append(
+            (
+                f"Council control: {politics['councilControl']}",
+                12,
+                theme["navy"],
                 False,
                 False,
             )
-        ],
-        theme,
-    )
+        )
+    if politics.get("commentary"):
+        pol_lines.append((politics["commentary"], 10, _GREY, False, False))
     _card(
         slide,
-        Inches(6.8),
-        Inches(5.45),
-        Inches(5.9),
-        Inches(1.15),
-        "NOTE",
-        [
+        Inches(6.7),
+        Inches(1.3),
+        Inches(6.0),
+        Inches(3.2),
+        "REPRESENTATION AND CHARACTER",
+        pol_lines
+        or [
             (
-                "Bus destinations are the routes' end points; journey times "
-                "vary by service and are not shown.",
+                "Add events and history (AI) on the Place profile to complete "
+                "this section with the MP, council control and political "
+                "character.",
                 10,
                 _GREY,
                 False,
@@ -264,6 +411,25 @@ def _getting_around(slide, record: dict, theme: dict) -> None:  # noqa: ANN001
         ],
         theme,
     )
+    if pol_lines:
+        _text(
+            slide,
+            Inches(0.6),
+            Inches(6.7),
+            Inches(12.1),
+            Inches(0.35),
+            [
+                (
+                    "Representation and character are AI-generated as of the "
+                    "model's knowledge; verify before use as control can change "
+                    "at elections.",
+                    10,
+                    _GREY,
+                    False,
+                    True,
+                )
+            ],
+        )
 
 
 def _list_lines(items: list[dict], theme: dict, limit: int = 6) -> list:
